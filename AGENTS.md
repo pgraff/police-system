@@ -1,0 +1,1 @@
+Our goal is to create a docker compose file with all the dependent services for the developer.
