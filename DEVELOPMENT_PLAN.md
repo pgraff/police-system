@@ -117,7 +117,7 @@ Events use request-based naming:
 ---
 
 #### Increment 1.3: Command and Query Base Infrastructure
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - Create base `Command` interface/abstract class
@@ -140,12 +140,47 @@ Events use request-based naming:
 - Validation errors return appropriate HTTP status codes
 - Error responses follow consistent structure
 
+**Implementation Details**:
+- Created `Command` abstract base class with fields: commandId (UUID), timestamp (Instant), aggregateId (String)
+- Created `Query` abstract base class with fields: queryId (UUID), timestamp (Instant)
+- Implemented `CommandHandler` interface with generic type parameters
+- Implemented `CommandHandlerRegistry` Spring component for handler registration and lookup
+- Implemented `QueryHandler` interface with generic type parameters
+- Created validation framework: `Validator` interface, `ValidationResult`, `ValidationError`, `CommandValidator` base class
+- Created DTOs: `ErrorResponse`, `SuccessResponse`, `ValidationErrorResponse`
+- Created exceptions: `ValidationException`, `CommandHandlerNotFoundException`, `QueryHandlerNotFoundException`
+- Implemented `GlobalExceptionHandler` with `@ControllerAdvice` for centralized exception handling
+- All tests passing: 39 tests covering all components
+
 **Demo Suggestion**:
-1. Show base Command and Query interfaces
+1. Show base Command and Query abstract classes
+   - Highlight common fields: commandId, timestamp, aggregateId (for Command)
+   - Show abstract `getCommandType()` and `getQueryType()` methods
 2. Create a sample command and handler
+   ```java
+   TestCommand command = new TestCommand("aggregate-123", "test data", 42);
+   CommandHandler<TestCommand, String> handler = new TestCommandHandler();
+   String result = handler.handle(command);
+   ```
 3. Show validation framework in action
+   ```java
+   CommandValidator validator = new TestCommandValidator();
+   ValidationResult result = validator.validate(command);
+   if (!result.isValid()) {
+       result.getErrors().forEach(error -> 
+           System.out.println(error.getField() + ": " + error.getMessage()));
+   }
+   ```
 4. Show error response structure
-5. Demonstrate command-to-event flow
+   ```java
+   ErrorResponse error = new ErrorResponse("Bad Request", "Validation failed", 
+       List.of("field1 is required", "field2 must be valid email"));
+   ValidationErrorResponse validationError = ValidationErrorResponse.fromValidationResult(validationResult);
+   ```
+5. Show GlobalExceptionHandler handling exceptions
+   - Demonstrate ValidationException → 400 Bad Request
+   - Demonstrate CommandHandlerNotFoundException → 500 Internal Server Error
+   - Show consistent error response format
 
 ---
 
