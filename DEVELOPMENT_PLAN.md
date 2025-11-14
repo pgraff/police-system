@@ -56,7 +56,7 @@ Events use request-based naming:
 ---
 
 #### Increment 1.2: Event Base Classes and Infrastructure
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - Create base `Event` interface/abstract class with common fields (eventId, timestamp, aggregateId, version)
@@ -77,12 +77,42 @@ Events use request-based naming:
 - Event can be published to Kafka
 - Event versioning works correctly
 
+**Implementation Details**:
+- Created `Event` abstract base class with fields: eventId (UUID), timestamp (Instant), aggregateId (String), version (int)
+- Implemented `EventPublisher` interface with methods for publishing events to Kafka topics
+- Implemented `KafkaEventPublisher` using KafkaProducer with JSON serialization
+- Added Jackson JSR310 module for Java 8 time support (Instant serialization)
+- Configured ObjectMapper to serialize dates as ISO-8601 strings
+- All tests passing: 5 tests covering serialization, deserialization, metadata, Kafka publishing, and versioning
+
 **Demo Suggestion**:
-1. Show base Event interface/class
-2. Create a sample event extending base class
-3. Serialize event to JSON and show output
-4. Publish event to Kafka and consume it
-5. Show event structure in Kafka topic
+1. Show base Event abstract class (`com.knowit.policesystem.common.events.Event`)
+   - Highlight common fields: eventId, timestamp, aggregateId, version
+   - Show abstract `getEventType()` method
+2. Create a sample event extending base class (use TestEvent from tests)
+   ```java
+   TestEvent event = new TestEvent("aggregate-123", "test data", 42);
+   ```
+3. Serialize event to JSON using ObjectMapper
+   ```java
+   ObjectMapper mapper = new ObjectMapper();
+   mapper.registerModule(new JavaTimeModule());
+   mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+   String json = mapper.writeValueAsString(event);
+   ```
+   Show JSON output with ISO-8601 timestamp format
+4. Publish event to Kafka using KafkaEventPublisher
+   ```java
+   EventPublisher publisher = new KafkaEventPublisher(producerProps, mapper);
+   publisher.publish("test-events", "aggregate-123", event);
+   ```
+5. Consume event from Kafka topic using kafka-console-consumer
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic test-events --from-beginning
+   ```
+   Show the JSON event structure in Kafka
+6. Highlight event metadata (eventId, timestamp, aggregateId, version) in the JSON
+7. Show event versioning by creating events with different versions
 
 ---
 
