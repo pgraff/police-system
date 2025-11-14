@@ -1,0 +1,2687 @@
+openapi: 3.0.3
+info:
+  title: Police Incident Management System API
+  description: |
+    REST API for the Police Incident Management System. This is an event-driven system where 
+    all operations produce events to Kafka. Events represent requests/commands from the edge, 
+    not state changes.
+    
+    ## Architecture
+    - Edge servers receive HTTP requests and produce events to Kafka
+    - Events represent requests/commands, not state changes
+    - No state reconstruction in edge layer
+    - All operations are asynchronous via Kafka events
+    
+  version: 1.0.0
+  contact:
+    name: Police System API Support
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+  - url: https://api.policesystem.example.com/api
+    description: Production server
+
+tags:
+  - name: Officers
+    description: Police officer management operations
+  - name: Vehicles
+    description: Police vehicle management operations
+  - name: Units
+    description: Unit management operations
+  - name: Persons
+    description: Person management operations
+  - name: Locations
+    description: Location management operations
+  - name: Incidents
+    description: Incident management operations
+  - name: Calls
+    description: Call for service management operations
+  - name: Activities
+    description: Activity management operations
+  - name: Assignments
+    description: Assignment management operations
+  - name: Shifts
+    description: Shift management operations
+  - name: Dispatches
+    description: Dispatch management operations
+  - name: ResourceAssignments
+    description: Resource assignment operations
+  - name: InvolvedParties
+    description: Involved party management operations
+  - name: OfficerShifts
+    description: Officer shift operations
+
+paths:
+  # ============================================
+  # Officers
+  # ============================================
+  /officers:
+    post:
+      tags:
+        - Officers
+      summary: Register a new officer
+      description: Registers a new police officer and produces a RegisterOfficerRequested event to Kafka
+      operationId: registerOfficer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterOfficerRequest'
+      responses:
+        '201':
+          description: Officer registration request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfficerResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Officer with badge number already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /officers/{badgeNumber}:
+    put:
+      tags:
+        - Officers
+      summary: Update officer information
+      description: Updates officer information and produces an UpdateOfficerRequested event to Kafka
+      operationId: updateOfficer
+      parameters:
+        - $ref: '#/components/parameters/BadgeNumber'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOfficerRequest'
+      responses:
+        '200':
+          description: Officer update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfficerUpdateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Officers
+      summary: Change officer status
+      description: Changes officer status and produces a ChangeOfficerStatusRequested event to Kafka
+      operationId: changeOfficerStatus
+      parameters:
+        - $ref: '#/components/parameters/BadgeNumber'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Officer status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OfficerStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Vehicles
+  # ============================================
+  /vehicles:
+    post:
+      tags:
+        - Vehicles
+      summary: Register a new vehicle
+      description: Registers a new police vehicle and produces a RegisterVehicleRequested event to Kafka
+      operationId: registerVehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterVehicleRequest'
+      responses:
+        '201':
+          description: Vehicle registration request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /vehicles/{unitId}:
+    put:
+      tags:
+        - Vehicles
+      summary: Update vehicle information
+      description: Updates vehicle information and produces an UpdateVehicleRequested event to Kafka
+      operationId: updateVehicle
+      parameters:
+        - $ref: '#/components/parameters/UnitId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVehicleRequest'
+      responses:
+        '200':
+          description: Vehicle update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Vehicles
+      summary: Change vehicle status
+      description: Changes vehicle status and produces a ChangeVehicleStatusRequested event to Kafka
+      operationId: changeVehicleStatus
+      parameters:
+        - $ref: '#/components/parameters/UnitId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Vehicle status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Units
+  # ============================================
+  /units:
+    post:
+      tags:
+        - Units
+      summary: Create a new unit
+      description: Creates a new unit and produces a CreateUnitRequested event to Kafka
+      operationId: createUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUnitRequest'
+      responses:
+        '201':
+          description: Unit creation request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /units/{unitId}:
+    put:
+      tags:
+        - Units
+      summary: Update unit information
+      description: Updates unit information and produces an UpdateUnitRequested event to Kafka
+      operationId: updateUnit
+      parameters:
+        - $ref: '#/components/parameters/UnitId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUnitRequest'
+      responses:
+        '200':
+          description: Unit update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Units
+      summary: Change unit status
+      description: Changes unit status and produces a ChangeUnitStatusRequested event to Kafka
+      operationId: changeUnitStatus
+      parameters:
+        - $ref: '#/components/parameters/UnitId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Unit status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Persons
+  # ============================================
+  /persons:
+    post:
+      tags:
+        - Persons
+      summary: Register a new person
+      description: Registers a new person and produces a RegisterPersonRequested event to Kafka
+      operationId: registerPerson
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPersonRequest'
+      responses:
+        '201':
+          description: Person registration request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /persons/{personId}:
+    put:
+      tags:
+        - Persons
+      summary: Update person information
+      description: Updates person information and produces an UpdatePersonRequested event to Kafka
+      operationId: updatePerson
+      parameters:
+        - $ref: '#/components/parameters/PersonId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePersonRequest'
+      responses:
+        '200':
+          description: Person update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Locations
+  # ============================================
+  /locations:
+    post:
+      tags:
+        - Locations
+      summary: Create a new location
+      description: Creates a new location and produces a CreateLocationRequested event to Kafka
+      operationId: createLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocationRequest'
+      responses:
+        '201':
+          description: Location creation request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /locations/{locationId}:
+    put:
+      tags:
+        - Locations
+      summary: Update location information
+      description: Updates location information and produces an UpdateLocationRequested event to Kafka
+      operationId: updateLocation
+      parameters:
+        - $ref: '#/components/parameters/LocationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocationRequest'
+      responses:
+        '200':
+          description: Location update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /incidents/{incidentId}/locations:
+    post:
+      tags:
+        - Locations
+      summary: Link location to incident
+      description: Links a location to an incident and produces a LinkLocationToIncidentRequested event to Kafka
+      operationId: linkLocationToIncident
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkLocationRequest'
+      responses:
+        '200':
+          description: Location link request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /incidents/{incidentId}/locations/{locationId}:
+    delete:
+      tags:
+        - Locations
+      summary: Unlink location from incident
+      description: Unlinks a location from an incident and produces an UnlinkLocationFromIncidentRequested event to Kafka
+      operationId: unlinkLocationFromIncident
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+        - $ref: '#/components/parameters/LocationId'
+      responses:
+        '200':
+          description: Location unlink request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /calls/{callId}/locations:
+    post:
+      tags:
+        - Locations
+      summary: Link location to call
+      description: Links a location to a call and produces a LinkLocationToCallRequested event to Kafka
+      operationId: linkLocationToCall
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkLocationRequest'
+      responses:
+        '200':
+          description: Location link request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /calls/{callId}/locations/{locationId}:
+    delete:
+      tags:
+        - Locations
+      summary: Unlink location from call
+      description: Unlinks a location from a call and produces an UnlinkLocationFromCallRequested event to Kafka
+      operationId: unlinkLocationFromCall
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+        - $ref: '#/components/parameters/LocationId'
+      responses:
+        '200':
+          description: Location unlink request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Incidents
+  # ============================================
+  /incidents:
+    post:
+      tags:
+        - Incidents
+      summary: Report a new incident
+      description: Reports a new incident and produces a ReportIncidentRequested event to Kafka
+      operationId: reportIncident
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportIncidentRequest'
+      responses:
+        '201':
+          description: Incident report request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /incidents/{incidentId}:
+    put:
+      tags:
+        - Incidents
+      summary: Update incident information
+      description: Updates incident information and produces an UpdateIncidentRequested event to Kafka
+      operationId: updateIncident
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateIncidentRequest'
+      responses:
+        '200':
+          description: Incident update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Incidents
+      summary: Change incident status
+      description: Changes incident status and produces a ChangeIncidentStatusRequested event to Kafka
+      operationId: changeIncidentStatus
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Incident status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /incidents/{incidentId}/dispatch:
+    post:
+      tags:
+        - Incidents
+      summary: Dispatch incident
+      description: Dispatches an incident and produces a DispatchIncidentRequested event to Kafka
+      operationId: dispatchIncident
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchRequest'
+      responses:
+        '200':
+          description: Incident dispatch request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /incidents/{incidentId}/arrive:
+    post:
+      tags:
+        - Incidents
+      summary: Arrive at incident
+      description: Records arrival at incident and produces an ArriveAtIncidentRequested event to Kafka
+      operationId: arriveAtIncident
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArriveRequest'
+      responses:
+        '200':
+          description: Arrival request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /incidents/{incidentId}/clear:
+    post:
+      tags:
+        - Incidents
+      summary: Clear incident
+      description: Clears an incident and produces a ClearIncidentRequested event to Kafka
+      operationId: clearIncident
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearRequest'
+      responses:
+        '200':
+          description: Clear incident request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Calls
+  # ============================================
+  /calls:
+    post:
+      tags:
+        - Calls
+      summary: Receive a new call
+      description: Receives a new call for service and produces a ReceiveCallRequested event to Kafka
+      operationId: receiveCall
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiveCallRequest'
+      responses:
+        '201':
+          description: Call receive request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /calls/{callId}:
+    put:
+      tags:
+        - Calls
+      summary: Update call information
+      description: Updates call information and produces an UpdateCallRequested event to Kafka
+      operationId: updateCall
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCallRequest'
+      responses:
+        '200':
+          description: Call update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Calls
+      summary: Change call status
+      description: Changes call status and produces a ChangeCallStatusRequested event to Kafka
+      operationId: changeCallStatus
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Call status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /calls/{callId}/dispatch:
+    post:
+      tags:
+        - Calls
+      summary: Dispatch call
+      description: Dispatches a call and produces a DispatchCallRequested event to Kafka
+      operationId: dispatchCall
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchRequest'
+      responses:
+        '200':
+          description: Call dispatch request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /calls/{callId}/arrive:
+    post:
+      tags:
+        - Calls
+      summary: Arrive at call
+      description: Records arrival at call location and produces an ArriveAtCallRequested event to Kafka
+      operationId: arriveAtCall
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArriveRequest'
+      responses:
+        '200':
+          description: Arrival request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /calls/{callId}/clear:
+    post:
+      tags:
+        - Calls
+      summary: Clear call
+      description: Clears a call and produces a ClearCallRequested event to Kafka
+      operationId: clearCall
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearRequest'
+      responses:
+        '200':
+          description: Clear call request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /calls/{callId}/incidents:
+    post:
+      tags:
+        - Calls
+      summary: Link call to incident
+      description: Links a call to an incident and produces a LinkCallToIncidentRequested event to Kafka
+      operationId: linkCallToIncident
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkCallToIncidentRequest'
+      responses:
+        '200':
+          description: Call link request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /calls/{callId}/dispatches:
+    post:
+      tags:
+        - Calls
+      summary: Link call to dispatch
+      description: Links a call to a dispatch and produces a LinkCallToDispatchRequested event to Kafka
+      operationId: linkCallToDispatch
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkCallToDispatchRequest'
+      responses:
+        '200':
+          description: Call link request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Activities
+  # ============================================
+  /activities:
+    post:
+      tags:
+        - Activities
+      summary: Start a new activity
+      description: Starts a new activity and produces a StartActivityRequested event to Kafka
+      operationId: startActivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartActivityRequest'
+      responses:
+        '201':
+          description: Activity start request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /activities/{activityId}:
+    put:
+      tags:
+        - Activities
+      summary: Update activity information
+      description: Updates activity information and produces an UpdateActivityRequested event to Kafka
+      operationId: updateActivity
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateActivityRequest'
+      responses:
+        '200':
+          description: Activity update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Activities
+      summary: Change activity status
+      description: Changes activity status and produces a ChangeActivityStatusRequested event to Kafka
+      operationId: changeActivityStatus
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Activity status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /activities/{activityId}/complete:
+    post:
+      tags:
+        - Activities
+      summary: Complete activity
+      description: Completes an activity and produces a CompleteActivityRequested event to Kafka
+      operationId: completeActivity
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRequest'
+      responses:
+        '200':
+          description: Activity completion request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /activities/{activityId}/incidents:
+    post:
+      tags:
+        - Activities
+      summary: Link activity to incident
+      description: Links an activity to an incident and produces a LinkActivityToIncidentRequested event to Kafka
+      operationId: linkActivityToIncident
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkActivityToIncidentRequest'
+      responses:
+        '200':
+          description: Activity link request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Assignments
+  # ============================================
+  /assignments:
+    post:
+      tags:
+        - Assignments
+      summary: Create a new assignment
+      description: Creates a new assignment and produces a CreateAssignmentRequested event to Kafka
+      operationId: createAssignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssignmentRequest'
+      responses:
+        '201':
+          description: Assignment creation request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /assignments/{assignmentId}:
+    patch:
+      tags:
+        - Assignments
+      summary: Change assignment status
+      description: Changes assignment status and produces a ChangeAssignmentStatusRequested event to Kafka
+      operationId: changeAssignmentStatus
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Assignment status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /assignments/{assignmentId}/complete:
+    post:
+      tags:
+        - Assignments
+      summary: Complete assignment
+      description: Completes an assignment and produces a CompleteAssignmentRequested event to Kafka
+      operationId: completeAssignment
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRequest'
+      responses:
+        '200':
+          description: Assignment completion request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /assignments/{assignmentId}/dispatches:
+    post:
+      tags:
+        - Assignments
+      summary: Link assignment to dispatch
+      description: Links an assignment to a dispatch and produces a LinkAssignmentToDispatchRequested event to Kafka
+      operationId: linkAssignmentToDispatch
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkAssignmentToDispatchRequest'
+      responses:
+        '200':
+          description: Assignment link request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /assignments/{assignmentId}/resources:
+    post:
+      tags:
+        - ResourceAssignments
+      summary: Assign resource to assignment
+      description: Assigns a resource to an assignment and produces an AssignResourceRequested event to Kafka
+      operationId: assignResource
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignResourceRequest'
+      responses:
+        '201':
+          description: Resource assignment request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceAssignmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - ResourceAssignments
+      summary: Unassign resource from assignment
+      description: Unassigns a resource from an assignment and produces an UnassignResourceRequested event to Kafka
+      operationId: unassignResource
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnassignResourceRequest'
+      responses:
+        '200':
+          description: Resource unassignment request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /assignments/{assignmentId}/resources/{resourceId}/status:
+    patch:
+      tags:
+        - ResourceAssignments
+      summary: Change resource assignment status
+      description: Changes resource assignment status and produces a ChangeResourceAssignmentStatusRequested event to Kafka
+      operationId: changeResourceAssignmentStatus
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Resource assignment status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Shifts
+  # ============================================
+  /shifts:
+    post:
+      tags:
+        - Shifts
+      summary: Start a new shift
+      description: Starts a new shift and produces a StartShiftRequested event to Kafka
+      operationId: startShift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartShiftRequest'
+      responses:
+        '201':
+          description: Shift start request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /shifts/{shiftId}:
+    patch:
+      tags:
+        - Shifts
+      summary: Change shift status
+      description: Changes shift status and produces a ChangeShiftStatusRequested event to Kafka
+      operationId: changeShiftStatus
+      parameters:
+        - $ref: '#/components/parameters/ShiftId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Shift status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shifts/{shiftId}/end:
+    post:
+      tags:
+        - Shifts
+      summary: End shift
+      description: Ends a shift and produces an EndShiftRequested event to Kafka
+      operationId: endShift
+      parameters:
+        - $ref: '#/components/parameters/ShiftId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndShiftRequest'
+      responses:
+        '200':
+          description: Shift end request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shifts/{shiftId}/shift-changes:
+    post:
+      tags:
+        - Shifts
+      summary: Record shift change
+      description: Records a shift change and produces a RecordShiftChangeRequested event to Kafka
+      operationId: recordShiftChange
+      parameters:
+        - $ref: '#/components/parameters/ShiftId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordShiftChangeRequest'
+      responses:
+        '201':
+          description: Shift change record request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shifts/{shiftId}/officers/{badgeNumber}:
+    put:
+      tags:
+        - OfficerShifts
+      summary: Update officer shift
+      description: Updates officer shift information and produces an UpdateOfficerShiftRequested event to Kafka
+      operationId: updateOfficerShift
+      parameters:
+        - $ref: '#/components/parameters/ShiftId'
+        - $ref: '#/components/parameters/BadgeNumber'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOfficerShiftRequest'
+      responses:
+        '200':
+          description: Officer shift update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shifts/{shiftId}/officers/{badgeNumber}/check-in:
+    post:
+      tags:
+        - OfficerShifts
+      summary: Check in officer to shift
+      description: Checks in an officer to a shift and produces a CheckInOfficerRequested event to Kafka
+      operationId: checkInOfficer
+      parameters:
+        - $ref: '#/components/parameters/ShiftId'
+        - $ref: '#/components/parameters/BadgeNumber'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInOfficerRequest'
+      responses:
+        '200':
+          description: Officer check-in request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /shifts/{shiftId}/officers/{badgeNumber}/check-out:
+    post:
+      tags:
+        - OfficerShifts
+      summary: Check out officer from shift
+      description: Checks out an officer from a shift and produces a CheckOutOfficerRequested event to Kafka
+      operationId: checkOutOfficer
+      parameters:
+        - $ref: '#/components/parameters/ShiftId'
+        - $ref: '#/components/parameters/BadgeNumber'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckOutOfficerRequest'
+      responses:
+        '200':
+          description: Officer check-out request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Dispatches
+  # ============================================
+  /dispatches:
+    post:
+      tags:
+        - Dispatches
+      summary: Create a new dispatch
+      description: Creates a new dispatch and produces a CreateDispatchRequested event to Kafka
+      operationId: createDispatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDispatchRequest'
+      responses:
+        '201':
+          description: Dispatch creation request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /dispatches/{dispatchId}/status:
+    patch:
+      tags:
+        - Dispatches
+      summary: Change dispatch status
+      description: Changes dispatch status and produces a ChangeDispatchStatusRequested event to Kafka
+      operationId: changeDispatchStatus
+      parameters:
+        - $ref: '#/components/parameters/DispatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Dispatch status change request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Involved Parties
+  # ============================================
+  /involved-parties:
+    post:
+      tags:
+        - InvolvedParties
+      summary: Involve party in incident/call/activity
+      description: Involves a party in an incident, call, or activity and produces an InvolvePartyRequested event to Kafka
+      operationId: involveParty
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvolvePartyRequest'
+      responses:
+        '201':
+          description: Party involvement request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvolvementResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /involved-parties/{involvementId}:
+    put:
+      tags:
+        - InvolvedParties
+      summary: Update party involvement
+      description: Updates party involvement information and produces an UpdatePartyInvolvementRequested event to Kafka
+      operationId: updatePartyInvolvement
+      parameters:
+        - $ref: '#/components/parameters/InvolvementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePartyInvolvementRequest'
+      responses:
+        '200':
+          description: Party involvement update request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /involved-parties/{involvementId}/end:
+    post:
+      tags:
+        - InvolvedParties
+      summary: End party involvement
+      description: Ends party involvement and produces an EndPartyInvolvementRequested event to Kafka
+      operationId: endPartyInvolvement
+      parameters:
+        - $ref: '#/components/parameters/InvolvementId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndPartyInvolvementRequest'
+      responses:
+        '200':
+          description: Party involvement end request processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    BadgeNumber:
+      name: badgeNumber
+      in: path
+      required: true
+      description: Officer badge number
+      schema:
+        type: string
+        example: "12345"
+    
+    UnitId:
+      name: unitId
+      in: path
+      required: true
+      description: Unit identifier
+      schema:
+        type: string
+        example: "UNIT-001"
+    
+    PersonId:
+      name: personId
+      in: path
+      required: true
+      description: Person identifier
+      schema:
+        type: string
+        example: "PERSON-001"
+    
+    LocationId:
+      name: locationId
+      in: path
+      required: true
+      description: Location identifier
+      schema:
+        type: string
+        example: "LOC-001"
+    
+    IncidentId:
+      name: incidentId
+      in: path
+      required: true
+      description: Incident identifier
+      schema:
+        type: string
+        example: "INC-001"
+    
+    CallId:
+      name: callId
+      in: path
+      required: true
+      description: Call identifier
+      schema:
+        type: string
+        example: "CALL-001"
+    
+    ActivityId:
+      name: activityId
+      in: path
+      required: true
+      description: Activity identifier
+      schema:
+        type: string
+        example: "ACT-001"
+    
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      description: Assignment identifier
+      schema:
+        type: string
+        example: "ASSIGN-001"
+    
+    ShiftId:
+      name: shiftId
+      in: path
+      required: true
+      description: Shift identifier
+      schema:
+        type: string
+        example: "SHIFT-001"
+    
+    DispatchId:
+      name: dispatchId
+      in: path
+      required: true
+      description: Dispatch identifier
+      schema:
+        type: string
+        example: "DISP-001"
+    
+    ResourceId:
+      name: resourceId
+      in: path
+      required: true
+      description: Resource identifier (officer badge number, vehicle unit ID, or unit ID)
+      schema:
+        type: string
+        example: "12345"
+    
+    InvolvementId:
+      name: involvementId
+      in: path
+      required: true
+      description: Involvement identifier
+      schema:
+        type: string
+        example: "INVOLVE-001"
+
+  schemas:
+    # Common Enums
+    OfficerStatus:
+      type: string
+      enum:
+        - Active
+        - On-Duty
+        - Off-Duty
+        - Suspended
+        - Retired
+      example: "Active"
+    
+    VehicleStatus:
+      type: string
+      enum:
+        - Available
+        - Assigned
+        - In-Use
+        - Maintenance
+        - Out-of-Service
+      example: "Available"
+    
+    UnitStatus:
+      type: string
+      enum:
+        - Available
+        - Assigned
+        - In-Use
+        - Maintenance
+        - Out-of-Service
+      example: "Available"
+    
+    IncidentStatus:
+      type: string
+      enum:
+        - Reported
+        - Dispatched
+        - Arrived
+        - In-Progress
+        - Cleared
+        - Closed
+      example: "Reported"
+    
+    CallStatus:
+      type: string
+      enum:
+        - Received
+        - Dispatched
+        - Arrived
+        - In-Progress
+        - Cleared
+        - Closed
+      example: "Received"
+    
+    ActivityStatus:
+      type: string
+      enum:
+        - Started
+        - In-Progress
+        - Completed
+        - Cancelled
+      example: "Started"
+    
+    AssignmentStatus:
+      type: string
+      enum:
+        - Created
+        - Assigned
+        - In-Progress
+        - Completed
+        - Cancelled
+      example: "Created"
+    
+    ShiftStatus:
+      type: string
+      enum:
+        - Started
+        - In-Progress
+        - Ended
+        - Cancelled
+      example: "Started"
+    
+    DispatchStatus:
+      type: string
+      enum:
+        - Created
+        - Sent
+        - Acknowledged
+        - Completed
+        - Cancelled
+      example: "Created"
+    
+    Priority:
+      type: string
+      enum:
+        - Emergency
+        - High
+        - Medium
+        - Low
+      example: "High"
+    
+    VehicleType:
+      type: string
+      enum:
+        - Patrol
+        - SUV
+        - Motorcycle
+        - Van
+        - Truck
+      example: "Patrol"
+    
+    UnitType:
+      type: string
+      enum:
+        - Single
+        - Team
+        - Squad
+      example: "Single"
+    
+    LocationType:
+      type: string
+      enum:
+        - Street
+        - Building
+        - Park
+        - Highway
+        - Other
+      example: "Street"
+    
+    IncidentType:
+      type: string
+      enum:
+        - Traffic
+        - Theft
+        - Assault
+        - Domestic
+        - Burglary
+        - Other
+      example: "Traffic"
+    
+    CallType:
+      type: string
+      enum:
+        - Emergency
+        - Non-Emergency
+        - Administrative
+        - Other
+      example: "Emergency"
+    
+    ActivityType:
+      type: string
+      enum:
+        - Arrest
+        - Interview
+        - Evidence
+        - Report
+        - Other
+      example: "Arrest"
+    
+    AssignmentType:
+      type: string
+      enum:
+        - Primary
+        - Backup
+        - Supervisor
+        - Other
+      example: "Primary"
+    
+    ShiftType:
+      type: string
+      enum:
+        - Day
+        - Evening
+        - Night
+        - Other
+      example: "Day"
+    
+    DispatchType:
+      type: string
+      enum:
+        - Initial
+        - Additional
+        - Cancellation
+        - Other
+      example: "Initial"
+    
+    ResourceType:
+      type: string
+      enum:
+        - Officer
+        - Vehicle
+        - Unit
+      example: "Officer"
+    
+    RoleType:
+      type: string
+      enum:
+        - Primary
+        - Backup
+        - Supervisor
+        - Trainee
+        - Other
+      example: "Primary"
+    
+    LocationRoleType:
+      type: string
+      enum:
+        - Primary
+        - Secondary
+        - Related
+        - Other
+      example: "Primary"
+    
+    PartyRoleType:
+      type: string
+      enum:
+        - Victim
+        - Suspect
+        - Witness
+        - Complainant
+        - Other
+      example: "Victim"
+    
+    ShiftRoleType:
+      type: string
+      enum:
+        - Regular
+        - Supervisor
+        - Trainee
+        - Other
+      example: "Regular"
+    
+    ChangeType:
+      type: string
+      enum:
+        - Briefing
+        - Handoff
+        - Status
+        - Other
+      example: "Briefing"
+    
+    Gender:
+      type: string
+      enum:
+        - Male
+        - Female
+        - Other
+        - Unknown
+      example: "Male"
+    
+    Race:
+      type: string
+      enum:
+        - White
+        - Black
+        - Hispanic
+        - Asian
+        - Native
+        - Other
+        - Unknown
+      example: "White"
+
+    # Request Schemas
+    RegisterOfficerRequest:
+      type: object
+      required:
+        - badgeNumber
+        - firstName
+        - lastName
+        - rank
+        - email
+        - status
+      properties:
+        badgeNumber:
+          type: string
+          description: Unique badge number
+          example: "12345"
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        rank:
+          type: string
+          example: "Officer"
+        email:
+          type: string
+          format: email
+          example: "john.doe@police.gov"
+        phoneNumber:
+          type: string
+          example: "555-0100"
+        hireDate:
+          type: string
+          format: date
+          example: "2020-01-15"
+        status:
+          $ref: '#/components/schemas/OfficerStatus'
+    
+    UpdateOfficerRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        rank:
+          type: string
+          example: "Sergeant"
+        email:
+          type: string
+          format: email
+          example: "john.doe@police.gov"
+        phoneNumber:
+          type: string
+          example: "555-0100"
+        hireDate:
+          type: string
+          format: date
+          example: "2020-01-15"
+    
+    RegisterVehicleRequest:
+      type: object
+      required:
+        - unitId
+        - vehicleType
+        - licensePlate
+        - vin
+        - status
+      properties:
+        unitId:
+          type: string
+          example: "UNIT-001"
+        vehicleType:
+          $ref: '#/components/schemas/VehicleType'
+        licensePlate:
+          type: string
+          example: "ABC-123"
+        vin:
+          type: string
+          example: "1HGBH41JXMN109186"
+        status:
+          $ref: '#/components/schemas/VehicleStatus'
+        lastMaintenanceDate:
+          type: string
+          format: date
+          example: "2024-01-15"
+    
+    UpdateVehicleRequest:
+      type: object
+      properties:
+        vehicleType:
+          $ref: '#/components/schemas/VehicleType'
+        licensePlate:
+          type: string
+          example: "ABC-123"
+        vin:
+          type: string
+          example: "1HGBH41JXMN109186"
+        status:
+          $ref: '#/components/schemas/VehicleStatus'
+        lastMaintenanceDate:
+          type: string
+          format: date
+          example: "2024-01-15"
+    
+    CreateUnitRequest:
+      type: object
+      required:
+        - unitId
+        - unitType
+        - status
+      properties:
+        unitId:
+          type: string
+          example: "UNIT-001"
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        status:
+          $ref: '#/components/schemas/UnitStatus'
+    
+    UpdateUnitRequest:
+      type: object
+      properties:
+        unitType:
+          $ref: '#/components/schemas/UnitType'
+        status:
+          $ref: '#/components/schemas/UnitStatus'
+    
+    RegisterPersonRequest:
+      type: object
+      required:
+        - personId
+        - firstName
+        - lastName
+        - dateOfBirth
+      properties:
+        personId:
+          type: string
+          example: "PERSON-001"
+        firstName:
+          type: string
+          example: "Jane"
+        lastName:
+          type: string
+          example: "Smith"
+        dateOfBirth:
+          type: string
+          format: date
+          example: "1990-05-20"
+        gender:
+          $ref: '#/components/schemas/Gender'
+        race:
+          $ref: '#/components/schemas/Race'
+        phoneNumber:
+          type: string
+          example: "555-0200"
+    
+    UpdatePersonRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          example: "Jane"
+        lastName:
+          type: string
+          example: "Smith"
+        dateOfBirth:
+          type: string
+          format: date
+          example: "1990-05-20"
+        gender:
+          $ref: '#/components/schemas/Gender'
+        race:
+          $ref: '#/components/schemas/Race'
+        phoneNumber:
+          type: string
+          example: "555-0200"
+    
+    CreateLocationRequest:
+      type: object
+      required:
+        - locationId
+      properties:
+        locationId:
+          type: string
+          example: "LOC-001"
+        address:
+          type: string
+          example: "123 Main St"
+        city:
+          type: string
+          example: "Springfield"
+        state:
+          type: string
+          example: "IL"
+        zipCode:
+          type: string
+          example: "62701"
+        latitude:
+          type: number
+          format: double
+          example: 39.7817
+        longitude:
+          type: number
+          format: double
+          example: -89.6501
+        locationType:
+          $ref: '#/components/schemas/LocationType'
+    
+    UpdateLocationRequest:
+      type: object
+      properties:
+        address:
+          type: string
+          example: "123 Main St"
+        city:
+          type: string
+          example: "Springfield"
+        state:
+          type: string
+          example: "IL"
+        zipCode:
+          type: string
+          example: "62701"
+        latitude:
+          type: number
+          format: double
+          example: 39.7817
+        longitude:
+          type: number
+          format: double
+          example: -89.6501
+        locationType:
+          $ref: '#/components/schemas/LocationType'
+    
+    LinkLocationRequest:
+      type: object
+      required:
+        - locationId
+        - locationRoleType
+      properties:
+        locationId:
+          type: string
+          example: "LOC-001"
+        locationRoleType:
+          $ref: '#/components/schemas/LocationRoleType'
+        description:
+          type: string
+          example: "Primary incident location"
+    
+    ReportIncidentRequest:
+      type: object
+      required:
+        - incidentId
+        - priority
+        - status
+        - incidentType
+      properties:
+        incidentId:
+          type: string
+          example: "INC-001"
+        incidentNumber:
+          type: string
+          example: "2024-001"
+        priority:
+          $ref: '#/components/schemas/Priority'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        reportedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        description:
+          type: string
+          example: "Traffic accident at Main St and Oak Ave"
+        incidentType:
+          $ref: '#/components/schemas/IncidentType'
+    
+    UpdateIncidentRequest:
+      type: object
+      properties:
+        priority:
+          $ref: '#/components/schemas/Priority'
+        description:
+          type: string
+          example: "Updated description"
+        incidentType:
+          $ref: '#/components/schemas/IncidentType'
+    
+    DispatchRequest:
+      type: object
+      required:
+        - dispatchedTime
+      properties:
+        dispatchedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:35:00Z"
+    
+    ArriveRequest:
+      type: object
+      required:
+        - arrivedTime
+      properties:
+        arrivedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:40:00Z"
+    
+    ClearRequest:
+      type: object
+      required:
+        - clearedTime
+      properties:
+        clearedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T11:00:00Z"
+    
+    ReceiveCallRequest:
+      type: object
+      required:
+        - callId
+        - priority
+        - status
+        - callType
+      properties:
+        callId:
+          type: string
+          example: "CALL-001"
+        callNumber:
+          type: string
+          example: "2024-CALL-001"
+        priority:
+          $ref: '#/components/schemas/Priority'
+        status:
+          $ref: '#/components/schemas/CallStatus'
+        receivedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        description:
+          type: string
+          example: "911 call reporting traffic accident"
+        callType:
+          $ref: '#/components/schemas/CallType'
+    
+    UpdateCallRequest:
+      type: object
+      properties:
+        priority:
+          $ref: '#/components/schemas/Priority'
+        description:
+          type: string
+          example: "Updated call description"
+        callType:
+          $ref: '#/components/schemas/CallType'
+    
+    LinkCallToIncidentRequest:
+      type: object
+      required:
+        - incidentId
+      properties:
+        incidentId:
+          type: string
+          example: "INC-001"
+    
+    LinkCallToDispatchRequest:
+      type: object
+      required:
+        - dispatchId
+      properties:
+        dispatchId:
+          type: string
+          example: "DISP-001"
+    
+    StartActivityRequest:
+      type: object
+      required:
+        - activityId
+        - activityType
+        - status
+      properties:
+        activityId:
+          type: string
+          example: "ACT-001"
+        activityTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:45:00Z"
+        activityType:
+          $ref: '#/components/schemas/ActivityType'
+        description:
+          type: string
+          example: "Interviewing witness"
+        status:
+          $ref: '#/components/schemas/ActivityStatus'
+    
+    UpdateActivityRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          example: "Updated activity description"
+    
+    CompleteRequest:
+      type: object
+      required:
+        - completedTime
+      properties:
+        completedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T11:00:00Z"
+    
+    LinkActivityToIncidentRequest:
+      type: object
+      required:
+        - incidentId
+      properties:
+        incidentId:
+          type: string
+          example: "INC-001"
+    
+    CreateAssignmentRequest:
+      type: object
+      required:
+        - assignmentId
+        - assignmentType
+        - status
+      properties:
+        assignmentId:
+          type: string
+          example: "ASSIGN-001"
+        assignedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:35:00Z"
+        assignmentType:
+          $ref: '#/components/schemas/AssignmentType'
+        status:
+          $ref: '#/components/schemas/AssignmentStatus'
+        incidentId:
+          type: string
+          example: "INC-001"
+        callId:
+          type: string
+          example: "CALL-001"
+    
+    LinkAssignmentToDispatchRequest:
+      type: object
+      required:
+        - dispatchId
+      properties:
+        dispatchId:
+          type: string
+          example: "DISP-001"
+    
+    AssignResourceRequest:
+      type: object
+      required:
+        - resourceId
+        - resourceType
+        - roleType
+        - status
+      properties:
+        resourceId:
+          type: string
+          description: Officer badge number, vehicle unit ID, or unit ID
+          example: "12345"
+        resourceType:
+          $ref: '#/components/schemas/ResourceType'
+        roleType:
+          $ref: '#/components/schemas/RoleType'
+        status:
+          type: string
+          example: "Assigned"
+        startTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:35:00Z"
+    
+    UnassignResourceRequest:
+      type: object
+      required:
+        - endTime
+      properties:
+        endTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T11:00:00Z"
+    
+    StartShiftRequest:
+      type: object
+      required:
+        - shiftId
+        - shiftType
+        - status
+      properties:
+        shiftId:
+          type: string
+          example: "SHIFT-001"
+        startTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T08:00:00Z"
+        endTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T16:00:00Z"
+        shiftType:
+          $ref: '#/components/schemas/ShiftType'
+        status:
+          $ref: '#/components/schemas/ShiftStatus'
+    
+    EndShiftRequest:
+      type: object
+      required:
+        - endTime
+      properties:
+        endTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T16:00:00Z"
+    
+    RecordShiftChangeRequest:
+      type: object
+      required:
+        - shiftChangeId
+        - changeType
+      properties:
+        shiftChangeId:
+          type: string
+          example: "CHANGE-001"
+        changeTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T16:00:00Z"
+        changeType:
+          $ref: '#/components/schemas/ChangeType'
+        notes:
+          type: string
+          example: "Shift handoff notes"
+    
+    UpdateOfficerShiftRequest:
+      type: object
+      properties:
+        shiftRoleType:
+          $ref: '#/components/schemas/ShiftRoleType'
+    
+    CheckInOfficerRequest:
+      type: object
+      required:
+        - checkInTime
+        - shiftRoleType
+      properties:
+        checkInTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T08:00:00Z"
+        shiftRoleType:
+          $ref: '#/components/schemas/ShiftRoleType'
+    
+    CheckOutOfficerRequest:
+      type: object
+      required:
+        - checkOutTime
+      properties:
+        checkOutTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T16:00:00Z"
+    
+    CreateDispatchRequest:
+      type: object
+      required:
+        - dispatchId
+        - dispatchType
+        - status
+      properties:
+        dispatchId:
+          type: string
+          example: "DISP-001"
+        dispatchTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:35:00Z"
+        dispatchType:
+          $ref: '#/components/schemas/DispatchType'
+        status:
+          $ref: '#/components/schemas/DispatchStatus'
+    
+    InvolvePartyRequest:
+      type: object
+      required:
+        - personId
+        - partyRoleType
+      properties:
+        personId:
+          type: string
+          example: "PERSON-001"
+        incidentId:
+          type: string
+          example: "INC-001"
+        callId:
+          type: string
+          example: "CALL-001"
+        activityId:
+          type: string
+          example: "ACT-001"
+        partyRoleType:
+          $ref: '#/components/schemas/PartyRoleType'
+        description:
+          type: string
+          example: "Primary witness"
+        involvementStartTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+    
+    UpdatePartyInvolvementRequest:
+      type: object
+      properties:
+        partyRoleType:
+          $ref: '#/components/schemas/PartyRoleType'
+        description:
+          type: string
+          example: "Updated involvement description"
+    
+    EndPartyInvolvementRequest:
+      type: object
+      required:
+        - involvementEndTime
+      properties:
+        involvementEndTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T11:00:00Z"
+    
+    ChangeStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: "Active"
+
+    # Response Schemas
+    OfficerResponse:
+      type: object
+      properties:
+        officerId:
+          type: string
+          example: "12345"
+        badgeNumber:
+          type: string
+          example: "12345"
+    
+    OfficerUpdateResponse:
+      type: object
+      properties:
+        badgeNumber:
+          type: string
+          example: "12345"
+        message:
+          type: string
+          example: "Officer update request processed"
+    
+    OfficerStatusResponse:
+      type: object
+      properties:
+        badgeNumber:
+          type: string
+          example: "12345"
+        status:
+          $ref: '#/components/schemas/OfficerStatus'
+    
+    VehicleResponse:
+      type: object
+      properties:
+        vehicleId:
+          type: string
+          example: "VEH-001"
+        unitId:
+          type: string
+          example: "UNIT-001"
+    
+    UnitResponse:
+      type: object
+      properties:
+        unitId:
+          type: string
+          example: "UNIT-001"
+    
+    PersonResponse:
+      type: object
+      properties:
+        personId:
+          type: string
+          example: "PERSON-001"
+    
+    LocationResponse:
+      type: object
+      properties:
+        locationId:
+          type: string
+          example: "LOC-001"
+    
+    IncidentResponse:
+      type: object
+      properties:
+        incidentId:
+          type: string
+          example: "INC-001"
+        incidentNumber:
+          type: string
+          example: "2024-001"
+    
+    CallResponse:
+      type: object
+      properties:
+        callId:
+          type: string
+          example: "CALL-001"
+        callNumber:
+          type: string
+          example: "2024-CALL-001"
+    
+    ActivityResponse:
+      type: object
+      properties:
+        activityId:
+          type: string
+          example: "ACT-001"
+    
+    AssignmentResponse:
+      type: object
+      properties:
+        assignmentId:
+          type: string
+          example: "ASSIGN-001"
+    
+    ShiftResponse:
+      type: object
+      properties:
+        shiftId:
+          type: string
+          example: "SHIFT-001"
+    
+    ShiftChangeResponse:
+      type: object
+      properties:
+        shiftChangeId:
+          type: string
+          example: "CHANGE-001"
+    
+    DispatchResponse:
+      type: object
+      properties:
+        dispatchId:
+          type: string
+          example: "DISP-001"
+    
+    ResourceAssignmentResponse:
+      type: object
+      properties:
+        resourceAssignmentId:
+          type: string
+          example: "RES-ASSIGN-001"
+    
+    InvolvementResponse:
+      type: object
+      properties:
+        involvementId:
+          type: string
+          example: "INVOLVE-001"
+    
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Request processed successfully"
+    
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Bad Request"
+        message:
+          type: string
+          example: "Validation failed"
+        details:
+          type: array
+          items:
+            type: string
+          example: ["badgeNumber is required"]
+
+  responses:
+    BadRequest:
+      description: Bad request - validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
