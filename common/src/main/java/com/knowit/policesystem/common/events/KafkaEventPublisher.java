@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,28 +35,58 @@ public class KafkaEventPublisher implements EventPublisher {
 
     @Override
     public void publish(String topic, Event event) {
-        // Use aggregateId as the partition key
-        publish(topic, event.getAggregateId(), event);
+        // Use aggregateId as the partition key with default logging callback
+        publish(topic, event.getAggregateId(), event, createDefaultCallback(topic));
     }
 
     @Override
     public void publish(String topic, String key, Event event) {
+        // Use default logging callback
+        publish(topic, key, event, createDefaultCallback(topic));
+    }
+
+    @Override
+    public void publish(String topic, Event event, PublishCallback callback) {
+        // Use aggregateId as the partition key
+        publish(topic, event.getAggregateId(), event, callback);
+    }
+
+    @Override
+    public void publish(String topic, String key, Event event, PublishCallback callback) {
         try {
             String json = objectMapper.writeValueAsString(event);
             ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, json);
             
             producer.send(record, (metadata, exception) -> {
                 if (exception != null) {
-                    logger.error("Failed to publish event {} to topic {}", event.getEventId(), topic, exception);
+                    callback.onFailure(event, exception);
                 } else {
-                    logger.debug("Published event {} to topic {} partition {} offset {}", 
-                            event.getEventId(), metadata.topic(), metadata.partition(), metadata.offset());
+                    callback.onSuccess(event, metadata);
                 }
             });
         } catch (JsonProcessingException e) {
             logger.error("Failed to serialize event {} to JSON", event.getEventId(), e);
-            throw new EventPublishingException("Failed to serialize event to JSON", e);
+            callback.onFailure(event, new EventPublishingException("Failed to serialize event to JSON", e));
         }
+    }
+
+    /**
+     * Creates a default callback that logs success and failure.
+     * Used by the fire-and-forget publish methods.
+     */
+    private PublishCallback createDefaultCallback(String topic) {
+        return new PublishCallback() {
+            @Override
+            public void onSuccess(Event event, RecordMetadata metadata) {
+                logger.debug("Published event {} to topic {} partition {} offset {}", 
+                        event.getEventId(), metadata.topic(), metadata.partition(), metadata.offset());
+            }
+
+            @Override
+            public void onFailure(Event event, Exception exception) {
+                logger.error("Failed to publish event {} to topic {}", event.getEventId(), topic, exception);
+            }
+        };
     }
 
     /**

@@ -81,9 +81,12 @@ Events use request-based naming:
 - Created `Event` abstract base class with fields: eventId (UUID), timestamp (Instant), aggregateId (String), version (int)
 - Implemented `EventPublisher` interface with methods for publishing events to Kafka topics
 - Implemented `KafkaEventPublisher` using KafkaProducer with JSON serialization
+- Added `PublishCallback` interface to allow application programmers to handle both success and failure outcomes
+- Added callback-based publish methods: `publish(String topic, Event event, PublishCallback callback)` and `publish(String topic, String key, Event event, PublishCallback callback)`
+- Maintained backward compatibility: existing fire-and-forget `publish()` methods use default logging callback
 - Added Jackson JSR310 module for Java 8 time support (Instant serialization)
 - Configured ObjectMapper to serialize dates as ISO-8601 strings
-- All tests passing: 5 tests covering serialization, deserialization, metadata, Kafka publishing, and versioning
+- All tests passing: 7 tests covering serialization, deserialization, metadata, Kafka publishing, versioning, and callback handling
 
 **Demo Suggestion**:
 1. Show base Event abstract class (`com.knowit.policesystem.common.events.Event`)
@@ -104,7 +107,21 @@ Events use request-based naming:
 4. Publish event to Kafka using KafkaEventPublisher
    ```java
    EventPublisher publisher = new KafkaEventPublisher(producerProps, mapper);
+   // Fire-and-forget (uses default logging callback)
    publisher.publish("test-events", "aggregate-123", event);
+   
+   // With callback to handle success/failure
+   publisher.publish("test-events", "aggregate-123", event, new EventPublisher.PublishCallback() {
+       @Override
+       public void onSuccess(Event event, RecordMetadata metadata) {
+           // Handle successful publication
+       }
+       
+       @Override
+       public void onFailure(Event event, Exception exception) {
+           // Handle publication failure (retry, store for later, etc.)
+       }
+   });
    ```
 5. Consume event from Kafka topic using kafka-console-consumer
    ```bash
@@ -192,7 +209,10 @@ Events use request-based naming:
 - Create REST controller base classes
 - Implement request/response DTOs
 - Set up API versioning
-- Create API documentation (OpenAPI/Swagger)
+- Integrate existing API documentation (OpenAPI/Swagger) with Spring Boot
+  - API specification already exists at `doc/api/openapi.yaml`
+  - Integrate with springdoc-openapi-ui to serve Swagger UI
+  - Configure Spring Boot to use the existing OpenAPI specification
 - Implement error handling and exception mapping
 - Add request validation
 
@@ -200,15 +220,22 @@ Events use request-based naming:
 - REST endpoints can be called
 - Request validation works
 - Error responses are properly formatted
-- API documentation is generated
+- API documentation is accessible via Swagger UI
 - Exception handling returns appropriate status codes
+
+**Implementation Notes**:
+- OpenAPI 3.0.3 specification already exists at `doc/api/openapi.yaml`
+- Specification includes all planned API endpoints with complete schemas
+- Need to integrate springdoc-openapi-ui to serve the specification
+- Location `doc/api/openapi.yaml` is appropriate and should remain there
 
 **Demo Suggestion**:
 1. Show Spring Boot application starting
-2. Show Swagger UI with API documentation
+2. Show Swagger UI with API documentation (served from existing openapi.yaml)
 3. Make a test API call (even if it fails)
 4. Show error response structure
 5. Show request validation in action
+6. Highlight that API documentation was created upfront and is now integrated
 
 ---
 

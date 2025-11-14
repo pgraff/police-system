@@ -8,8 +8,16 @@ import java.util.stream.Collectors;
 /**
  * Validation error response DTO.
  * Extends ErrorResponse with validation-specific formatting.
+ * Used for returning validation errors to clients.
  */
 public class ValidationErrorResponse extends ErrorResponse {
+    
+    /**
+     * Default constructor for Jackson deserialization.
+     */
+    public ValidationErrorResponse() {
+        super();
+    }
     /**
      * Creates a new validation error response.
      *

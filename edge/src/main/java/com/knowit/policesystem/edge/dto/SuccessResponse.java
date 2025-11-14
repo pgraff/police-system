@@ -1,15 +1,24 @@
 package com.knowit.policesystem.edge.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 /**
  * Standard success response DTO.
  * Used for returning successful operation results to clients.
  *
  * @param <T> the type of the response data
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class SuccessResponse<T> {
     private boolean success;
     private String message;
     private T data;
+
+    /**
+     * Default constructor for Jackson deserialization.
+     */
+    public SuccessResponse() {
+    }
 
     /**
      * Creates a new success response.

@@ -1,15 +1,25 @@
 package com.knowit.policesystem.edge.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.List;
 
 /**
  * Standard error response DTO.
  * Used for returning error information to clients.
+ * Matches the ErrorResponse schema in the OpenAPI specification.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ErrorResponse {
     private String error;
     private String message;
     private List<String> details;
+
+    /**
+     * Default constructor for Jackson deserialization.
+     */
+    public ErrorResponse() {
+    }
 
     /**
      * Creates a new error response.

@@ -214,5 +214,103 @@ class EventInfrastructureTest {
         assertThat(deserializedV2.getVersion()).isEqualTo(2);
         assertThat(deserializedV3.getVersion()).isEqualTo(3);
     }
+
+    @Test
+    void testEventPublishing_WithCallback_InvokesOnSuccess() throws JsonProcessingException {
+        // Given
+        String aggregateId = "test-aggregate-6";
+        TestEvent event = new TestEvent(aggregateId, "callback test data", 300);
+        boolean[] successCalled = {false};
+        org.apache.kafka.clients.producer.RecordMetadata[] capturedMetadata = {null};
+
+        EventPublisher.PublishCallback callback = new EventPublisher.PublishCallback() {
+            @Override
+            public void onSuccess(Event event, org.apache.kafka.clients.producer.RecordMetadata metadata) {
+                successCalled[0] = true;
+                capturedMetadata[0] = metadata;
+            }
+
+            @Override
+            public void onFailure(Event event, Exception exception) {
+                throw new AssertionError("onFailure should not be called for successful publish", exception);
+            }
+        };
+
+        // When
+        eventPublisher.publish(testTopic, aggregateId, event, callback);
+
+        // Then - wait for async callback
+        try {
+            Thread.sleep(1000); // Give Kafka time to process
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        assertThat(successCalled[0]).isTrue();
+        assertThat(capturedMetadata[0]).isNotNull();
+        assertThat(capturedMetadata[0].topic()).isEqualTo(testTopic);
+
+        // Verify event was actually published
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isNotEmpty();
+    }
+
+    @Test
+    void testEventPublishing_WithCallback_InvokesOnFailure_WhenSerializationFails() {
+        // Given
+        String aggregateId = "test-aggregate-7";
+        TestEvent event = new TestEvent(aggregateId, "test", 1);
+        boolean[] failureCalled = {false};
+        Exception[] capturedException = {null};
+
+        EventPublisher.PublishCallback callback = new EventPublisher.PublishCallback() {
+            @Override
+            public void onSuccess(Event event, org.apache.kafka.clients.producer.RecordMetadata metadata) {
+                throw new AssertionError("onSuccess should not be called when serialization fails");
+            }
+
+            @Override
+            public void onFailure(Event event, Exception exception) {
+                failureCalled[0] = true;
+                capturedException[0] = exception;
+            }
+        };
+
+        // Create a publisher with a broken ObjectMapper that will fail serialization
+        ObjectMapper brokenMapper = new ObjectMapper() {
+            @Override
+            public String writeValueAsString(Object value) throws com.fasterxml.jackson.core.JsonProcessingException {
+                throw new com.fasterxml.jackson.core.JsonProcessingException("Simulated serialization failure") {};
+            }
+        };
+        
+        // Create producer properties for the broken publisher
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+        
+        EventPublisher brokenPublisher = new KafkaEventPublisher(producerProps, brokenMapper);
+
+        // When
+        brokenPublisher.publish(testTopic, aggregateId, event, callback);
+
+        // Then - wait a bit for callback
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        assertThat(failureCalled[0]).isTrue();
+        assertThat(capturedException[0]).isNotNull();
+        assertThat(capturedException[0].getMessage()).contains("Failed to serialize event to JSON");
+        
+        // Clean up
+        if (brokenPublisher instanceof KafkaEventPublisher) {
+            ((KafkaEventPublisher) brokenPublisher).close();
+        }
+    }
 }
 
