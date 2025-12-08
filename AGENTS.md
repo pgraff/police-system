@@ -190,5 +190,7 @@ Step 7: Demo Suggestion
 4. Highlight event structure and data
 5. Show validation error example (missing badgeNumber)
 6. Explain event-driven architecture approach
+
+Step 8: Update the development plan to mark off what has been done
 ```
 
