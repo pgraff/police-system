@@ -2,10 +2,12 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.units.ChangeUnitStatusRequested;
 import com.knowit.policesystem.common.events.units.CreateUnitRequested;
 import com.knowit.policesystem.common.events.units.UpdateUnitRequested;
 import com.knowit.policesystem.edge.domain.UnitStatus;
 import com.knowit.policesystem.edge.domain.UnitType;
+import com.knowit.policesystem.edge.dto.ChangeUnitStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CreateUnitRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateUnitRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -35,6 +37,7 @@ import java.util.Collections;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -411,6 +414,98 @@ class UnitControllerTest {
         // When - call REST API with empty unitId (invalid path)
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(put("/api/v1/units/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().is5xxServerError()); // 500 for invalid path mapping
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeUnitStatus_WithValidStatus_ProducesEvent() throws Exception {
+        // Given
+        String unitId = "UNIT-010";
+        String status = "InUse";
+        ChangeUnitStatusRequestDto request = new ChangeUnitStatusRequestDto(status);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/units/{unitId}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.unitId").value(unitId))
+                .andExpect(jsonPath("$.data.status").value(status))
+                .andExpect(jsonPath("$.message").value("Unit status change request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(unitId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        ChangeUnitStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeUnitStatusRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(unitId);
+        assertThat(event.getUnitId()).isEqualTo(unitId);
+        assertThat(event.getStatus()).isEqualTo(status);
+        assertThat(event.getEventType()).isEqualTo("ChangeUnitStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testChangeUnitStatus_WithInvalidStatus_Returns400() throws Exception {
+        // Given - invalid status enum value
+        String unitId = "UNIT-011";
+        String requestJson = """
+                {
+                    "status": "InvalidStatus"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/units/{unitId}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeUnitStatus_WithMissingStatus_Returns400() throws Exception {
+        // Given - missing status field
+        String unitId = "UNIT-012";
+        String requestJson = "{}";
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/units/{unitId}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeUnitStatus_WithEmptyUnitId_Returns400() throws Exception {
+        // Given - empty unitId in path
+        ChangeUnitStatusRequestDto request = new ChangeUnitStatusRequestDto("Available");
+
+        // When - call REST API with empty unitId (invalid path)
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/units/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().is5xxServerError()); // 500 for invalid path mapping

@@ -897,7 +897,7 @@ Events use request-based naming:
 ---
 
 #### Increment 4.3: Change Unit Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PATCH /api/v1/units/{unitId}` (note: path follows OpenAPI spec, not `/status` sub-path)
@@ -916,6 +916,21 @@ Events use request-based naming:
 - Event has eventId, timestamp, aggregateId
 - Event appears in Kafka topic `unit-events`
 - Event appears in NATS JetStream subject `commands.unit.change-status` (critical event)
+
+**Implementation Details**:
+- Created DTOs: `ChangeUnitStatusRequestDto` with `@NotNull` status field and `UnitStatusResponseDto` with unitId and status fields
+- Created `ChangeUnitStatusCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/units/`
+- Created `ChangeUnitStatusRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/units/`
+- Created `ChangeUnitStatusCommandValidator` with validation for unitId (required) and status (required, valid UnitStatus enum: Available, Assigned, InUse, Maintenance, OutOfService)
+- Created `ChangeUnitStatusCommandHandler` that publishes events to Kafka topic "unit-events"
+- Added PATCH endpoint to `UnitController` with path `/api/v1/units/{unitId}` (following OpenAPI spec, not `/status` sub-path)
+- DualEventPublisher automatically publishes critical events (ending in "Requested") to both Kafka and NATS/JetStream
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic (and NATS/JetStream)
+- Event uses request-based naming: `ChangeUnitStatusRequested` (not `UnitStatusChanged`)
+- Validation occurs at both DTO level (via `@Valid` and `@NotNull`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `UnitControllerTest` with Kafka test containers (4 new test cases, all passing)
+- Tests verify Kafka event production with proper event structure and metadata
+- Note: NATS is disabled in test profile, but DualEventPublisher infrastructure is in place for production use
 
 **Demo Suggestion**:
 1. Show PATCH /api/v1/units/UNIT-001 request with curl or Postman
