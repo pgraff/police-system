@@ -3,8 +3,10 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.locations.CreateLocationRequested;
+import com.knowit.policesystem.common.events.locations.UpdateLocationRequested;
 import com.knowit.policesystem.edge.domain.LocationType;
 import com.knowit.policesystem.edge.dto.CreateLocationRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateLocationRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -33,6 +35,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -444,5 +447,256 @@ class LocationControllerTest {
         assertThat(event.getLocationId()).isEqualTo(locationId);
         assertThat(event.getLatitude()).isEqualTo("-90.0");
         assertThat(event.getLongitude()).isEqualTo("-180.0");
+    }
+
+    @Test
+    void testUpdateLocation_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String locationId = "LOC-100";
+        UpdateLocationRequestDto request = new UpdateLocationRequestDto(
+                "456 Oak Ave",
+                "Chicago",
+                "IL",
+                "60601",
+                41.8781,
+                -87.6298,
+                LocationType.Building
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.locationId").value(locationId))
+                .andExpect(jsonPath("$.message").value("Location update request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(locationId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdateLocationRequested event = eventObjectMapper.readValue(record.value(), UpdateLocationRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(locationId);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getAddress()).isEqualTo("456 Oak Ave");
+        assertThat(event.getCity()).isEqualTo("Chicago");
+        assertThat(event.getState()).isEqualTo("IL");
+        assertThat(event.getZipCode()).isEqualTo("60601");
+        assertThat(event.getLatitude()).isEqualTo("41.8781");
+        assertThat(event.getLongitude()).isEqualTo("-87.6298");
+        assertThat(event.getLocationType()).isEqualTo("Building");
+        assertThat(event.getEventType()).isEqualTo("UpdateLocationRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateLocation_WithPartialUpdate_ProducesEvent() throws Exception {
+        // Given - only address and city provided
+        String locationId = "LOC-101";
+        UpdateLocationRequestDto request = new UpdateLocationRequestDto(
+                "789 Pine St",
+                "Boston",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.locationId").value(locationId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdateLocationRequested event = eventObjectMapper.readValue(record.value(), UpdateLocationRequested.class);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getAddress()).isEqualTo("789 Pine St");
+        assertThat(event.getCity()).isEqualTo("Boston");
+        assertThat(event.getState()).isNull();
+        assertThat(event.getZipCode()).isNull();
+        assertThat(event.getLatitude()).isNull();
+        assertThat(event.getLongitude()).isNull();
+        assertThat(event.getLocationType()).isNull();
+        assertThat(event.getEventType()).isEqualTo("UpdateLocationRequested");
+    }
+
+    @Test
+    void testUpdateLocation_WithLatitudeGreaterThan90_Returns400() throws Exception {
+        // Given - latitude > 90
+        String locationId = "LOC-102";
+        UpdateLocationRequestDto request = new UpdateLocationRequestDto(
+                "123 Main St",
+                "Springfield",
+                "IL",
+                "62701",
+                91.0,  // Invalid latitude
+                -89.6501,
+                LocationType.Street
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateLocation_WithLatitudeLessThanNegative90_Returns400() throws Exception {
+        // Given - latitude < -90
+        String locationId = "LOC-103";
+        UpdateLocationRequestDto request = new UpdateLocationRequestDto(
+                "123 Main St",
+                "Springfield",
+                "IL",
+                "62701",
+                -91.0,  // Invalid latitude
+                -89.6501,
+                LocationType.Street
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateLocation_WithLongitudeGreaterThan180_Returns400() throws Exception {
+        // Given - longitude > 180
+        String locationId = "LOC-104";
+        UpdateLocationRequestDto request = new UpdateLocationRequestDto(
+                "123 Main St",
+                "Springfield",
+                "IL",
+                "62701",
+                39.7817,
+                181.0,  // Invalid longitude
+                LocationType.Street
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateLocation_WithLongitudeLessThanNegative180_Returns400() throws Exception {
+        // Given - longitude < -180
+        String locationId = "LOC-105";
+        UpdateLocationRequestDto request = new UpdateLocationRequestDto(
+                "123 Main St",
+                "Springfield",
+                "IL",
+                "62701",
+                39.7817,
+                -181.0,  // Invalid longitude
+                LocationType.Street
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateLocation_WithInvalidLocationType_Returns400() throws Exception {
+        // Given - invalid locationType enum value
+        String locationId = "LOC-106";
+        String requestJson = """
+                {
+                    "address": "123 Main St",
+                    "city": "Springfield",
+                    "state": "IL",
+                    "zipCode": "62701",
+                    "latitude": 39.7817,
+                    "longitude": -89.6501,
+                    "locationType": "InvalidLocationType"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateLocation_WithValidCoordinatesAtBoundaries_ProducesEvent() throws Exception {
+        // Given - coordinates at valid boundaries
+        String locationId = "LOC-107";
+        UpdateLocationRequestDto request = new UpdateLocationRequestDto(
+                "123 Main St",
+                "Springfield",
+                "IL",
+                "62701",
+                90.0,   // Maximum valid latitude
+                180.0,  // Maximum valid longitude
+                LocationType.Street
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/locations/{locationId}", locationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdateLocationRequested event = eventObjectMapper.readValue(record.value(), UpdateLocationRequested.class);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getLatitude()).isEqualTo("90.0");
+        assertThat(event.getLongitude()).isEqualTo("180.0");
     }
 }
