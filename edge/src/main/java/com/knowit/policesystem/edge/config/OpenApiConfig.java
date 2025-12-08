@@ -1,62 +1,68 @@
 package com.knowit.policesystem.edge.config;
 
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
-import io.swagger.v3.oas.models.servers.Server;
+import io.swagger.v3.parser.OpenAPIV3Parser;
+import io.swagger.v3.parser.core.models.ParseOptions;
+import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 
-import java.util.List;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * OpenAPI/Swagger configuration.
- * Configures API documentation based on the existing OpenAPI specification.
+ * Loads API documentation from the existing OpenAPI YAML specification file.
  */
 @Configuration
 public class OpenApiConfig {
 
     /**
-     * Configures the OpenAPI information.
-     * Matches the information from the existing OpenAPI specification.
+     * Loads the OpenAPI specification from the YAML file in resources.
+     * The YAML file is located at {@code api/openapi.yaml} in the classpath.
      *
-     * @return OpenAPI configuration
+     * @return OpenAPI configuration loaded from YAML file
+     * @throws RuntimeException if the YAML file cannot be loaded or parsed
      */
     @Bean
-    public OpenAPI policeSystemOpenAPI() {
-        return new OpenAPI()
-                .info(new Info()
-                        .title("Police Incident Management System API")
-                        .description("""
-                                REST API for the Police Incident Management System. This is an event-driven system where
-                                all operations produce events to Kafka. Events represent requests/commands from the edge,
-                                not state changes.
-                                
-                                ## Architecture
-                                - Edge servers receive HTTP requests and produce events to Kafka
-                                - Events represent requests/commands, not state changes
-                                - No state reconstruction in edge layer
-                                - All operations are asynchronous via Kafka events
-                                """)
-                        .version("1.0.0")
-                        .contact(new Contact()
-                                .name("Police System API Support"))
-                        .license(new License()
-                                .name("Proprietary")))
-                .servers(List.of(
-                        new Server()
-                                .url("http://localhost:8080/api")
-                                .description("Local development server"),
-                        new Server()
-                                .url("https://api.policesystem.example.com/api")
-                                .description("Production server")));
+    public io.swagger.v3.oas.models.OpenAPI policeSystemOpenAPI() {
+        try {
+            Resource resource = new ClassPathResource("api/openapi.yaml");
+            if (!resource.exists()) {
+                throw new IllegalStateException("OpenAPI YAML file not found at api/openapi.yaml");
+            }
+
+            try (InputStream inputStream = resource.getInputStream()) {
+                String yamlContent = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+
+                OpenAPIV3Parser parser = new OpenAPIV3Parser();
+                ParseOptions options = new ParseOptions();
+                options.setResolve(true);
+                options.setFlatten(true);
+
+                SwaggerParseResult parseResult = parser.readContents(yamlContent, null, options);
+
+                if (parseResult.getOpenAPI() == null) {
+                    String errorMessage = "Failed to parse OpenAPI YAML file. Errors: " +
+                            String.join(", ", parseResult.getMessages());
+                    throw new IllegalStateException(errorMessage);
+                }
+
+                return parseResult.getOpenAPI();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load OpenAPI YAML file from classpath", e);
+        }
     }
 
     /**
      * Configures grouped OpenAPI for API documentation.
      * Groups all endpoints under the main API group.
+     * Note: The OpenAPI spec defines paths starting with /api, but controllers use /api/v1.
+     * This grouping matches the actual controller paths.
      *
      * @return GroupedOpenApi configuration
      */
