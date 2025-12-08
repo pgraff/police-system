@@ -713,21 +713,47 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `PATCH /api/vehicles/{unitId}/status`
+- REST API: `PATCH /api/v1/vehicles/{unitId}` (note: path follows OpenAPI spec, not `/status` sub-path)
 - Request body: `{ status }`
-- Response: `200 OK`
-- Produces event: `ChangeVehicleStatusRequested` to Kafka topic `vehicle-events`
-- Test criteria: Verify `ChangeVehicleStatusRequested` event appears in Kafka
+- Response: `200 OK` with `{ unitId, status }`
+- Produces event: `ChangeVehicleStatusRequested` to Kafka topic `vehicle-events` and NATS JetStream subject `commands.vehicle.change-status`
+- Validation: unitId must exist, status must be valid enum
+- Test criteria: Verify `ChangeVehicleStatusRequested` event appears in both Kafka and NATS/JetStream
 
 **Test Criteria**:
-- `testChangeVehicleStatus_WithValidStatus_ProducesEvent()` - Verify event
-- `testChangeVehicleStatus_WithInvalidStatus_Returns400()` - Invalid status
-- Event contains unitId and status
+- `testChangeVehicleStatus_WithValidStatus_ProducesEvent()` - Call PATCH endpoint, verify event
+- `testChangeVehicleStatus_WithInvalidStatus_Returns400()` - Invalid status enum, no event
+- `testChangeVehicleStatus_WithMissingStatus_Returns400()` - Missing status field, no event
+- `testChangeVehicleStatus_WithEmptyUnitId_Returns400()` - Empty unitId in path, no event
+- Event contains unitId and new status
+- Event has eventId, timestamp, aggregateId
+- Event appears in Kafka topic `vehicle-events`
+- Event appears in NATS JetStream subject `commands.vehicle.change-status` (critical event)
+
+**Implementation Details**:
+- (To be filled in during implementation)
 
 **Demo Suggestion**:
-1. Show PATCH /api/vehicles/{unitId}/status request
-2. Show ChangeVehicleStatusRequested event
-3. Show status transition (Available -> In-Use)
+1. Show PATCH /api/v1/vehicles/UNIT-001 request with curl or Postman
+   ```bash
+   curl -X PATCH http://localhost:8080/api/v1/vehicles/UNIT-001 \
+     -H "Content-Type: application/json" \
+     -d '{"status":"InUse"}'
+   ```
+2. Show 200 OK response with unitId and status
+3. Show ChangeVehicleStatusRequested event in Kafka topic using kafka-console-consumer
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic vehicle-events --from-beginning
+   ```
+4. Show ChangeVehicleStatusRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.vehicle.change-status
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show validation error example (invalid status enum value) - 400 Bad Request, no events published
+7. Show validation error example (missing status field) - 400 Bad Request, no events published
+8. Explain status enum values (Available, Assigned, InUse, Maintenance, OutOfService)
+9. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
 
 ---
 
