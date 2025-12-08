@@ -583,27 +583,68 @@ Events use request-based naming:
 ### Phase 3: PoliceVehicle Domain
 
 #### Increment 3.1: Register Vehicle Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/vehicles`
+- REST API: `POST /api/v1/vehicles`
 - Request body: `{ unitId, vehicleType, licensePlate, vin, status, lastMaintenanceDate }`
 - Response: `201 Created` with `{ vehicleId, unitId }`
-- Produces event: `RegisterVehicleRequested` to Kafka topic `vehicle-events`
-- Validation: unitId required, VIN format, status enum
-- Test criteria: Verify `RegisterVehicleRequested` event appears in Kafka
+- Produces event: `RegisterVehicleRequested` to Kafka topic `vehicle-events` and NATS JetStream subject `commands.vehicle.register`
+- Validation: unitId required, VIN format (17 characters, alphanumeric excluding I, O, Q), status enum, vehicleType enum
+- Test criteria: Verify `RegisterVehicleRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testRegisterVehicle_WithValidData_ProducesEvent()` - Verify event in Kafka
-- `testRegisterVehicle_WithMissingUnitId_Returns400()` - Validation error
-- `testRegisterVehicle_WithInvalidVIN_Returns400()` - VIN validation
-- Event contains all vehicle data
+- `testRegisterVehicle_WithValidData_ProducesEvent()` - Call POST /api/v1/vehicles, verify event in both Kafka and NATS/JetStream
+- `testRegisterVehicle_WithMissingUnitId_Returns400()` - Validation error, no event in either bus
+- `testRegisterVehicle_WithInvalidVIN_Returns400()` - VIN validation (wrong length), no event in either bus
+- `testRegisterVehicle_WithInvalidVIN_ContainsInvalidCharacters_Returns400()` - VIN validation (contains I/O/Q), no event in either bus
+- `testRegisterVehicle_WithInvalidStatus_Returns400()` - Status enum validation, no event in either bus
+- `testRegisterVehicle_WithInvalidVehicleType_Returns400()` - VehicleType enum validation, no event in either bus
+- `testRegisterVehicle_WithEmptyUnitId_Returns400()` - Empty unitId validation, no event in either bus
+- `testRegisterVehicle_WithValidData_WithoutLastMaintenanceDate_ProducesEvent()` - Optional field handling
+- Event contains all vehicle data (unitId, vehicleType, licensePlate, vin, status, lastMaintenanceDate)
+- Event has eventId, timestamp, and aggregateId (unitId)
+- Event appears in Kafka topic `vehicle-events`
+- Event appears in NATS JetStream subject `commands.vehicle.register` (critical event)
+
+**Implementation Details**:
+- Created domain enums: `VehicleStatus` (Available, Assigned, InUse, Maintenance, OutOfService) and `VehicleType` (Patrol, SUV, Motorcycle, Van, Truck) in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
+- Created DTOs: `RegisterVehicleRequestDto` and `VehicleResponseDto` with validation annotations (`@NotBlank`, `@NotNull`)
+- Created `RegisterVehicleCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/vehicles/`
+- Created `RegisterVehicleRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/vehicles/`
+- Created `RegisterVehicleCommandValidator` with validation for required fields (unitId, vin format, status enum, vehicleType enum)
+  - VIN validation: regex pattern `^[A-HJ-NPR-Z0-9]{17}$` (17 characters, alphanumeric excluding I, O, Q)
+- Created `RegisterVehicleCommandHandler` that publishes events to Kafka topic "vehicle-events"
+- Created `VehicleController` with POST `/api/v1/vehicles` endpoint extending `BaseRestController`
+- DualEventPublisher automatically publishes critical events (ending in "Requested") to both Kafka and NATS/JetStream
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic (and NATS/JetStream)
+- Event uses request-based naming: `RegisterVehicleRequested` (not `VehicleRegistered`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `VehicleControllerTest` with Kafka test containers (8 test cases, all passing)
+- Tests verify Kafka event production with proper event structure and metadata
+- Note: NATS is disabled in test profile, but DualEventPublisher infrastructure is in place for production use
 
 **Demo Suggestion**:
-1. Show POST /api/vehicles request
-2. Show RegisterVehicleRequested event in Kafka
-3. Show vehicle data structure
-4. Show validation errors
+1. Show POST /api/v1/vehicles request with curl or Postman
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/vehicles \
+     -H "Content-Type: application/json" \
+     -d '{"unitId":"UNIT-001","vehicleType":"Patrol","licensePlate":"ABC-123","vin":"1HGBH41JXMN109186","status":"Available","lastMaintenanceDate":"2024-01-15"}'
+   ```
+2. Show 201 Created response
+3. Show RegisterVehicleRequested event in Kafka topic using kafka-console-consumer
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic vehicle-events --from-beginning
+   ```
+4. Show RegisterVehicleRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.vehicle.register
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show validation error example (missing unitId) - 400 Bad Request, no events published
+7. Show validation error example (invalid VIN format) - 400 Bad Request, no events published
+8. Show vehicle types and statuses
+9. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
 
 ---
 
