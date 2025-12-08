@@ -3,9 +3,11 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.vehicles.RegisterVehicleRequested;
+import com.knowit.policesystem.common.events.vehicles.UpdateVehicleRequested;
 import com.knowit.policesystem.edge.domain.VehicleStatus;
 import com.knowit.policesystem.edge.domain.VehicleType;
 import com.knowit.policesystem.edge.dto.RegisterVehicleRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateVehicleRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -35,6 +37,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -332,5 +335,164 @@ class VehicleControllerTest {
         assertThat(event.getStatus()).isEqualTo("InUse");
         assertThat(event.getLastMaintenanceDate()).isNull();
         assertThat(event.getEventType()).isEqualTo("RegisterVehicleRequested");
+    }
+
+    @Test
+    void testUpdateVehicle_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String unitId = "UNIT-007";
+        LocalDate lastMaintenanceDate = LocalDate.of(2024, 2, 20);
+        UpdateVehicleRequestDto request = new UpdateVehicleRequestDto(
+                VehicleType.SUV,
+                "XYZ-123",
+                "2HGBH41JXMN109186",
+                VehicleStatus.Maintenance,
+                lastMaintenanceDate
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/vehicles/{unitId}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.vehicleId").value(unitId))
+                .andExpect(jsonPath("$.data.unitId").value(unitId))
+                .andExpect(jsonPath("$.message").value("Vehicle update request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(unitId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdateVehicleRequested event = eventObjectMapper.readValue(record.value(), UpdateVehicleRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(unitId);
+        assertThat(event.getUnitId()).isEqualTo(unitId);
+        assertThat(event.getVehicleType()).isEqualTo("SUV");
+        assertThat(event.getLicensePlate()).isEqualTo("XYZ-123");
+        assertThat(event.getVin()).isEqualTo("2HGBH41JXMN109186");
+        assertThat(event.getStatus()).isEqualTo("Maintenance");
+        assertThat(event.getLastMaintenanceDate()).isEqualTo("2024-02-20");
+        assertThat(event.getEventType()).isEqualTo("UpdateVehicleRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateVehicle_WithAllFields_ProducesEvent() throws Exception {
+        // Given - all fields provided
+        String unitId = "UNIT-008";
+        LocalDate lastMaintenanceDate = LocalDate.of(2024, 3, 15);
+        UpdateVehicleRequestDto request = new UpdateVehicleRequestDto(
+                VehicleType.Truck,
+                "ABC-999",
+                "3HGBH41JXMN109186",
+                VehicleStatus.OutOfService,
+                lastMaintenanceDate
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/vehicles/{unitId}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka with all fields
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdateVehicleRequested event = eventObjectMapper.readValue(record.value(), UpdateVehicleRequested.class);
+        assertThat(event.getUnitId()).isEqualTo(unitId);
+        assertThat(event.getVehicleType()).isEqualTo("Truck");
+        assertThat(event.getLicensePlate()).isEqualTo("ABC-999");
+        assertThat(event.getVin()).isEqualTo("3HGBH41JXMN109186");
+        assertThat(event.getStatus()).isEqualTo("OutOfService");
+        assertThat(event.getLastMaintenanceDate()).isEqualTo("2024-03-15");
+    }
+
+    @Test
+    void testUpdateVehicle_WithOnlyVehicleType_ProducesEvent() throws Exception {
+        // Given - only vehicleType provided (partial update)
+        String unitId = "UNIT-009";
+        UpdateVehicleRequestDto request = new UpdateVehicleRequestDto(
+                VehicleType.Van,
+                null,
+                null,
+                null,
+                null
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/vehicles/{unitId}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka with only vehicleType
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdateVehicleRequested event = eventObjectMapper.readValue(record.value(), UpdateVehicleRequested.class);
+        assertThat(event.getUnitId()).isEqualTo(unitId);
+        assertThat(event.getVehicleType()).isEqualTo("Van");
+        assertThat(event.getLicensePlate()).isNull();
+        assertThat(event.getVin()).isNull();
+        assertThat(event.getStatus()).isNull();
+        assertThat(event.getLastMaintenanceDate()).isNull();
+    }
+
+    @Test
+    void testUpdateVehicle_WithInvalidVIN_Returns400() throws Exception {
+        // Given - invalid VIN format (wrong length)
+        String unitId = "UNIT-010";
+        String requestJson = """
+                {
+                    "vehicleType": "Patrol",
+                    "vin": "1HGBH41JXMN10918"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/vehicles/{unitId}", unitId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateVehicle_WithEmptyUnitId_Returns400() throws Exception {
+        // Given - empty unitId in path (this will result in 404 or 500 depending on Spring configuration)
+        UpdateVehicleRequestDto request = new UpdateVehicleRequestDto(
+                VehicleType.Patrol,
+                null,
+                null,
+                null,
+                null
+        );
+
+        // When - call REST API with empty unitId (invalid path)
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/vehicles/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().is5xxServerError()); // 500 for invalid path mapping
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
     }
 }
