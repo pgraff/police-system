@@ -772,26 +772,63 @@ Events use request-based naming:
 ### Phase 4: Unit Domain
 
 #### Increment 4.1: Create Unit Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/units`
+- REST API: `POST /api/v1/units`
 - Request body: `{ unitId, unitType, status }`
-- Response: `201 Created` with `{ unitId }`
-- Produces event: `CreateUnitRequested` to Kafka topic `unit-events`
-- Validation: unitId required, unitType enum, status enum
-- Test criteria: Verify `CreateUnitRequested` event appears in Kafka
+- Response: `201 Created` with `SuccessResponse<UnitResponseDto>` containing `{ unitId }`
+- Produces event: `CreateUnitRequested` to Kafka topic `unit-events` and NATS JetStream subject `commands.unit.create`
+- Validation: unitId required, unitType enum (Single, Team, Squad), status enum (Available, Assigned, In-Use, Maintenance, Out-of-Service)
+- Test criteria: Verify `CreateUnitRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testCreateUnit_WithValidData_ProducesEvent()` - Verify event
-- `testCreateUnit_WithMissingUnitId_Returns400()` - Validation error
-- `testCreateUnit_WithInvalidUnitType_Returns400()` - Invalid enum
-- Event contains unitId, unitType, status
+- `testCreateUnit_WithValidData_ProducesEvent()` - Call POST /api/v1/units, verify event in both Kafka and NATS/JetStream
+- `testCreateUnit_WithMissingUnitId_Returns400()` - Validation error, no event in either bus
+- `testCreateUnit_WithInvalidUnitType_Returns400()` - Invalid unitType enum, no event in either bus
+- `testCreateUnit_WithInvalidStatus_Returns400()` - Invalid status enum, no event in either bus
+- `testCreateUnit_WithEmptyUnitId_Returns400()` - Empty unitId validation, no event in either bus
+- Event contains all unit data (unitId, unitType, status)
+- Event has eventId, timestamp, and aggregateId (unitId)
+- Event appears in Kafka topic `unit-events`
+- Event appears in NATS JetStream subject `commands.unit.create` (critical event)
 
 **Demo Suggestion**:
-1. Show POST /api/units request
-2. Show CreateUnitRequested event in Kafka
-3. Show unit types and statuses
+1. Show POST /api/v1/units request with curl or Postman
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/units \
+     -H "Content-Type: application/json" \
+     -d '{"unitId":"UNIT-001","unitType":"Single","status":"Available"}'
+   ```
+2. Show 201 Created response
+3. Show CreateUnitRequested event in Kafka topic using kafka-console-consumer
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic unit-events --from-beginning
+   ```
+4. Show CreateUnitRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.unit.create
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show validation error example (missing unitId) - 400 Bad Request, no events published
+7. Show unit types (Single, Team, Squad) and statuses (Available, Assigned, In-Use, Maintenance, Out-of-Service)
+8. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
+
+**Implementation Details**:
+- Created domain enums: `UnitType` (Single, Team, Squad) and `UnitStatus` (Available, Assigned, InUse, Maintenance, OutOfService) in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
+- Created DTOs: `CreateUnitRequestDto` and `UnitResponseDto` with validation annotations (`@NotBlank`, `@NotNull`)
+- Created `CreateUnitCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/units/`
+- Created `CreateUnitRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/units/`
+- Created `CreateUnitCommandValidator` with validation for required fields (unitId, unitType enum, status enum)
+- Created `CreateUnitCommandHandler` that publishes events to Kafka topic "unit-events"
+- Created `UnitController` with POST `/api/v1/units` endpoint extending `BaseRestController`
+- DualEventPublisher automatically publishes critical events (ending in "Requested") to both Kafka and NATS/JetStream
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic (and NATS/JetStream)
+- Event uses request-based naming: `CreateUnitRequested` (not `UnitCreated`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `UnitControllerTest` with Kafka test containers (5 test cases, all passing)
+- Tests verify Kafka event production with proper event structure and metadata
+- Note: NATS is disabled in test profile, but DualEventPublisher infrastructure is in place for production use
 
 ---
 
