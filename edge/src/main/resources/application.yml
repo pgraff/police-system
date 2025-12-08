@@ -15,6 +15,11 @@ spring:
   kafka:
     bootstrap-servers: localhost:9092
 
+# NATS/JetStream configuration
+nats:
+  url: nats://localhost:4222
+  enabled: true
+
 # SpringDoc OpenAPI configuration
 springdoc:
   api-docs:

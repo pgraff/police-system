@@ -7,17 +7,38 @@ This document outlines the complete development plan for the Police Incident Man
 The Police System is an Event-Driven system built with:
 - **Language**: Java 17
 - **Framework**: Spring Framework / Spring Boot
-- **Event Bus**: Apache Kafka
-- **Architecture**: Event-Driven Edge Layer (events represent requests/commands)
+- **Primary Event Bus**: Apache Kafka (for event sourcing and long-term storage)
+- **Secondary Event Bus**: NATS/JetStream (for critical messages requiring near realtime processing)
+- **Architecture**: Event-Driven Edge Layer with Double-Publish Pattern (events represent requests/commands)
 
 ## Development Approach
 
 ### Core Principles
-- **Edge servers** receive HTTP requests and produce events to Kafka
+- **Edge servers** receive HTTP requests and produce events using double-publish pattern
 - **Events represent requests/commands**, not state changes
 - **No state reconstruction** in edge layer
 - **No CQRS projections** in initial development
-- **Tests verify Kafka message production** - call API, verify event in Kafka
+- **Tests verify event production** - call API, verify event in both Kafka and NATS/JetStream (for critical events)
+
+### Double-Publish Pattern
+The system implements a **double-publish pattern** for event distribution:
+- **All events** are published to **Kafka** for event sourcing, long-term storage, and eventual consistency
+- **Critical events** (commands and near realtime processing requirements) are also published to **NATS/JetStream** for:
+  - Low-latency message delivery
+  - At-least-once delivery guarantees
+  - Real-time processing capabilities
+  - Stream processing with JetStream
+
+**Critical Events** include:
+- All command events (e.g., `RegisterOfficerRequested`, `ReportIncidentRequested`)
+- Status change events requiring immediate processing
+- Dispatch and assignment events
+- Any event requiring near realtime processing
+
+**Non-Critical Events** (Kafka only):
+- Update events that don't require immediate processing
+- Historical events
+- Events used primarily for analytics and reporting
 
 ### Event Naming
 Events use request-based naming:
@@ -79,7 +100,7 @@ Events use request-based naming:
 
 **Implementation Details**:
 - Created `Event` abstract base class with fields: eventId (UUID), timestamp (Instant), aggregateId (String), version (int)
-- Implemented `EventPublisher` interface with methods for publishing events to Kafka topics
+- Implemented `EventPublisher` interface with methods for publishing events to event buses
 - Implemented `KafkaEventPublisher` using KafkaProducer with JSON serialization
 - Added `PublishCallback` interface to allow application programmers to handle both success and failure outcomes
 - Added callback-based publish methods: `publish(String topic, Event event, PublishCallback callback)` and `publish(String topic, String key, Event event, PublishCallback callback)`
@@ -87,6 +108,7 @@ Events use request-based naming:
 - Added Jackson JSR310 module for Java 8 time support (Instant serialization)
 - Configured ObjectMapper to serialize dates as ISO-8601 strings
 - All tests passing: 7 tests covering serialization, deserialization, metadata, Kafka publishing, versioning, and callback handling
+- Note: NATS/JetStream support will be added in Increment 1.5
 
 **Demo Suggestion**:
 1. Show base Event abstract class (`com.knowit.policesystem.common.events.Event`)
@@ -204,6 +226,70 @@ Events use request-based naming:
 #### Increment 1.4: REST API Infrastructure
 **Status**: ✅ Completed
 
+---
+
+#### Increment 1.5: NATS/JetStream Infrastructure
+**Status**: ⏳ Pending
+
+**Step 0: Requirements**
+- Add NATS Java client dependency to common module
+- Create `NatsEventPublisher` implementing `EventPublisher` interface
+  - Location: `common` module, package `com.knowit.policesystem.common.events`
+- Implement JetStream publishing with:
+  - Subject-based routing (e.g., `commands.officer.register`, `commands.incident.report`)
+  - At-least-once delivery guarantees
+  - Message acknowledgment handling
+  - Error handling and retry logic
+- Create `DualEventPublisher` composite that publishes to both Kafka and NATS/JetStream
+  - Location: `common` module, package `com.knowit.policesystem.common.events`
+  - Determines if event is critical and should be published to NATS/JetStream
+  - Always publishes to Kafka
+  - Publishes to NATS/JetStream for critical events (commands and near realtime events)
+- Configure NATS connection in Spring Boot
+  - Location: `edge` module, package `com.knowit.policesystem.edge.config`
+- Add NATS test container support for testing
+- Update `EventPublisher` interface to support dual publishing (if needed)
+- Create event classification mechanism to determine critical vs non-critical events
+
+**Test Criteria**:
+- `NatsEventPublisher` can publish events to NATS JetStream subjects
+- Events are correctly serialized to JSON
+- Message acknowledgment works correctly
+- Error handling and retry logic function properly
+- `DualEventPublisher` publishes all events to Kafka
+- `DualEventPublisher` publishes critical events to NATS/JetStream
+- `DualEventPublisher` skips NATS/JetStream for non-critical events
+- Events can be consumed from NATS JetStream subjects
+- NATS test containers can be used in integration tests
+- Both Kafka and NATS/JetStream events contain correct data
+
+**Implementation Details**:
+- Use `io.nats:jnats` Java client library for NATS connectivity
+- Use JetStream API for persistent message storage
+- Subject naming convention: `commands.{domain}.{action}` (e.g., `commands.officer.register`)
+- Event classification: All command events (ending in `Requested`) are considered critical
+- DualEventPublisher uses composition pattern with KafkaEventPublisher and NatsEventPublisher
+- Configuration allows enabling/disabling NATS publishing per environment
+- Both publishers use the same ObjectMapper for JSON serialization consistency
+
+**Demo Suggestion**:
+1. Show NATS/JetStream configuration in application.yml
+2. Show DualEventPublisher implementation and event classification logic
+3. Publish a critical event (e.g., `ReportIncidentRequested`)
+4. Verify event appears in both Kafka topic and NATS JetStream subject
+   ```bash
+   # Kafka
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic incident-events --from-beginning
+   
+   # NATS JetStream
+   nats stream view commands.incident.report
+   ```
+5. Publish a non-critical event and show it only goes to Kafka
+6. Show NATS JetStream message acknowledgment and delivery guarantees
+7. Explain the double-publish pattern and when to use each event bus
+
+---
+
 **Step 0: Requirements**
 - Set up Spring Web MVC configuration
 - Create REST controller base classes
@@ -264,17 +350,19 @@ Events use request-based naming:
 - REST API: `POST /api/incidents`
 - Request body: `{ incidentId, incidentNumber, priority, status, reportedTime, description, incidentType }`
 - Response: `201 Created` with `{ incidentId, incidentNumber }`
-- Produces event: `ReportIncidentRequested` to Kafka topic `incident-events`
+- Produces event: `ReportIncidentRequested` to Kafka topic `incident-events` and NATS JetStream subject `commands.incident.report`
 - Validation: incidentId required, priority enum, status enum, incidentType enum
-- Test criteria: Verify `ReportIncidentRequested` event appears in Kafka with correct data
+- Test criteria: Verify `ReportIncidentRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testReportIncident_WithValidData_ProducesEvent()` - Call POST /api/incidents, verify event in Kafka
-- `testReportIncident_WithMissingIncidentId_Returns400()` - Validation error, no event
-- `testReportIncident_WithInvalidPriority_Returns400()` - Priority enum validation, no event
-- `testReportIncident_WithInvalidStatus_Returns400()` - Status enum validation, no event
+- `testReportIncident_WithValidData_ProducesEvent()` - Call POST /api/incidents, verify event in both Kafka and NATS/JetStream
+- `testReportIncident_WithMissingIncidentId_Returns400()` - Validation error, no event in either bus
+- `testReportIncident_WithInvalidPriority_Returns400()` - Priority enum validation, no event in either bus
+- `testReportIncident_WithInvalidStatus_Returns400()` - Status enum validation, no event in either bus
 - Event contains all incident data (incidentId, incidentNumber, priority, status, reportedTime, description, incidentType)
 - Event has eventId, timestamp, and aggregateId (incidentId)
+- Event appears in Kafka topic `incident-events`
+- Event appears in NATS JetStream subject `commands.incident.report` (critical event)
 
 **Implementation Details**:
 - Created domain enums: `Priority`, `IncidentStatus`, `IncidentType` in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
@@ -304,10 +392,14 @@ Events use request-based naming:
    ```bash
    kafka-console-consumer --bootstrap-server localhost:9092 --topic incident-events --from-beginning
    ```
-4. Highlight event structure (eventId, timestamp, aggregateId, event data)
-5. Show validation error example (missing incidentId) - 400 Bad Request
-6. Show incident priorities and types
-7. Explain event-driven architecture approach
+4. Show ReportIncidentRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.incident.report
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show validation error example (missing incidentId) - 400 Bad Request, no events published
+7. Show incident priorities and types
+8. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
 
 ---
 
@@ -318,17 +410,19 @@ Events use request-based naming:
 - REST API: `POST /api/officers`
 - Request body: `{ badgeNumber, firstName, lastName, rank, email, phoneNumber, hireDate, status }`
 - Response: `201 Created` with `{ officerId, badgeNumber }`
-- Produces event: `RegisterOfficerRequested` to Kafka topic `officer-events`
+- Produces event: `RegisterOfficerRequested` to Kafka topic `officer-events` and NATS JetStream subject `commands.officer.register`
 - Validation: badgeNumber required, email format, status enum
-- Test criteria: Verify `RegisterOfficerRequested` event appears in Kafka with correct data
+- Test criteria: Verify `RegisterOfficerRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testRegisterOfficer_WithValidData_ProducesEvent()` - Call POST /api/officers, verify event in Kafka
-- `testRegisterOfficer_WithMissingBadgeNumber_Returns400()` - Validation error, no event
-- `testRegisterOfficer_WithInvalidEmail_Returns400()` - Email validation, no event
-- `testRegisterOfficer_WithInvalidStatus_Returns400()` - Status enum validation, no event
+- `testRegisterOfficer_WithValidData_ProducesEvent()` - Call POST /api/officers, verify event in both Kafka and NATS/JetStream
+- `testRegisterOfficer_WithMissingBadgeNumber_Returns400()` - Validation error, no event in either bus
+- `testRegisterOfficer_WithInvalidEmail_Returns400()` - Email validation, no event in either bus
+- `testRegisterOfficer_WithInvalidStatus_Returns400()` - Status enum validation, no event in either bus
 - Event contains all officer data (badgeNumber, firstName, lastName, rank, email, phoneNumber, hireDate, status)
 - Event has eventId, timestamp, and aggregateId (badgeNumber)
+- Event appears in Kafka topic `officer-events`
+- Event appears in NATS JetStream subject `commands.officer.register` (critical event)
 
 **Demo Suggestion**:
 1. Show POST /api/officers request with curl or Postman
@@ -342,9 +436,13 @@ Events use request-based naming:
    ```bash
    kafka-console-consumer --bootstrap-server localhost:9092 --topic officer-events --from-beginning
    ```
-4. Highlight event structure (eventId, timestamp, aggregateId, event data)
-5. Show validation error example (missing badgeNumber) - 400 Bad Request
-6. Explain event-driven architecture approach
+4. Show RegisterOfficerRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.officer.register
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show validation error example (missing badgeNumber) - 400 Bad Request, no events published
+7. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
 
 ---
 
@@ -355,9 +453,9 @@ Events use request-based naming:
 - REST API: `PUT /api/officers/{badgeNumber}`
 - Request body: `{ firstName, lastName, rank, email, phoneNumber, hireDate }` (all optional)
 - Response: `200 OK` with `{ badgeNumber, message }`
-- Produces event: `UpdateOfficerRequested` to Kafka topic `officer-events`
+- Produces event: `UpdateOfficerRequested` to Kafka topic `officer-events` and NATS JetStream subject `commands.officer.update`
 - Validation: badgeNumber must exist, email format if provided
-- Test criteria: Verify `UpdateOfficerRequested` event appears in Kafka
+- Test criteria: Verify `UpdateOfficerRequested` event appears in both Kafka and NATS/JetStream
 
 **Test Criteria**:
 - `testUpdateOfficer_WithValidData_ProducesEvent()` - Call PUT /api/officers/{badgeNumber}, verify event
@@ -382,9 +480,9 @@ Events use request-based naming:
 - REST API: `PATCH /api/officers/{badgeNumber}/status`
 - Request body: `{ status }`
 - Response: `200 OK` with `{ badgeNumber, status }`
-- Produces event: `ChangeOfficerStatusRequested` to Kafka topic `officer-events`
+- Produces event: `ChangeOfficerStatusRequested` to Kafka topic `officer-events` and NATS JetStream subject `commands.officer.change-status`
 - Validation: badgeNumber must exist, status must be valid enum
-- Test criteria: Verify `ChangeOfficerStatusRequested` event appears in Kafka
+- Test criteria: Verify `ChangeOfficerStatusRequested` event appears in both Kafka and NATS/JetStream
 
 **Test Criteria**:
 - `testChangeOfficerStatus_WithValidStatus_ProducesEvent()` - Call PATCH endpoint, verify event
@@ -1527,14 +1625,17 @@ Events use request-based naming:
 
 ### Increment Selection
 - Start with Phase 1 (Foundation) before moving to other phases
+- **Increment 1.5 (NATS/JetStream Infrastructure) must be completed before implementing domain features** that require dual publishing
 - Within each phase, increments can be developed in parallel when dependencies allow
 - Always complete infrastructure increments before dependent feature increments
 
 ### Testing Strategy
 - Each increment must include comprehensive tests
-- All tests follow the pattern: Call API → Verify Kafka Event
-- Use Kafka test containers or embedded Kafka for testing
-- Tests verify event structure and data correctness
+- All tests follow the pattern: Call API → Verify Events (Kafka and NATS/JetStream for critical events)
+- Use Kafka test containers and NATS test containers for testing
+- Tests verify event structure and data correctness in both event buses
+- Critical events (commands) must be verified in both Kafka and NATS/JetStream
+- Non-critical events are verified in Kafka only
 - No state reconstruction or projection testing in initial development
 
 ### Code Quality
@@ -1565,4 +1666,13 @@ Events use request-based naming:
 - Regular reviews should be conducted to ensure plan accuracy
 - All events use request-based naming (e.g., `RegisterOfficerRequested` not `OfficerRegistered`)
 - Focus is on event production, not state reconstruction or projections
+
+### Double-Publish Pattern Implementation Notes
+
+- **All command events** (events ending in `Requested`) are considered critical and must be published to both Kafka and NATS/JetStream
+- **NATS JetStream subject naming**: `commands.{domain}.{action}` (e.g., `commands.officer.register`, `commands.incident.report`)
+- **Kafka topic naming**: `{domain}-events` (e.g., `officer-events`, `incident-events`)
+- **Test verification**: All critical events must be verified in both event buses
+- **Increment 1.5** must be completed before implementing domain features that require dual publishing
+- For increments not yet updated with dual-publish test criteria, they should be updated when implemented to include verification of both Kafka and NATS/JetStream events
 
