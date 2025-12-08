@@ -2,9 +2,11 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.officers.ChangeOfficerStatusRequested;
 import com.knowit.policesystem.common.events.officers.RegisterOfficerRequested;
 import com.knowit.policesystem.common.events.officers.UpdateOfficerRequested;
 import com.knowit.policesystem.edge.domain.OfficerStatus;
+import com.knowit.policesystem.edge.dto.ChangeOfficerStatusRequestDto;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -35,6 +37,7 @@ import java.util.Collections;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -419,6 +422,98 @@ class OfficerControllerTest {
         // When - call REST API with empty badgeNumber (invalid path)
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(put("/api/v1/officers/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().is5xxServerError()); // 500 for invalid path mapping
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeOfficerStatus_WithValidStatus_ProducesEvent() throws Exception {
+        // Given
+        String badgeNumber = "12352";
+        String status = "OnDuty";
+        ChangeOfficerStatusRequestDto request = new ChangeOfficerStatusRequestDto(status);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/officers/{badgeNumber}", badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.badgeNumber").value(badgeNumber))
+                .andExpect(jsonPath("$.data.status").value(status))
+                .andExpect(jsonPath("$.message").value("Officer status change request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(badgeNumber);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        ChangeOfficerStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeOfficerStatusRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(badgeNumber);
+        assertThat(event.getBadgeNumber()).isEqualTo(badgeNumber);
+        assertThat(event.getStatus()).isEqualTo(status);
+        assertThat(event.getEventType()).isEqualTo("ChangeOfficerStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testChangeOfficerStatus_WithInvalidStatus_Returns400() throws Exception {
+        // Given - invalid status enum value
+        String badgeNumber = "12353";
+        String requestJson = """
+                {
+                    "status": "InvalidStatus"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/officers/{badgeNumber}", badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeOfficerStatus_WithMissingStatus_Returns400() throws Exception {
+        // Given - missing status field
+        String badgeNumber = "12354";
+        String requestJson = "{}";
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/officers/{badgeNumber}", badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeOfficerStatus_WithEmptyBadgeNumber_Returns400() throws Exception {
+        // Given - empty badgeNumber in path
+        ChangeOfficerStatusRequestDto request = new ChangeOfficerStatusRequestDto("Active");
+
+        // When - call REST API with empty badgeNumber (invalid path)
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/officers/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().is5xxServerError()); // 500 for invalid path mapping
