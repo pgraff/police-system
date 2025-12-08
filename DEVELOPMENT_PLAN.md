@@ -836,20 +836,47 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `PUT /api/units/{unitId}`
+- REST API: `PUT /api/v1/units/{unitId}`
 - Request body: `{ unitType, status }` (all optional)
-- Response: `200 OK`
-- Produces event: `UpdateUnitRequested` to Kafka topic `unit-events`
-- Test criteria: Verify `UpdateUnitRequested` event appears in Kafka
+- Response: `200 OK` with `SuccessResponse<UnitResponseDto>`
+- Produces event: `UpdateUnitRequested` to Kafka topic `unit-events` and NATS JetStream subject `commands.unit.update`
+- Validation: unitId required (from path), unitType enum if provided, status enum if provided
+- Test criteria: Verify `UpdateUnitRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testUpdateUnit_WithValidData_ProducesEvent()` - Verify event
-- `testUpdateUnit_WithNonExistentUnitId_Returns404()` - Not found
-- Event contains unitId and provided fields
+- `testUpdateUnit_WithValidData_ProducesEvent()` - Call PUT /api/v1/units/{unitId}, verify event in Kafka
+- `testUpdateUnit_WithAllFields_ProducesEvent()` - All fields provided, verify all fields in event
+- `testUpdateUnit_WithOnlyUnitType_ProducesEvent()` - Partial update (only unitType), verify nulls for other fields
+- `testUpdateUnit_WithOnlyStatus_ProducesEvent()` - Partial update (only status), verify nulls for other fields
+- `testUpdateUnit_WithInvalidUnitType_Returns400()` - Invalid unitType enum, verify 400 and no event
+- `testUpdateUnit_WithInvalidStatus_Returns400()` - Invalid status enum, verify 400 and no event
+- `testUpdateUnit_WithEmptyUnitId_Returns400()` - Empty unitId in path, verify error
+- Event contains unitId and provided fields (nulls for omitted fields)
+- Event has eventId, timestamp, aggregateId
+- Event appears in Kafka topic `unit-events`
+- Event appears in NATS JetStream subject `commands.unit.update` (critical event)
 
 **Demo Suggestion**:
-1. Show PUT /api/units/{unitId} request
-2. Show UpdateUnitRequested event
+1. Show PUT /api/v1/units/UNIT-001 request with curl or Postman
+   ```bash
+   curl -X PUT http://localhost:8080/api/v1/units/UNIT-001 \
+     -H "Content-Type: application/json" \
+     -d '{"unitType":"Team","status":"Assigned"}'
+   ```
+2. Show 200 OK response
+3. Show UpdateUnitRequested event in Kafka topic using kafka-console-consumer
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic unit-events --from-beginning
+   ```
+4. Show UpdateUnitRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.unit.update
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show partial update example (only unitType provided) - verify other fields are null in event
+7. Show validation error example (invalid unitType enum value) - 400 Bad Request, no events published
+8. Show validation error example (invalid status enum value) - 400 Bad Request, no events published
+9. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
 
 ---
 
