@@ -1092,26 +1092,71 @@ Events use request-based naming:
 ### Phase 6: Location Domain
 
 #### Increment 6.1: Create Location Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/v1/locations`
 - Request body: `{ locationId, address, city, state, zipCode, latitude, longitude, locationType }`
-- Response: `201 Created` with `{ locationId }`
-- Produces event: `CreateLocationRequested` to Kafka topic `location-events`
-- Validation: locationId required, coordinates format, locationType enum
-- Test criteria: Verify `CreateLocationRequested` event appears in Kafka
+- Response: `201 Created` with `SuccessResponse<LocationResponseDto>` containing `{ locationId }`
+- Produces event: `CreateLocationRequested` to Kafka topic `location-events` and NATS JetStream subject `commands.location.create`
+- Validation: locationId required, coordinates format (latitude: -90 to 90, longitude: -180 to 180), locationType enum
+- Test criteria: Verify `CreateLocationRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testCreateLocation_WithValidData_ProducesEvent()` - Verify event
-- `testCreateLocation_WithMissingLocationId_Returns400()` - Validation error
-- `testCreateLocation_WithInvalidCoordinates_Returns400()` - Coordinate validation
-- Event contains all location data
+- `testCreateLocation_WithValidData_ProducesEvent()` - Call POST /api/v1/locations, verify event in both Kafka and NATS/JetStream
+- `testCreateLocation_WithMinimalData_ProducesEvent()` - Only required fields, verify event
+- `testCreateLocation_WithMissingLocationId_Returns400()` - Validation error, no event in either bus
+- `testCreateLocation_WithEmptyLocationId_Returns400()` - Empty locationId validation, no event published
+- `testCreateLocation_WithLatitudeGreaterThan90_Returns400()` - Latitude > 90 validation, no event published
+- `testCreateLocation_WithLatitudeLessThanNegative90_Returns400()` - Latitude < -90 validation, no event published
+- `testCreateLocation_WithLongitudeGreaterThan180_Returns400()` - Longitude > 180 validation, no event published
+- `testCreateLocation_WithLongitudeLessThanNegative180_Returns400()` - Longitude < -180 validation, no event published
+- `testCreateLocation_WithInvalidLocationType_Returns400()` - LocationType enum validation, no event published
+- `testCreateLocation_WithValidCoordinatesAtBoundaries_ProducesEvent()` - Boundary values (90, -90, 180, -180) are valid
+- `testCreateLocation_WithValidCoordinatesAtNegativeBoundaries_ProducesEvent()` - Negative boundary values are valid
+- Event contains all location data (locationId, address, city, state, zipCode, latitude, longitude, locationType)
+- Event has eventId, timestamp, and aggregateId (locationId)
+- Event appears in Kafka topic `location-events`
+- Event appears in NATS JetStream subject `commands.location.create` (critical event)
+
+**Implementation Details**:
+- Created domain enum: `LocationType` (Street, Building, Park, Highway, Other) in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
+- Created DTOs: `CreateLocationRequestDto` and `LocationResponseDto` with validation annotations (`@NotBlank` for locationId)
+- Created `CreateLocationCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/locations/`
+- Created `CreateLocationRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/locations/`
+- Created `CreateLocationCommandValidator` with validation for required fields (locationId) and coordinate ranges (latitude: -90 to 90, longitude: -180 to 180)
+- Created `CreateLocationCommandHandler` that publishes events to Kafka topic "location-events"
+- Created `LocationController` with POST `/api/v1/locations` endpoint extending `BaseRestController`
+- DualEventPublisher automatically publishes critical events (ending in "Requested") to both Kafka and NATS/JetStream
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic (and NATS/JetStream)
+- Event uses request-based naming: `CreateLocationRequested` (not `LocationCreated`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `LocationControllerTest` with Kafka test containers (11 test cases, all passing)
+- Tests verify Kafka event production with proper event structure and metadata
+- Coordinate validation ensures latitude is between -90.0 and 90.0, longitude is between -180.0 and 180.0
+- Note: NATS is disabled in test profile, but DualEventPublisher infrastructure is in place for production use
 
 **Demo Suggestion**:
-1. Show POST /api/v1/locations request
-2. Show CreateLocationRequested event in Kafka
-3. Show location with coordinates
+1. Show POST /api/v1/locations request with curl or Postman
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/locations \
+     -H "Content-Type: application/json" \
+     -d '{"locationId":"LOC-001","address":"123 Main St","city":"Springfield","state":"IL","zipCode":"62701","latitude":39.7817,"longitude":-89.6501,"locationType":"Street"}'
+   ```
+2. Show 201 Created response
+3. Show CreateLocationRequested event in Kafka topic using kafka-console-consumer
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic location-events --from-beginning
+   ```
+4. Show CreateLocationRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.location.create
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show validation error example (missing locationId) - 400 Bad Request, no events published
+7. Show coordinate validation examples (latitude > 90, longitude > 180) - 400 Bad Request, no events published
+8. Show locationType enum values (Street, Building, Park, Highway, Other)
+9. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
 
 ---
 
