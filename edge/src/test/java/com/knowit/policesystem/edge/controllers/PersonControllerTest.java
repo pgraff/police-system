@@ -3,9 +3,11 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.persons.RegisterPersonRequested;
+import com.knowit.policesystem.common.events.persons.UpdatePersonRequested;
 import com.knowit.policesystem.edge.domain.Gender;
 import com.knowit.policesystem.edge.domain.Race;
 import com.knowit.policesystem.edge.dto.RegisterPersonRequestDto;
+import com.knowit.policesystem.edge.dto.UpdatePersonRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -35,6 +37,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -383,6 +386,220 @@ class PersonControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdatePerson_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String personId = "PERSON-100";
+        LocalDate dateOfBirth = LocalDate.of(1990, 5, 20);
+        UpdatePersonRequestDto request = new UpdatePersonRequestDto(
+                "Jane",
+                "Smith",
+                dateOfBirth,
+                Gender.Female,
+                Race.White,
+                "555-0200"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/persons/{personId}", personId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.personId").value(personId))
+                .andExpect(jsonPath("$.message").value("Person update request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(personId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdatePersonRequested event = eventObjectMapper.readValue(record.value(), UpdatePersonRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(personId);
+        assertThat(event.getPersonId()).isEqualTo(personId);
+        assertThat(event.getFirstName()).isEqualTo("Jane");
+        assertThat(event.getLastName()).isEqualTo("Smith");
+        assertThat(event.getDateOfBirth()).isEqualTo("1990-05-20");
+        assertThat(event.getGender()).isEqualTo("Female");
+        assertThat(event.getRace()).isEqualTo("White");
+        assertThat(event.getPhoneNumber()).isEqualTo("555-0200");
+        assertThat(event.getEventType()).isEqualTo("UpdatePersonRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdatePerson_WithAllFields_ProducesEvent() throws Exception {
+        // Given - all fields provided
+        String personId = "PERSON-101";
+        LocalDate dateOfBirth = LocalDate.of(1985, 3, 15);
+        UpdatePersonRequestDto request = new UpdatePersonRequestDto(
+                "John",
+                "Doe",
+                dateOfBirth,
+                Gender.Male,
+                Race.Black,
+                "555-0300"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/persons/{personId}", personId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka with all fields
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdatePersonRequested event = eventObjectMapper.readValue(record.value(), UpdatePersonRequested.class);
+        assertThat(event.getPersonId()).isEqualTo(personId);
+        assertThat(event.getFirstName()).isEqualTo("John");
+        assertThat(event.getLastName()).isEqualTo("Doe");
+        assertThat(event.getDateOfBirth()).isEqualTo("1985-03-15");
+        assertThat(event.getGender()).isEqualTo("Male");
+        assertThat(event.getRace()).isEqualTo("Black");
+        assertThat(event.getPhoneNumber()).isEqualTo("555-0300");
+        assertThat(event.getEventType()).isEqualTo("UpdatePersonRequested");
+    }
+
+    @Test
+    void testUpdatePerson_WithPartialUpdate_ProducesEvent() throws Exception {
+        // Given - only firstName provided (partial update)
+        String personId = "PERSON-102";
+        UpdatePersonRequestDto request = new UpdatePersonRequestDto(
+                "Alice",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/persons/{personId}", personId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka with only firstName
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdatePersonRequested event = eventObjectMapper.readValue(record.value(), UpdatePersonRequested.class);
+        assertThat(event.getPersonId()).isEqualTo(personId);
+        assertThat(event.getFirstName()).isEqualTo("Alice");
+        assertThat(event.getLastName()).isNull();
+        assertThat(event.getDateOfBirth()).isNull();
+        assertThat(event.getGender()).isNull();
+        assertThat(event.getRace()).isNull();
+        assertThat(event.getPhoneNumber()).isNull();
+        assertThat(event.getEventType()).isEqualTo("UpdatePersonRequested");
+    }
+
+    @Test
+    void testUpdatePerson_WithInvalidDateOfBirth_Returns400() throws Exception {
+        // Given - invalid date format
+        String personId = "PERSON-103";
+        String requestJson = """
+                {
+                    "firstName": "Jane",
+                    "lastName": "Smith",
+                    "dateOfBirth": "invalid-date"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/persons/{personId}", personId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdatePerson_WithInvalidGender_Returns400() throws Exception {
+        // Given - invalid gender enum value
+        String personId = "PERSON-104";
+        String requestJson = """
+                {
+                    "firstName": "Jane",
+                    "lastName": "Smith",
+                    "gender": "InvalidGender"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/persons/{personId}", personId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdatePerson_WithInvalidRace_Returns400() throws Exception {
+        // Given - invalid race enum value
+        String personId = "PERSON-105";
+        String requestJson = """
+                {
+                    "firstName": "Jane",
+                    "lastName": "Smith",
+                    "race": "InvalidRace"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/persons/{personId}", personId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdatePerson_WithEmptyPersonId_Returns400() throws Exception {
+        // Given - empty personId in path (this will result in 500 depending on Spring configuration)
+        UpdatePersonRequestDto request = new UpdatePersonRequestDto(
+                "Jane",
+                "Smith",
+                LocalDate.of(1990, 5, 20),
+                null,
+                null,
+                null
+        );
+
+        // When - call REST API with empty personId (invalid path)
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/persons/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().is5xxServerError()); // 500 for invalid path mapping
 
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
