@@ -58,20 +58,73 @@ public class EventClassification {
             baseName = baseName.substring(0, baseName.length() - "Requested".length());
         }
         
-        // Convert from PascalCase to kebab-case
-        // Example: ReportIncident -> report-incident
-        String kebabCase = convertToKebabCase(baseName);
-        
-        // Extract domain from event type
-        // For now, we'll use a simple heuristic: extract domain from common patterns
+        // Extract domain and action from event type
         String domain = extractDomain(eventType);
+        String action = extractAction(baseName, domain);
         
-        return "commands." + domain + "." + kebabCase;
+        return "commands." + domain + "." + action;
+    }
+
+    /**
+     * Extracts the action verb from the base name (the part before the domain keyword).
+     * Examples:
+     * - ReportIncident -> report
+     * - RegisterOfficer -> register
+     * - CreateUnit -> create
+     * - ChangeOfficerStatus -> change-status
+     * 
+     * @param baseName the base name without "Requested" suffix
+     * @param domain the domain that was extracted
+     * @return the action verb in kebab-case
+     */
+    private static String extractAction(String baseName, String domain) {
+        if (baseName == null || baseName.isEmpty()) {
+            return "unknown";
+        }
+        
+        // Find the domain keyword in the base name (case-insensitive)
+        String domainKeyword = capitalizeFirst(domain);
+        int domainIndex = -1;
+        
+        // Try to find the domain keyword in the base name
+        for (int i = 0; i <= baseName.length() - domainKeyword.length(); i++) {
+            String substring = baseName.substring(i, i + domainKeyword.length());
+            if (substring.equals(domainKeyword)) {
+                domainIndex = i;
+                break;
+            }
+        }
+        
+        // If domain keyword found, extract the part before it
+        if (domainIndex > 0) {
+            String actionPart = baseName.substring(0, domainIndex);
+            return convertToKebabCase(actionPart);
+        }
+        
+        // Fallback: if domain keyword not found or at start, try to extract first word(s)
+        // This handles cases where the pattern might be different
+        // Find first capital letter after the first one
+        int firstCap = 0;
+        for (int i = 1; i < baseName.length(); i++) {
+            if (Character.isUpperCase(baseName.charAt(i))) {
+                firstCap = i;
+                break;
+            }
+        }
+        
+        if (firstCap > 0) {
+            String firstWord = baseName.substring(0, firstCap);
+            return convertToKebabCase(firstWord);
+        }
+        
+        // Last resort: convert entire baseName to kebab-case
+        return convertToKebabCase(baseName);
     }
 
     /**
      * Converts PascalCase to kebab-case.
      * Example: ReportIncident -> report-incident
+     * Example: ChangeStatus -> change-status
      */
     private static String convertToKebabCase(String pascalCase) {
         if (pascalCase == null || pascalCase.isEmpty()) {
@@ -87,6 +140,17 @@ public class EventClassification {
             result.append(Character.toLowerCase(c));
         }
         return result.toString();
+    }
+
+    /**
+     * Capitalizes the first letter of a string.
+     * Example: incident -> Incident
+     */
+    private static String capitalizeFirst(String str) {
+        if (str == null || str.isEmpty()) {
+            return str;
+        }
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
     }
 
     /**

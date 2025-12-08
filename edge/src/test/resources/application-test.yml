@@ -5,6 +5,10 @@ spring:
   kafka:
     bootstrap-servers: ${spring.kafka.bootstrap-servers}  # Will be set by test containers
 
+# NATS/JetStream configuration - disabled for tests
+nats:
+  enabled: false
+
 springdoc:
   api-docs:
     path: /api-docs
