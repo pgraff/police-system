@@ -1095,7 +1095,7 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `POST /api/locations`
+- REST API: `POST /api/v1/locations`
 - Request body: `{ locationId, address, city, state, zipCode, latitude, longitude, locationType }`
 - Response: `201 Created` with `{ locationId }`
 - Produces event: `CreateLocationRequested` to Kafka topic `location-events`
@@ -1109,7 +1109,7 @@ Events use request-based naming:
 - Event contains all location data
 
 **Demo Suggestion**:
-1. Show POST /api/locations request
+1. Show POST /api/v1/locations request
 2. Show CreateLocationRequested event in Kafka
 3. Show location with coordinates
 
@@ -1119,7 +1119,7 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `PUT /api/locations/{locationId}`
+- REST API: `PUT /api/v1/locations/{locationId}`
 - Request body: `{ address, city, state, zipCode, latitude, longitude, locationType }` (all optional)
 - Response: `200 OK`
 - Produces event: `UpdateLocationRequested` to Kafka topic `location-events`
@@ -1131,7 +1131,7 @@ Events use request-based naming:
 - Event contains locationId and provided fields
 
 **Demo Suggestion**:
-1. Show PUT /api/locations/{locationId} request
+1. Show PUT /api/v1/locations/{locationId} request
 2. Show UpdateLocationRequested event
 
 ---
@@ -1140,7 +1140,7 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `POST /api/incidents/{incidentId}/locations`
+- REST API: `POST /api/v1/incidents/{incidentId}/locations`
 - Request body: `{ locationId, locationRoleType, description }`
 - Response: `200 OK`
 - Produces event: `LinkLocationToIncidentRequested` to Kafka topic `location-events`
@@ -1153,7 +1153,7 @@ Events use request-based naming:
 - Event contains incidentId, locationId, locationRoleType, description
 
 **Demo Suggestion**:
-1. Show POST /api/incidents/{incidentId}/locations request
+1. Show POST /api/v1/incidents/{incidentId}/locations request
 2. Show LinkLocationToIncidentRequested event
 3. Show location role types
 
@@ -1163,7 +1163,7 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `DELETE /api/incidents/{incidentId}/locations/{locationId}`
+- REST API: `DELETE /api/v1/incidents/{incidentId}/locations/{locationId}`
 - Response: `200 OK`
 - Produces event: `UnlinkLocationFromIncidentRequested` to Kafka topic `location-events`
 - Test criteria: Verify `UnlinkLocationFromIncidentRequested` event appears in Kafka
@@ -1174,7 +1174,7 @@ Events use request-based naming:
 - Event contains incidentId and locationId
 
 **Demo Suggestion**:
-1. Show DELETE /api/incidents/{incidentId}/locations/{locationId} request
+1. Show DELETE /api/v1/incidents/{incidentId}/locations/{locationId} request
 2. Show UnlinkLocationFromIncidentRequested event
 
 ---
@@ -1183,7 +1183,7 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `POST /api/calls/{callId}/locations`
+- REST API: `POST /api/v1/calls/{callId}/locations`
 - Request body: `{ locationId, locationRoleType, description }`
 - Response: `200 OK`
 - Produces event: `LinkLocationToCallRequested` to Kafka topic `location-events`
@@ -1194,7 +1194,7 @@ Events use request-based naming:
 - Event contains callId, locationId, locationRoleType, description
 
 **Demo Suggestion**:
-1. Show POST /api/calls/{callId}/locations request
+1. Show POST /api/v1/calls/{callId}/locations request
 2. Show LinkLocationToCallRequested event
 
 ---
@@ -1203,7 +1203,7 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `DELETE /api/calls/{callId}/locations/{locationId}`
+- REST API: `DELETE /api/v1/calls/{callId}/locations/{locationId}`
 - Response: `200 OK`
 - Produces event: `UnlinkLocationFromCallRequested` to Kafka topic `location-events`
 - Test criteria: Verify `UnlinkLocationFromCallRequested` event appears in Kafka
@@ -1213,7 +1213,7 @@ Events use request-based naming:
 - Event contains callId and locationId
 
 **Demo Suggestion**:
-1. Show DELETE /api/calls/{callId}/locations/{locationId} request
+1. Show DELETE /api/v1/calls/{callId}/locations/{locationId} request
 2. Show UnlinkLocationFromCallRequested event
 
 ---
