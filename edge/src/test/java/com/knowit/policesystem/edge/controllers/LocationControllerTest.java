@@ -3,9 +3,12 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.locations.CreateLocationRequested;
+import com.knowit.policesystem.common.events.locations.LinkLocationToIncidentRequested;
 import com.knowit.policesystem.common.events.locations.UpdateLocationRequested;
+import com.knowit.policesystem.edge.domain.LocationRoleType;
 import com.knowit.policesystem.edge.domain.LocationType;
 import com.knowit.policesystem.edge.dto.CreateLocationRequestDto;
+import com.knowit.policesystem.edge.dto.LinkLocationRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateLocationRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -698,5 +701,193 @@ class LocationControllerTest {
         assertThat(event.getLocationId()).isEqualTo(locationId);
         assertThat(event.getLatitude()).isEqualTo("90.0");
         assertThat(event.getLongitude()).isEqualTo("180.0");
+    }
+
+    @Test
+    void testLinkLocationToIncident_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String incidentId = "INC-001";
+        String locationId = "LOC-001";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                locationId,
+                LocationRoleType.Primary,
+                "Primary incident location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/locations", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.locationId").value(locationId))
+                .andExpect(jsonPath("$.message").value("Location link request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(locationId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        LinkLocationToIncidentRequested event = eventObjectMapper.readValue(record.value(), LinkLocationToIncidentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(locationId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getLocationRoleType()).isEqualTo("Primary");
+        assertThat(event.getDescription()).isEqualTo("Primary incident location");
+        assertThat(event.getEventType()).isEqualTo("LinkLocationToIncidentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testLinkLocationToIncident_WithMissingLocationId_Returns400() throws Exception {
+        // Given
+        String incidentId = "INC-001";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                null,  // Missing locationId
+                LocationRoleType.Primary,
+                "Primary incident location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/locations", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkLocationToIncident_WithMissingLocationRoleType_Returns400() throws Exception {
+        // Given
+        String incidentId = "INC-001";
+        String locationId = "LOC-001";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                locationId,
+                null,  // Missing locationRoleType
+                "Primary incident location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/locations", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkLocationToIncident_WithInvalidLocationRoleType_Returns400() throws Exception {
+        // Given - invalid enum value (Jackson will reject this before validation)
+        String incidentId = "INC-001";
+        String requestJson = "{\"locationId\":\"LOC-001\",\"locationRoleType\":\"InvalidRole\",\"description\":\"Test\"}";
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/locations", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkLocationToIncident_WithEmptyLocationId_Returns400() throws Exception {
+        // Given
+        String incidentId = "INC-001";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                "",  // Empty locationId
+                LocationRoleType.Primary,
+                "Primary incident location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/locations", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkLocationToIncident_WithAllLocationRoleTypes_ProducesEvent() throws Exception {
+        // Given - test all enum values
+        String incidentId = "INC-001";
+        String[] roleTypes = {"Primary", "Secondary", "Related", "Other"};
+
+        for (String roleType : roleTypes) {
+            String locationId = "LOC-" + roleType;
+            LinkLocationRequestDto request = new LinkLocationRequestDto(
+                    locationId,
+                    LocationRoleType.valueOf(roleType),
+                    "Test " + roleType + " location"
+            );
+
+            // When - call REST API
+            String requestJson = objectMapper.writeValueAsString(request);
+            mockMvc.perform(post("/api/v1/incidents/{incidentId}/locations", incidentId)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(requestJson))
+                    .andExpect(status().isOk());
+
+            // Then - verify event in Kafka
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+            assertThat(records).isNotEmpty();
+
+            ConsumerRecord<String, String> record = records.iterator().next();
+            LinkLocationToIncidentRequested event = eventObjectMapper.readValue(record.value(), LinkLocationToIncidentRequested.class);
+            assertThat(event.getLocationRoleType()).isEqualTo(roleType);
+            assertThat(event.getLocationId()).isEqualTo(locationId);
+        }
+    }
+
+    @Test
+    void testLinkLocationToIncident_WithOptionalDescription_ProducesEvent() throws Exception {
+        // Given - description is optional
+        String incidentId = "INC-001";
+        String locationId = "LOC-001";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                locationId,
+                LocationRoleType.Secondary,
+                null  // Optional description
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/locations", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        LinkLocationToIncidentRequested event = eventObjectMapper.readValue(record.value(), LinkLocationToIncidentRequested.class);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getLocationRoleType()).isEqualTo("Secondary");
+        assertThat(event.getDescription()).isNull();
     }
 }

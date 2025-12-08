@@ -2,12 +2,15 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.locations.CreateLocationCommand;
+import com.knowit.policesystem.edge.commands.locations.LinkLocationToIncidentCommand;
 import com.knowit.policesystem.edge.commands.locations.UpdateLocationCommand;
 import com.knowit.policesystem.edge.dto.CreateLocationRequestDto;
+import com.knowit.policesystem.edge.dto.LinkLocationRequestDto;
 import com.knowit.policesystem.edge.dto.LocationResponseDto;
 import com.knowit.policesystem.edge.dto.UpdateLocationRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.locations.CreateLocationCommandValidator;
+import com.knowit.policesystem.edge.validation.locations.LinkLocationToIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.UpdateLocationCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +30,7 @@ public class LocationController extends BaseRestController {
     private final CommandHandlerRegistry commandHandlerRegistry;
     private final CreateLocationCommandValidator createCommandValidator;
     private final UpdateLocationCommandValidator updateCommandValidator;
+    private final LinkLocationToIncidentCommandValidator linkLocationToIncidentCommandValidator;
 
     /**
      * Creates a new location controller.
@@ -34,13 +38,16 @@ public class LocationController extends BaseRestController {
      * @param commandHandlerRegistry the command handler registry
      * @param createCommandValidator the create command validator
      * @param updateCommandValidator the update command validator
+     * @param linkLocationToIncidentCommandValidator the link location to incident command validator
      */
     public LocationController(CommandHandlerRegistry commandHandlerRegistry,
                              CreateLocationCommandValidator createCommandValidator,
-                             UpdateLocationCommandValidator updateCommandValidator) {
+                             UpdateLocationCommandValidator updateCommandValidator,
+                             LinkLocationToIncidentCommandValidator linkLocationToIncidentCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.createCommandValidator = createCommandValidator;
         this.updateCommandValidator = updateCommandValidator;
+        this.linkLocationToIncidentCommandValidator = linkLocationToIncidentCommandValidator;
     }
 
     /**
@@ -101,5 +108,36 @@ public class LocationController extends BaseRestController {
 
         // Return 200 OK response
         return success(response, "Location update request processed");
+    }
+
+    /**
+     * Links a location to an incident.
+     * Accepts location link data, validates it, and publishes a LinkLocationToIncidentRequested event to Kafka.
+     *
+     * @param incidentId the incident ID from the path
+     * @param requestDto the location link request DTO
+     * @return 200 OK with location ID
+     */
+    @PostMapping("/incidents/{incidentId}/locations")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<LocationResponseDto>> linkLocationToIncident(
+            @PathVariable String incidentId,
+            @Valid @RequestBody LinkLocationRequestDto requestDto) {
+
+        // Create command from DTO
+        LinkLocationToIncidentCommand command = new LinkLocationToIncidentCommand(requestDto.getLocationId(), incidentId, requestDto);
+
+        // Validate command
+        var validationResult = linkLocationToIncidentCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<LinkLocationToIncidentCommand, LocationResponseDto> handler =
+                commandHandlerRegistry.findHandler(LinkLocationToIncidentCommand.class);
+        LocationResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Location link request processed");
     }
 }
