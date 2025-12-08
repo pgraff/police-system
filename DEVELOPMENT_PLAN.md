@@ -404,10 +404,10 @@ Events use request-based naming:
 ---
 
 #### Increment 2.2: Register Officer Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/officers`
+- REST API: `POST /api/v1/officers`
 - Request body: `{ badgeNumber, firstName, lastName, rank, email, phoneNumber, hireDate, status }`
 - Response: `201 Created` with `{ officerId, badgeNumber }`
 - Produces event: `RegisterOfficerRequested` to Kafka topic `officer-events` and NATS JetStream subject `commands.officer.register`
@@ -415,19 +415,36 @@ Events use request-based naming:
 - Test criteria: Verify `RegisterOfficerRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testRegisterOfficer_WithValidData_ProducesEvent()` - Call POST /api/officers, verify event in both Kafka and NATS/JetStream
+- `testRegisterOfficer_WithValidData_ProducesEvent()` - Call POST /api/v1/officers, verify event in both Kafka and NATS/JetStream
 - `testRegisterOfficer_WithMissingBadgeNumber_Returns400()` - Validation error, no event in either bus
 - `testRegisterOfficer_WithInvalidEmail_Returns400()` - Email validation, no event in either bus
 - `testRegisterOfficer_WithInvalidStatus_Returns400()` - Status enum validation, no event in either bus
+- `testRegisterOfficer_WithEmptyBadgeNumber_Returns400()` - Empty badgeNumber validation, no event in either bus
 - Event contains all officer data (badgeNumber, firstName, lastName, rank, email, phoneNumber, hireDate, status)
 - Event has eventId, timestamp, and aggregateId (badgeNumber)
 - Event appears in Kafka topic `officer-events`
 - Event appears in NATS JetStream subject `commands.officer.register` (critical event)
 
+**Implementation Details**:
+- Created domain enum: `OfficerStatus` (Active, OnDuty, OffDuty, Suspended, Retired) in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
+- Created DTOs: `RegisterOfficerRequestDto` and `OfficerResponseDto` with validation annotations (`@NotBlank`, `@Email`, `@NotNull`)
+- Created `RegisterOfficerCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/officers/`
+- Created `RegisterOfficerRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/officers/`
+- Created `RegisterOfficerCommandValidator` with validation for required fields (badgeNumber, email format, status enum)
+- Created `RegisterOfficerCommandHandler` that publishes events to Kafka topic "officer-events"
+- Created `OfficerController` with POST `/api/v1/officers` endpoint extending `BaseRestController`
+- DualEventPublisher automatically publishes critical events (ending in "Requested") to both Kafka and NATS/JetStream
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic (and NATS/JetStream)
+- Event uses request-based naming: `RegisterOfficerRequested` (not `OfficerRegistered`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `OfficerControllerTest` with Kafka test containers (5 test cases, all passing)
+- Tests verify Kafka event production with proper event structure and metadata
+- Note: NATS is disabled in test profile, but DualEventPublisher infrastructure is in place for production use
+
 **Demo Suggestion**:
-1. Show POST /api/officers request with curl or Postman
+1. Show POST /api/v1/officers request with curl or Postman
    ```bash
-   curl -X POST http://localhost:8080/api/officers \
+   curl -X POST http://localhost:8080/api/v1/officers \
      -H "Content-Type: application/json" \
      -d '{"badgeNumber":"12345","firstName":"John","lastName":"Doe","rank":"Officer","email":"john.doe@police.gov","phoneNumber":"555-0100","hireDate":"2020-01-15","status":"Active"}'
    ```
