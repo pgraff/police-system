@@ -202,7 +202,7 @@ Events use request-based naming:
 ---
 
 #### Increment 1.4: REST API Infrastructure
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - Set up Spring Web MVC configuration
@@ -223,11 +223,27 @@ Events use request-based naming:
 - API documentation is accessible via Swagger UI
 - Exception handling returns appropriate status codes
 
-**Implementation Notes**:
-- OpenAPI 3.0.3 specification already exists at `doc/api/openapi.yaml`
-- Specification includes all planned API endpoints with complete schemas
-- Need to integrate springdoc-openapi-ui to serve the specification
-- Location `doc/api/openapi.yaml` is appropriate and should remain there
+**Implementation Details**:
+- Integrated OpenAPI YAML specification file into SpringDoc
+  - Copied openapi.yaml to `edge/src/main/resources/api/` for classpath access
+  - Updated `OpenApiConfig` to load OpenAPI spec from YAML file using swagger-parser
+  - Added swagger-parser-v3 dependency for YAML parsing
+- Created comprehensive REST API infrastructure tests
+  - `RestApiInfrastructureTest` with 25 test cases covering:
+    * Swagger UI accessibility and API documentation endpoints
+    * Request validation with @Valid annotations
+    * Error handling for all exception types
+    * Content negotiation (JSON default)
+    * API versioning consistency (/api/v1)
+    * BaseRestController helper methods
+- Added test infrastructure components
+  - `TestRestController` with test endpoints (test profile only)
+  - `TestRequestDto` with validation annotations for testing
+- Verified API versioning consistency
+  - `BaseRestController` uses /api/v1 base path
+  - `OpenApiConfig` GroupedOpenApi matches /api/v1/** paths
+  - All endpoints consistently use versioned paths
+- All 72 tests passing (25 new infrastructure tests + 47 existing tests)
 
 **Demo Suggestion**:
 1. Show Spring Boot application starting
