@@ -258,7 +258,7 @@ Events use request-based naming:
 ### Phase 2: PoliceOfficer Domain
 
 #### Increment 2.1: Report Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/incidents`
@@ -275,6 +275,22 @@ Events use request-based naming:
 - `testReportIncident_WithInvalidStatus_Returns400()` - Status enum validation, no event
 - Event contains all incident data (incidentId, incidentNumber, priority, status, reportedTime, description, incidentType)
 - Event has eventId, timestamp, and aggregateId (incidentId)
+
+**Implementation Details**:
+- Created domain enums: `Priority`, `IncidentStatus`, `IncidentType` in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
+- Created DTOs: `ReportIncidentRequestDto` and `IncidentResponseDto` with validation annotations (`@NotBlank`, `@NotNull`)
+- Created `ReportIncidentCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/incidents/`
+- Created `ReportIncidentRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/incidents/`
+- Created `ReportIncidentCommandValidator` with validation for required fields and enum values
+- Created `ReportIncidentCommandHandler` that publishes events to Kafka topic "incident-events"
+- Created `IncidentController` with POST `/api/v1/incidents` endpoint extending `BaseRestController`
+- Configured `EventPublisher`/`KafkaEventPublisher` as Spring bean in `KafkaConfig` with proper ObjectMapper configuration
+- Enhanced `GlobalExceptionHandler` to handle `HttpMessageNotReadableException` for invalid enum values (returns 400 Bad Request)
+- Created comprehensive integration tests in `IncidentControllerTest` with Kafka test containers
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic
+- Event uses request-based naming: `ReportIncidentRequested` (not `IncidentReported`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Tests verify Kafka event production with proper event structure and metadata
 
 **Demo Suggestion**:
 1. Show POST /api/incidents request with curl or Postman
