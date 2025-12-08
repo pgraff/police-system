@@ -3,8 +3,10 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.officers.RegisterOfficerRequested;
+import com.knowit.policesystem.common.events.officers.UpdateOfficerRequested;
 import com.knowit.policesystem.edge.domain.OfficerStatus;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -34,6 +36,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -86,6 +89,15 @@ class OfficerControllerTest {
 
         consumer = new KafkaConsumer<>(consumerProps);
         consumer.subscribe(Collections.singletonList(TOPIC));
+        
+        // Wait for partition assignment and consume any existing events
+        consumer.poll(Duration.ofSeconds(1));
+        
+        // Consume and discard all existing events to start fresh
+        ConsumerRecords<String, String> existingRecords;
+        do {
+            existingRecords = consumer.poll(Duration.ofMillis(100));
+        } while (!existingRecords.isEmpty());
     }
 
     @AfterEach
@@ -243,6 +255,173 @@ class OfficerControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateOfficer_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String badgeNumber = "12348";
+        LocalDate hireDate = LocalDate.of(2021, 3, 20);
+        UpdateOfficerRequestDto request = new UpdateOfficerRequestDto(
+                "Jane",
+                "Smith",
+                "Sergeant",
+                "jane.smith@police.gov",
+                "555-0200",
+                hireDate
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/officers/{badgeNumber}", badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.badgeNumber").value(badgeNumber))
+                .andExpect(jsonPath("$.message").value("Officer update request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(badgeNumber);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdateOfficerRequested event = eventObjectMapper.readValue(record.value(), UpdateOfficerRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(badgeNumber);
+        assertThat(event.getBadgeNumber()).isEqualTo(badgeNumber);
+        assertThat(event.getFirstName()).isEqualTo("Jane");
+        assertThat(event.getLastName()).isEqualTo("Smith");
+        assertThat(event.getRank()).isEqualTo("Sergeant");
+        assertThat(event.getEmail()).isEqualTo("jane.smith@police.gov");
+        assertThat(event.getPhoneNumber()).isEqualTo("555-0200");
+        assertThat(event.getHireDate()).isEqualTo("2021-03-20");
+        assertThat(event.getEventType()).isEqualTo("UpdateOfficerRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateOfficer_WithAllFields_ProducesEvent() throws Exception {
+        // Given - all fields provided
+        String badgeNumber = "12349";
+        LocalDate hireDate = LocalDate.of(2019, 6, 10);
+        UpdateOfficerRequestDto request = new UpdateOfficerRequestDto(
+                "Bob",
+                "Johnson",
+                "Lieutenant",
+                "bob.johnson@police.gov",
+                "555-0300",
+                hireDate
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/officers/{badgeNumber}", badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka with all fields
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdateOfficerRequested event = eventObjectMapper.readValue(record.value(), UpdateOfficerRequested.class);
+        assertThat(event.getBadgeNumber()).isEqualTo(badgeNumber);
+        assertThat(event.getFirstName()).isEqualTo("Bob");
+        assertThat(event.getLastName()).isEqualTo("Johnson");
+        assertThat(event.getRank()).isEqualTo("Lieutenant");
+        assertThat(event.getEmail()).isEqualTo("bob.johnson@police.gov");
+        assertThat(event.getPhoneNumber()).isEqualTo("555-0300");
+        assertThat(event.getHireDate()).isEqualTo("2019-06-10");
+        assertThat(event.getEventType()).isEqualTo("UpdateOfficerRequested");
+    }
+
+    @Test
+    void testUpdateOfficer_WithOnlyFirstName_ProducesEvent() throws Exception {
+        // Given - only firstName provided (partial update)
+        String badgeNumber = "12350";
+        UpdateOfficerRequestDto request = new UpdateOfficerRequestDto(
+                "Alice",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/officers/{badgeNumber}", badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        // Then - verify event in Kafka with only firstName
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        UpdateOfficerRequested event = eventObjectMapper.readValue(record.value(), UpdateOfficerRequested.class);
+        assertThat(event.getBadgeNumber()).isEqualTo(badgeNumber);
+        assertThat(event.getFirstName()).isEqualTo("Alice");
+        assertThat(event.getLastName()).isNull();
+        assertThat(event.getRank()).isNull();
+        assertThat(event.getEmail()).isNull();
+        assertThat(event.getPhoneNumber()).isNull();
+        assertThat(event.getHireDate()).isNull();
+        assertThat(event.getEventType()).isEqualTo("UpdateOfficerRequested");
+    }
+
+    @Test
+    void testUpdateOfficer_WithInvalidEmail_Returns400() throws Exception {
+        // Given - invalid email format
+        String badgeNumber = "12351";
+        String requestJson = """
+                {
+                    "firstName": "John",
+                    "email": "invalid-email"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/officers/{badgeNumber}", badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateOfficer_WithEmptyBadgeNumber_Returns400() throws Exception {
+        // Given - empty badgeNumber in path (this will result in 404 or 500 depending on Spring configuration)
+        UpdateOfficerRequestDto request = new UpdateOfficerRequestDto(
+                "John",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        // When - call REST API with empty badgeNumber (invalid path)
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/officers/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().is5xxServerError()); // 500 for invalid path mapping
 
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));

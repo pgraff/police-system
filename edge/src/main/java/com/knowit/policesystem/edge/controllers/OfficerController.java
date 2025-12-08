@@ -2,13 +2,18 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.officers.RegisterOfficerCommand;
+import com.knowit.policesystem.edge.commands.officers.UpdateOfficerCommand;
 import com.knowit.policesystem.edge.dto.OfficerResponseDto;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.officers.RegisterOfficerCommandValidator;
+import com.knowit.policesystem.edge.validation.officers.UpdateOfficerCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -20,18 +25,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class OfficerController extends BaseRestController {
 
     private final CommandHandlerRegistry commandHandlerRegistry;
-    private final RegisterOfficerCommandValidator commandValidator;
+    private final RegisterOfficerCommandValidator registerCommandValidator;
+    private final UpdateOfficerCommandValidator updateCommandValidator;
 
     /**
      * Creates a new officer controller.
      *
      * @param commandHandlerRegistry the command handler registry
-     * @param commandValidator the command validator
+     * @param registerCommandValidator the register command validator
+     * @param updateCommandValidator the update command validator
      */
     public OfficerController(CommandHandlerRegistry commandHandlerRegistry,
-                            RegisterOfficerCommandValidator commandValidator) {
+                            RegisterOfficerCommandValidator registerCommandValidator,
+                            UpdateOfficerCommandValidator updateCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
-        this.commandValidator = commandValidator;
+        this.registerCommandValidator = registerCommandValidator;
+        this.updateCommandValidator = updateCommandValidator;
     }
 
     /**
@@ -49,7 +58,7 @@ public class OfficerController extends BaseRestController {
         RegisterOfficerCommand command = new RegisterOfficerCommand(requestDto.getBadgeNumber(), requestDto);
 
         // Validate command
-        var validationResult = commandValidator.validate(command);
+        var validationResult = registerCommandValidator.validate(command);
         if (!validationResult.isValid()) {
             throw new ValidationException(validationResult);
         }
@@ -61,5 +70,36 @@ public class OfficerController extends BaseRestController {
 
         // Return 201 Created response
         return created(response, "Officer registration request created");
+    }
+
+    /**
+     * Updates an existing officer.
+     * Accepts partial officer data, validates it, and publishes an UpdateOfficerRequested event to Kafka and NATS/JetStream.
+     *
+     * @param badgeNumber the badge number of the officer to update
+     * @param requestDto the officer update request DTO (all fields optional)
+     * @return 200 OK with badge number
+     */
+    @PutMapping("/officers/{badgeNumber}")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<OfficerResponseDto>> updateOfficer(
+            @PathVariable String badgeNumber,
+            @Valid @RequestBody UpdateOfficerRequestDto requestDto) {
+
+        // Create command from DTO
+        UpdateOfficerCommand command = new UpdateOfficerCommand(badgeNumber, requestDto);
+
+        // Validate command
+        var validationResult = updateCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<UpdateOfficerCommand, OfficerResponseDto> handler =
+                commandHandlerRegistry.findHandler(UpdateOfficerCommand.class);
+        OfficerResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Officer update request processed");
     }
 }
