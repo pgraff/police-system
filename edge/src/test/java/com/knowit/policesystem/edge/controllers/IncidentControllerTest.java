@@ -86,6 +86,15 @@ class IncidentControllerTest {
 
         consumer = new KafkaConsumer<>(consumerProps);
         consumer.subscribe(Collections.singletonList(TOPIC));
+        
+        // Wait for partition assignment and consume any existing events
+        consumer.poll(Duration.ofSeconds(1));
+        
+        // Consume and discard all existing events to start fresh
+        ConsumerRecords<String, String> existingRecords;
+        do {
+            existingRecords = consumer.poll(Duration.ofMillis(100));
+        } while (!existingRecords.isEmpty());
     }
 
     @AfterEach

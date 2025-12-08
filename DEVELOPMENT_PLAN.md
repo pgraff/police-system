@@ -959,26 +959,68 @@ Events use request-based naming:
 ### Phase 5: Person Domain
 
 #### Increment 5.1: Register Person Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/persons`
+- REST API: `POST /api/v1/persons`
 - Request body: `{ personId, firstName, lastName, dateOfBirth, gender, race, phoneNumber }`
-- Response: `201 Created` with `{ personId }`
-- Produces event: `RegisterPersonRequested` to Kafka topic `person-events`
-- Validation: personId required, dateOfBirth format, gender/race enums
-- Test criteria: Verify `RegisterPersonRequested` event appears in Kafka
+- Response: `201 Created` with `SuccessResponse<PersonResponseDto>` containing `{ personId }`
+- Produces event: `RegisterPersonRequested` to Kafka topic `person-events` and NATS JetStream subject `commands.person.register`
+- Validation: personId required, firstName required, lastName required, dateOfBirth required, gender/race enums optional
+- Test criteria: Verify `RegisterPersonRequested` event appears in both Kafka and NATS/JetStream with correct data
 
 **Test Criteria**:
-- `testRegisterPerson_WithValidData_ProducesEvent()` - Verify event
-- `testRegisterPerson_WithMissingPersonId_Returns400()` - Validation error
-- `testRegisterPerson_WithInvalidDateOfBirth_Returns400()` - Date validation
-- Event contains all person data
+- `testRegisterPerson_WithValidData_ProducesEvent()` - Call POST /api/v1/persons, verify event in both Kafka and NATS/JetStream
+- `testRegisterPerson_WithAllFields_ProducesEvent()` - All fields including optional, verify all fields in event
+- `testRegisterPerson_WithMissingPersonId_Returns400()` - Validation error, no event in either bus
+- `testRegisterPerson_WithMissingFirstName_Returns400()` - Validation error, no event published
+- `testRegisterPerson_WithMissingLastName_Returns400()` - Validation error, no event published
+- `testRegisterPerson_WithMissingDateOfBirth_Returns400()` - Validation error, no event published
+- `testRegisterPerson_WithInvalidDateOfBirth_Returns400()` - Date format validation, no event published
+- `testRegisterPerson_WithInvalidGender_Returns400()` - Gender enum validation, no event published
+- `testRegisterPerson_WithInvalidRace_Returns400()` - Race enum validation, no event published
+- `testRegisterPerson_WithEmptyPersonId_Returns400()` - Empty personId validation, no event published
+- Event contains all person data (personId, firstName, lastName, dateOfBirth, gender, race, phoneNumber)
+- Event has eventId, timestamp, and aggregateId (personId)
+- Event appears in Kafka topic `person-events`
+- Event appears in NATS JetStream subject `commands.person.register` (critical event)
+
+**Implementation Details**:
+- Created domain enums: `Gender` (Male, Female, Other, Unknown) and `Race` (White, Black, Hispanic, Asian, Native, Other, Unknown) in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
+- Created DTOs: `RegisterPersonRequestDto` and `PersonResponseDto` with validation annotations (`@NotBlank`, `@NotNull`)
+- Created `RegisterPersonCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/persons/`
+- Created `RegisterPersonRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/persons/`
+- Created `RegisterPersonCommandValidator` with validation for required fields (personId, firstName, lastName, dateOfBirth)
+- Created `RegisterPersonCommandHandler` that publishes events to Kafka topic "person-events"
+- Created `PersonController` with POST `/api/v1/persons` endpoint extending `BaseRestController`
+- DualEventPublisher automatically publishes critical events (ending in "Requested") to both Kafka and NATS/JetStream
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic (and NATS/JetStream)
+- Event uses request-based naming: `RegisterPersonRequested` (not `PersonRegistered`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `PersonControllerTest` with Kafka test containers (10 test cases, all passing)
+- Tests verify Kafka event production with proper event structure and metadata
+- Note: NATS is disabled in test profile, but DualEventPublisher infrastructure is in place for production use
 
 **Demo Suggestion**:
-1. Show POST /api/persons request
-2. Show RegisterPersonRequested event in Kafka
-3. Show person data structure
+1. Show POST /api/v1/persons request with curl or Postman
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/persons \
+     -H "Content-Type: application/json" \
+     -d '{"personId":"PERSON-001","firstName":"Jane","lastName":"Smith","dateOfBirth":"1990-05-20","gender":"Female","race":"White","phoneNumber":"555-0200"}'
+   ```
+2. Show 201 Created response
+3. Show RegisterPersonRequested event in Kafka topic using kafka-console-consumer
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic person-events --from-beginning
+   ```
+4. Show RegisterPersonRequested event in NATS JetStream subject
+   ```bash
+   nats stream view commands.person.register
+   ```
+5. Highlight event structure (eventId, timestamp, aggregateId, event data) in both buses
+6. Show validation error example (missing personId) - 400 Bad Request, no events published
+7. Show gender and race enum values
+8. Explain double-publish pattern: Kafka for event sourcing, NATS/JetStream for near realtime processing
 
 ---
 
