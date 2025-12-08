@@ -2,7 +2,11 @@
 
 ## Overview
 
-Apache Kafka serves as the central event bus and event store for the system. It provides the infrastructure for event sourcing, event distribution, and stream processing.
+The system implements a **double-publish pattern** using two event buses:
+- **Apache Kafka**: Primary event bus and event store for event sourcing, long-term storage, and eventual consistency
+- **NATS/JetStream**: Secondary event bus for critical messages requiring near realtime processing
+
+All events are published to Kafka for event sourcing and long-term storage. Critical events (all command events ending with "Requested") are also published to NATS/JetStream for low-latency, near realtime processing.
 
 ## Kafka as Event Store
 

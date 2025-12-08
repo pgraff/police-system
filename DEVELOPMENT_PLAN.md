@@ -229,7 +229,7 @@ Events use request-based naming:
 ---
 
 #### Increment 1.5: NATS/JetStream Infrastructure
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - Add NATS Java client dependency to common module
