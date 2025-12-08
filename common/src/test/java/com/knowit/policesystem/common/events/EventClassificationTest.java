@@ -43,7 +43,7 @@ class EventClassificationTest {
         String subject = EventClassification.generateNatsSubject(event);
 
         // Then
-        assertThat(subject).isEqualTo("commands.officer.change");
+        assertThat(subject).isEqualTo("commands.officer.change-status");
     }
 
     @Test

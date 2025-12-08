@@ -67,11 +67,12 @@ public class EventClassification {
 
     /**
      * Extracts the action verb from the base name (the part before the domain keyword).
+     * For compound actions, extracts the entire action phrase including suffixes.
      * Examples:
      * - ReportIncident -> report
      * - RegisterOfficer -> register
      * - CreateUnit -> create
-     * - ChangeOfficerStatus -> change-status
+     * - ChangeOfficerStatus -> change-status (includes "Status" suffix)
      * 
      * @param baseName the base name without "Requested" suffix
      * @param domain the domain that was extracted
@@ -82,7 +83,7 @@ public class EventClassification {
             return "unknown";
         }
         
-        // Find the domain keyword in the base name (case-insensitive)
+        // Find the domain keyword in the base name
         String domainKeyword = capitalizeFirst(domain);
         int domainIndex = -1;
         
@@ -98,6 +99,31 @@ public class EventClassification {
         // If domain keyword found, extract the part before it
         if (domainIndex > 0) {
             String actionPart = baseName.substring(0, domainIndex);
+            
+            // Check if there are common action suffixes after the domain that should be included
+            // For example, "Status" in "ChangeOfficerStatus" should be part of the action
+            String remaining = baseName.substring(domainIndex + domainKeyword.length());
+            if (!remaining.isEmpty() && Character.isUpperCase(remaining.charAt(0))) {
+                // There's a capitalized word after the domain - it's likely part of the action
+                // Extract it and append to the action
+                int nextCapitalIndex = -1;
+                for (int i = 1; i < remaining.length(); i++) {
+                    if (Character.isUpperCase(remaining.charAt(i))) {
+                        nextCapitalIndex = i;
+                        break;
+                    }
+                }
+                
+                if (nextCapitalIndex > 0) {
+                    // Extract the word after the domain (e.g., "Status" from "ChangeOfficerStatus")
+                    String suffix = remaining.substring(0, nextCapitalIndex);
+                    actionPart = actionPart + suffix;
+                } else {
+                    // The remaining part is a single word (e.g., "Status")
+                    actionPart = actionPart + remaining;
+                }
+            }
+            
             return convertToKebabCase(actionPart);
         }
         
