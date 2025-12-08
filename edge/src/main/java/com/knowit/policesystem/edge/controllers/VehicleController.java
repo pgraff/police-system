@@ -1,16 +1,21 @@
 package com.knowit.policesystem.edge.controllers;
 
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.commands.vehicles.ChangeVehicleStatusCommand;
 import com.knowit.policesystem.edge.commands.vehicles.RegisterVehicleCommand;
 import com.knowit.policesystem.edge.commands.vehicles.UpdateVehicleCommand;
+import com.knowit.policesystem.edge.dto.ChangeVehicleStatusRequestDto;
 import com.knowit.policesystem.edge.dto.RegisterVehicleRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateVehicleRequestDto;
 import com.knowit.policesystem.edge.dto.VehicleResponseDto;
+import com.knowit.policesystem.edge.dto.VehicleStatusResponseDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
+import com.knowit.policesystem.edge.validation.vehicles.ChangeVehicleStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.vehicles.RegisterVehicleCommandValidator;
 import com.knowit.policesystem.edge.validation.vehicles.UpdateVehicleCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -27,6 +32,7 @@ public class VehicleController extends BaseRestController {
     private final CommandHandlerRegistry commandHandlerRegistry;
     private final RegisterVehicleCommandValidator registerCommandValidator;
     private final UpdateVehicleCommandValidator updateCommandValidator;
+    private final ChangeVehicleStatusCommandValidator changeStatusCommandValidator;
 
     /**
      * Creates a new vehicle controller.
@@ -34,13 +40,16 @@ public class VehicleController extends BaseRestController {
      * @param commandHandlerRegistry the command handler registry
      * @param registerCommandValidator the register command validator
      * @param updateCommandValidator the update command validator
+     * @param changeStatusCommandValidator the change status command validator
      */
     public VehicleController(CommandHandlerRegistry commandHandlerRegistry,
                               RegisterVehicleCommandValidator registerCommandValidator,
-                              UpdateVehicleCommandValidator updateCommandValidator) {
+                              UpdateVehicleCommandValidator updateCommandValidator,
+                              ChangeVehicleStatusCommandValidator changeStatusCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.registerCommandValidator = registerCommandValidator;
         this.updateCommandValidator = updateCommandValidator;
+        this.changeStatusCommandValidator = changeStatusCommandValidator;
     }
 
     /**
@@ -101,5 +110,36 @@ public class VehicleController extends BaseRestController {
 
         // Return 200 OK response
         return success(response, "Vehicle update request processed");
+    }
+
+    /**
+     * Changes a vehicle's status.
+     * Accepts status change data, validates it, and publishes a ChangeVehicleStatusRequested event to Kafka and NATS/JetStream.
+     *
+     * @param unitId the unit ID of the vehicle whose status to change
+     * @param requestDto the status change request DTO
+     * @return 200 OK with unit ID and status
+     */
+    @PatchMapping("/vehicles/{unitId}")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<VehicleStatusResponseDto>> changeVehicleStatus(
+            @PathVariable String unitId,
+            @Valid @RequestBody ChangeVehicleStatusRequestDto requestDto) {
+
+        // Create command from DTO
+        ChangeVehicleStatusCommand command = new ChangeVehicleStatusCommand(unitId, requestDto);
+
+        // Validate command
+        var validationResult = changeStatusCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<ChangeVehicleStatusCommand, VehicleStatusResponseDto> handler =
+                commandHandlerRegistry.findHandler(ChangeVehicleStatusCommand.class);
+        VehicleStatusResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Vehicle status change request processed");
     }
 }
