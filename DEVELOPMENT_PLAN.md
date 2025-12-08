@@ -833,7 +833,7 @@ Events use request-based naming:
 ---
 
 #### Increment 4.2: Update Unit Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PUT /api/v1/units/{unitId}`
@@ -855,6 +855,22 @@ Events use request-based naming:
 - Event has eventId, timestamp, aggregateId
 - Event appears in Kafka topic `unit-events`
 - Event appears in NATS JetStream subject `commands.unit.update` (critical event)
+
+**Implementation Details**:
+- Created `UpdateUnitRequestDto` with optional fields (unitType, status) matching OpenAPI spec
+- Created `UpdateUnitCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/units/`
+- Created `UpdateUnitRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/units/`
+- Created `UpdateUnitCommandValidator` with validation for unitId (required)
+- Created `UpdateUnitCommandHandler` that publishes events to Kafka topic "unit-events"
+- Added PUT endpoint to `UnitController` with path `/api/v1/units/{unitId}`
+- DualEventPublisher automatically publishes critical events (ending in "Requested") to both Kafka and NATS/JetStream
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic (and NATS/JetStream)
+- Event uses request-based naming: `UpdateUnitRequested` (not `UnitUpdated`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `UnitControllerTest` with Kafka test containers (7 new test cases, all passing)
+- Tests verify Kafka event production with proper event structure and metadata
+- Partial updates supported - event contains only provided fields, nulls for omitted fields
+- Note: NATS is disabled in test profile, but DualEventPublisher infrastructure is in place for production use
 
 **Demo Suggestion**:
 1. Show PUT /api/v1/units/UNIT-001 request with curl or Postman
