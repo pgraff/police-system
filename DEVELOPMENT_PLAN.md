@@ -1394,24 +1394,33 @@ Events use request-based naming:
 ---
 
 #### Increment 7.2: Arrive at Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/incidents/{incidentId}/arrive`
+- REST API: `POST /api/v1/incidents/{incidentId}/arrive`
 - Request body: `{ arrivedTime }`
 - Response: `200 OK`
-- Produces event: `ArriveAtIncidentRequested` to Kafka topic `incident-events`
-- Test criteria: Verify `ArriveAtIncidentRequested` event appears in Kafka
+- Produces event: `ArriveAtIncidentRequested` to Kafka topic `incident-events` (dual-published to NATS/JetStream subject `commands.incident.arrive` for critical events)
+- Test criteria: Verify `ArriveAtIncidentRequested` event appears in Kafka; validation-only (no 404 checks)
 
-**Test Criteria**:
-- `testArriveAtIncident_WithValidData_ProducesEvent()` - Verify event
-- `testArriveAtIncident_WithNonExistentIncidentId_Returns404()` - Not found
+**Test Criteria (implemented)**:
+- `testArriveAtIncident_WithValidData_ProducesEvent()` - Verify topic/key/payload
+- `testArriveAtIncident_WithEmptyIncidentId_Returns400()` - Validation error, no event
+- `testArriveAtIncident_WithMissingArrivedTime_Returns400()` - Validation error, no event
 - Event contains incidentId and arrivedTime
 
+**Implementation Details**:
+- Added `ArriveAtIncidentRequested` event (common module) and dual-published via `EventPublisher` to Kafka `incident-events` (NATS handled by DualEventPublisher).
+- Added DTO `ArriveAtIncidentRequestDto`, command `ArriveAtIncidentCommand`, validator `ArriveAtIncidentCommandValidator`, and handler `ArriveAtIncidentCommandHandler`.
+- Added POST `/api/v1/incidents/{incidentId}/arrive` in `IncidentController`, returning 200 with incidentId message; validation-only (no state lookups/404).
+- Tests added to `IncidentControllerTest` using Kafka test container; `mvn -pl edge -Dtest=IncidentControllerTest test`, `mvn test` executed successfully.
+
 **Demo Suggestion**:
-1. Show POST /api/incidents/{incidentId}/arrive request
-2. Show ArriveAtIncidentRequested event
-3. Show timeline progression (reported -> dispatched -> arrived)
+1. Show POST /api/v1/incidents/{incidentId}/arrive request with curl/Postman
+2. Show 200 OK response with incidentId
+3. Show ArriveAtIncidentRequested event in Kafka topic (`incident-events`)
+4. Explain dual-publish path to NATS subject `commands.incident.arrive`
+5. Show validation error example (missing arrivedTime) -> 400, no events
 
 ---
 
