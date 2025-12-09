@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.locations.CreateLocationRequested;
 import com.knowit.policesystem.common.events.locations.LinkLocationToIncidentRequested;
+import com.knowit.policesystem.common.events.locations.UnlinkLocationFromIncidentRequested;
 import com.knowit.policesystem.common.events.locations.UpdateLocationRequested;
 import com.knowit.policesystem.edge.domain.LocationRoleType;
 import com.knowit.policesystem.edge.domain.LocationType;
@@ -37,6 +38,7 @@ import java.util.Collections;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -889,5 +891,67 @@ class LocationControllerTest {
         assertThat(event.getIncidentId()).isEqualTo(incidentId);
         assertThat(event.getLocationRoleType()).isEqualTo("Secondary");
         assertThat(event.getDescription()).isNull();
+    }
+
+    @Test
+    void testUnlinkLocationFromIncident_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String incidentId = "INC-001";
+        String locationId = "LOC-001";
+
+        // When - call REST API
+        mockMvc.perform(delete("/api/v1/incidents/{incidentId}/locations/{locationId}", incidentId, locationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.locationId").value(locationId))
+                .andExpect(jsonPath("$.message").value("Location unlink request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(locationId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UnlinkLocationFromIncidentRequested event = eventObjectMapper.readValue(record.value(), UnlinkLocationFromIncidentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(locationId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getEventType()).isEqualTo("UnlinkLocationFromIncidentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUnlinkLocationFromIncident_WithEmptyIncidentId_Returns400() throws Exception {
+        // Given - whitespace-only incidentId path parameter (empty string causes 500, so use whitespace)
+        String incidentId = "   ";
+        String locationId = "LOC-001";
+
+        // When - call REST API
+        mockMvc.perform(delete("/api/v1/incidents/{incidentId}/locations/{locationId}", incidentId, locationId))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUnlinkLocationFromIncident_WithEmptyLocationId_Returns400() throws Exception {
+        // Given - whitespace-only locationId path parameter (empty string causes 500, so use whitespace)
+        String incidentId = "INC-001";
+        String locationId = "   ";
+
+        // When - call REST API
+        mockMvc.perform(delete("/api/v1/incidents/{incidentId}/locations/{locationId}", incidentId, locationId))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
     }
 }

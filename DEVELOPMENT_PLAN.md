@@ -1284,7 +1284,7 @@ Events use request-based naming:
 ---
 
 #### Increment 6.4: Unlink Location from Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `DELETE /api/v1/incidents/{incidentId}/locations/{locationId}`
@@ -1293,9 +1293,15 @@ Events use request-based naming:
 - Test criteria: Verify `UnlinkLocationFromIncidentRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testUnlinkLocationFromIncident_WithValidData_ProducesEvent()` - Verify event
-- `testUnlinkLocationFromIncident_WithNonExistentIncidentId_Returns404()` - Not found
+- `testUnlinkLocationFromIncident_WithValidData_ProducesEvent()` - Verify event data and topic/key
+- `testUnlinkLocationFromIncident_WithEmptyIncidentId_Returns400()` - Validation error, no event
+- `testUnlinkLocationFromIncident_WithEmptyLocationId_Returns400()` - Validation error, no event
 - Event contains incidentId and locationId
+
+**Implementation Details**:
+- Added event `UnlinkLocationFromIncidentRequested` (common module)
+- Added command, handler, validator, and DELETE endpoint in `LocationController`
+- Tests added in `LocationControllerTest`; full suite executed (171 tests passing)
 
 **Demo Suggestion**:
 1. Show DELETE /api/v1/incidents/{incidentId}/locations/{locationId} request

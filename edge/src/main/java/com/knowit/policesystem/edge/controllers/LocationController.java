@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge.controllers;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.locations.CreateLocationCommand;
 import com.knowit.policesystem.edge.commands.locations.LinkLocationToIncidentCommand;
+import com.knowit.policesystem.edge.commands.locations.UnlinkLocationFromIncidentCommand;
 import com.knowit.policesystem.edge.commands.locations.UpdateLocationCommand;
 import com.knowit.policesystem.edge.dto.CreateLocationRequestDto;
 import com.knowit.policesystem.edge.dto.LinkLocationRequestDto;
@@ -11,9 +12,11 @@ import com.knowit.policesystem.edge.dto.UpdateLocationRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.locations.CreateLocationCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.LinkLocationToIncidentCommandValidator;
+import com.knowit.policesystem.edge.validation.locations.UnlinkLocationFromIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.UpdateLocationCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -31,6 +34,7 @@ public class LocationController extends BaseRestController {
     private final CreateLocationCommandValidator createCommandValidator;
     private final UpdateLocationCommandValidator updateCommandValidator;
     private final LinkLocationToIncidentCommandValidator linkLocationToIncidentCommandValidator;
+    private final UnlinkLocationFromIncidentCommandValidator unlinkLocationFromIncidentCommandValidator;
 
     /**
      * Creates a new location controller.
@@ -39,15 +43,18 @@ public class LocationController extends BaseRestController {
      * @param createCommandValidator the create command validator
      * @param updateCommandValidator the update command validator
      * @param linkLocationToIncidentCommandValidator the link location to incident command validator
+     * @param unlinkLocationFromIncidentCommandValidator the unlink location from incident command validator
      */
     public LocationController(CommandHandlerRegistry commandHandlerRegistry,
                              CreateLocationCommandValidator createCommandValidator,
                              UpdateLocationCommandValidator updateCommandValidator,
-                             LinkLocationToIncidentCommandValidator linkLocationToIncidentCommandValidator) {
+                             LinkLocationToIncidentCommandValidator linkLocationToIncidentCommandValidator,
+                             UnlinkLocationFromIncidentCommandValidator unlinkLocationFromIncidentCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.createCommandValidator = createCommandValidator;
         this.updateCommandValidator = updateCommandValidator;
         this.linkLocationToIncidentCommandValidator = linkLocationToIncidentCommandValidator;
+        this.unlinkLocationFromIncidentCommandValidator = unlinkLocationFromIncidentCommandValidator;
     }
 
     /**
@@ -139,5 +146,36 @@ public class LocationController extends BaseRestController {
 
         // Return 200 OK response
         return success(response, "Location link request processed");
+    }
+
+    /**
+     * Unlinks a location from an incident.
+     * Accepts path parameters, validates them, and publishes an UnlinkLocationFromIncidentRequested event to Kafka.
+     *
+     * @param incidentId the incident ID from the path
+     * @param locationId the location ID from the path
+     * @return 200 OK with location ID
+     */
+    @DeleteMapping("/incidents/{incidentId}/locations/{locationId}")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<LocationResponseDto>> unlinkLocationFromIncident(
+            @PathVariable String incidentId,
+            @PathVariable String locationId) {
+
+        // Create command from path parameters
+        UnlinkLocationFromIncidentCommand command = new UnlinkLocationFromIncidentCommand(locationId, incidentId, locationId);
+
+        // Validate command
+        var validationResult = unlinkLocationFromIncidentCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<UnlinkLocationFromIncidentCommand, LocationResponseDto> handler =
+                commandHandlerRegistry.findHandler(UnlinkLocationFromIncidentCommand.class);
+        LocationResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Location unlink request processed");
     }
 }
