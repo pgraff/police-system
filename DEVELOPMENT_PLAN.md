@@ -1367,15 +1367,16 @@ Events use request-based naming:
 **Status**: ⏳ Pending
 
 **Step 0: Requirements**
-- REST API: `POST /api/incidents/{incidentId}/dispatch`
+- REST API: `POST /api/v1/incidents/{incidentId}/dispatch`
 - Request body: `{ dispatchedTime }`
 - Response: `200 OK`
-- Produces event: `DispatchIncidentRequested` to Kafka topic `incident-events`
-- Test criteria: Verify `DispatchIncidentRequested` event appears in Kafka
+- Produces event: `DispatchIncidentRequested` to Kafka topic `incident-events` and NATS subject `commands.incident.dispatch` (via DualEventPublisher)
+- Test criteria: Verify `DispatchIncidentRequested` event appears in Kafka (dual publish handled automatically; NATS disabled in test profile)
 
 **Test Criteria**:
-- `testDispatchIncident_WithValidData_ProducesEvent()` - Verify event
-- `testDispatchIncident_WithNonExistentIncidentId_Returns404()` - Not found
+- `testDispatchIncident_WithValidData_ProducesEvent()` - Verify topic/key/payload
+- `testDispatchIncident_WithEmptyIncidentId_Returns400()` - Validation error, no event
+- `testDispatchIncident_WithMissingDispatchedTime_Returns400()` - Validation error, no event
 - Event contains incidentId and dispatchedTime
 
 **Demo Suggestion**:

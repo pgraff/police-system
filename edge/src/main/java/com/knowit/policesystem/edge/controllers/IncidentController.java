@@ -1,14 +1,18 @@
 package com.knowit.policesystem.edge.controllers;
 
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.commands.incidents.DispatchIncidentCommand;
 import com.knowit.policesystem.edge.commands.incidents.ReportIncidentCommand;
+import com.knowit.policesystem.edge.dto.DispatchIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.IncidentResponseDto;
 import com.knowit.policesystem.edge.dto.ReportIncidentRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
+import com.knowit.policesystem.edge.validation.incidents.DispatchIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.ReportIncidentCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,17 +25,21 @@ public class IncidentController extends BaseRestController {
 
     private final CommandHandlerRegistry commandHandlerRegistry;
     private final ReportIncidentCommandValidator commandValidator;
+    private final DispatchIncidentCommandValidator dispatchCommandValidator;
 
     /**
      * Creates a new incident controller.
      *
      * @param commandHandlerRegistry the command handler registry
-     * @param commandValidator the command validator
+     * @param commandValidator the report incident command validator
+     * @param dispatchCommandValidator the dispatch incident command validator
      */
     public IncidentController(CommandHandlerRegistry commandHandlerRegistry,
-                              ReportIncidentCommandValidator commandValidator) {
+                              ReportIncidentCommandValidator commandValidator,
+                              DispatchIncidentCommandValidator dispatchCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
+        this.dispatchCommandValidator = dispatchCommandValidator;
     }
 
     /**
@@ -61,5 +69,32 @@ public class IncidentController extends BaseRestController {
 
         // Return 201 Created response
         return created(response, "Incident report request created");
+    }
+
+    /**
+     * Dispatches an incident.
+     * Accepts dispatch time, validates it, and publishes a DispatchIncidentRequested event.
+     *
+     * @param incidentId the incident identifier from the path
+     * @param requestDto the dispatch request DTO
+     * @return 200 OK with incident ID
+     */
+    @PostMapping("/incidents/{incidentId}/dispatch")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<IncidentResponseDto>> dispatchIncident(
+            @PathVariable String incidentId,
+            @Valid @RequestBody DispatchIncidentRequestDto requestDto) {
+
+        DispatchIncidentCommand command = new DispatchIncidentCommand(incidentId, requestDto);
+
+        var validationResult = dispatchCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        com.knowit.policesystem.edge.commands.CommandHandler<DispatchIncidentCommand, IncidentResponseDto> handler =
+                commandHandlerRegistry.findHandler(DispatchIncidentCommand.class);
+        IncidentResponseDto response = handler.handle(command);
+
+        return success(response, "Incident dispatch request created");
     }
 }
