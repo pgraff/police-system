@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge.controllers;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.locations.CreateLocationCommand;
 import com.knowit.policesystem.edge.commands.locations.LinkLocationToIncidentCommand;
+import com.knowit.policesystem.edge.commands.locations.LinkLocationToCallCommand;
 import com.knowit.policesystem.edge.commands.locations.UnlinkLocationFromIncidentCommand;
 import com.knowit.policesystem.edge.commands.locations.UpdateLocationCommand;
 import com.knowit.policesystem.edge.dto.CreateLocationRequestDto;
@@ -12,6 +13,7 @@ import com.knowit.policesystem.edge.dto.UpdateLocationRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.locations.CreateLocationCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.LinkLocationToIncidentCommandValidator;
+import com.knowit.policesystem.edge.validation.locations.LinkLocationToCallCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.UnlinkLocationFromIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.UpdateLocationCommandValidator;
 import jakarta.validation.Valid;
@@ -35,6 +37,7 @@ public class LocationController extends BaseRestController {
     private final UpdateLocationCommandValidator updateCommandValidator;
     private final LinkLocationToIncidentCommandValidator linkLocationToIncidentCommandValidator;
     private final UnlinkLocationFromIncidentCommandValidator unlinkLocationFromIncidentCommandValidator;
+    private final LinkLocationToCallCommandValidator linkLocationToCallCommandValidator;
 
     /**
      * Creates a new location controller.
@@ -49,12 +52,14 @@ public class LocationController extends BaseRestController {
                              CreateLocationCommandValidator createCommandValidator,
                              UpdateLocationCommandValidator updateCommandValidator,
                              LinkLocationToIncidentCommandValidator linkLocationToIncidentCommandValidator,
-                             UnlinkLocationFromIncidentCommandValidator unlinkLocationFromIncidentCommandValidator) {
+                             UnlinkLocationFromIncidentCommandValidator unlinkLocationFromIncidentCommandValidator,
+                             LinkLocationToCallCommandValidator linkLocationToCallCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.createCommandValidator = createCommandValidator;
         this.updateCommandValidator = updateCommandValidator;
         this.linkLocationToIncidentCommandValidator = linkLocationToIncidentCommandValidator;
         this.unlinkLocationFromIncidentCommandValidator = unlinkLocationFromIncidentCommandValidator;
+        this.linkLocationToCallCommandValidator = linkLocationToCallCommandValidator;
     }
 
     /**
@@ -142,6 +147,37 @@ public class LocationController extends BaseRestController {
         // Get handler and execute
         com.knowit.policesystem.edge.commands.CommandHandler<LinkLocationToIncidentCommand, LocationResponseDto> handler =
                 commandHandlerRegistry.findHandler(LinkLocationToIncidentCommand.class);
+        LocationResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Location link request processed");
+    }
+
+    /**
+     * Links a location to a call.
+     * Accepts location link data, validates it, and publishes a LinkLocationToCallRequested event to Kafka.
+     *
+     * @param callId the call ID from the path
+     * @param requestDto the location link request DTO
+     * @return 200 OK with location ID
+     */
+    @PostMapping("/calls/{callId}/locations")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<LocationResponseDto>> linkLocationToCall(
+            @PathVariable String callId,
+            @Valid @RequestBody LinkLocationRequestDto requestDto) {
+
+        // Create command from DTO
+        LinkLocationToCallCommand command = new LinkLocationToCallCommand(requestDto.getLocationId(), callId, requestDto);
+
+        // Validate command
+        var validationResult = linkLocationToCallCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<LinkLocationToCallCommand, LocationResponseDto> handler =
+                commandHandlerRegistry.findHandler(LinkLocationToCallCommand.class);
         LocationResponseDto response = handler.handle(command);
 
         // Return 200 OK response

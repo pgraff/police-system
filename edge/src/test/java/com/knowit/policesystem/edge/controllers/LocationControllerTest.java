@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.locations.CreateLocationRequested;
 import com.knowit.policesystem.common.events.locations.LinkLocationToIncidentRequested;
+import com.knowit.policesystem.common.events.locations.LinkLocationToCallRequested;
 import com.knowit.policesystem.common.events.locations.UnlinkLocationFromIncidentRequested;
 import com.knowit.policesystem.common.events.locations.UpdateLocationRequested;
 import com.knowit.policesystem.edge.domain.LocationRoleType;
@@ -891,6 +892,131 @@ class LocationControllerTest {
         assertThat(event.getIncidentId()).isEqualTo(incidentId);
         assertThat(event.getLocationRoleType()).isEqualTo("Secondary");
         assertThat(event.getDescription()).isNull();
+    }
+
+    @Test
+    void testLinkLocationToCall_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-001";
+        String locationId = "LOC-100";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                locationId,
+                LocationRoleType.Primary,
+                "Primary call location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/locations", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.locationId").value(locationId))
+                .andExpect(jsonPath("$.message").value("Location link request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(locationId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        LinkLocationToCallRequested event = eventObjectMapper.readValue(record.value(), LinkLocationToCallRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(locationId);
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getLocationRoleType()).isEqualTo("Primary");
+        assertThat(event.getDescription()).isEqualTo("Primary call location");
+        assertThat(event.getEventType()).isEqualTo("LinkLocationToCallRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testLinkLocationToCall_WithEmptyCallId_Returns400() throws Exception {
+        // Given - whitespace path variable should fail validation
+        String callId = " ";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                "LOC-101",
+                LocationRoleType.Primary,
+                "Primary call location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/locations", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkLocationToCall_WithMissingLocationId_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-002";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                null,
+                LocationRoleType.Primary,
+                "Primary call location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/locations", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkLocationToCall_WithMissingLocationRoleType_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-003";
+        LinkLocationRequestDto request = new LinkLocationRequestDto(
+                "LOC-102",
+                null,
+                "Primary call location"
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/locations", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkLocationToCall_WithInvalidLocationRoleType_Returns400() throws Exception {
+        // Given - invalid enum value (Jackson will reject this before validation)
+        String callId = "CALL-004";
+        String requestJson = "{\"locationId\":\"LOC-103\",\"locationRoleType\":\"InvalidRole\",\"description\":\"Test\"}";
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/calls/{callId}/locations", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
     }
 
     @Test

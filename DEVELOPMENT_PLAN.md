@@ -1310,7 +1310,7 @@ Events use request-based naming:
 ---
 
 #### Increment 6.5: Link Location to Call Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/v1/calls/{callId}/locations`
@@ -1320,8 +1320,15 @@ Events use request-based naming:
 - Test criteria: Verify `LinkLocationToCallRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testLinkLocationToCall_WithValidData_ProducesEvent()` - Verify event
-- Event contains callId, locationId, locationRoleType, description
+- `testLinkLocationToCall_WithValidData_ProducesEvent()` - Verify topic/key/payload
+- Validation failures: whitespace callId, missing locationId, missing locationRoleType, invalid enum -> 400, no event
+
+**Implementation Details**:
+- Added event `LinkLocationToCallRequested` (common module)
+- Added command, validator, and handler for linking location to a call and publishing to `location-events`
+- Added POST `/api/v1/calls/{callId}/locations` in `LocationController`
+- Added integration tests in `LocationControllerTest` covering happy path and validation errors
+- Tests executed: `mvn -pl edge -Dtest=LocationControllerTest test`, `mvn test` (all modules) ✅
 
 **Demo Suggestion**:
 1. Show POST /api/v1/calls/{callId}/locations request
