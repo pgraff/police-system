@@ -1726,10 +1726,10 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 8: CallForService Domain
 
 #### Increment 8.1: Receive Call Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/calls`
+- REST API: `POST /api/v1/calls`
 - Request body: `{ callId, callNumber, priority, status, receivedTime, description, callType }`
 - Response: `201 Created` with `{ callId, callNumber }`
 - Produces event: `ReceiveCallRequested` to Kafka topic `call-events`
@@ -1737,13 +1737,22 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ReceiveCallRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testReceiveCall_WithValidData_ProducesEvent()` - Verify event
-- `testReceiveCall_WithMissingCallId_Returns400()` - Validation error
-- `testReceiveCall_WithInvalidPriority_Returns400()` - Priority validation
+- ✅ `testReceiveCall_WithValidData_ProducesEvent()` - Verify event
+- ✅ `testReceiveCall_WithMissingCallId_Returns400()` - Validation error
+- ✅ `testReceiveCall_WithInvalidPriority_Returns400()` - Priority validation
 - Event contains all call data
 
+**Implementation Summary**:
+- Created `CallStatus` and `CallType` enums in `edge.domain` package
+- Created `ReceiveCallRequestDto` with validation annotations
+- Created `CallResponseDto` for response
+- Created `ReceiveCallCommand`, `ReceiveCallCommandValidator`, and `ReceiveCallCommandHandler`
+- Created `ReceiveCallRequested` event in `common.events.calls` package
+- Created `CallController` with `POST /api/v1/calls` endpoint
+- All tests passing (3/3) and full regression suite passing (200/200)
+
 **Demo Suggestion**:
-1. Show POST /api/calls request
+1. Show POST /api/v1/calls request
 2. Show ReceiveCallRequested event in Kafka
 3. Show call types and priorities
 
