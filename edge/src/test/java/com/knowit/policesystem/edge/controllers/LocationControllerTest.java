@@ -6,6 +6,7 @@ import com.knowit.policesystem.common.events.locations.CreateLocationRequested;
 import com.knowit.policesystem.common.events.locations.LinkLocationToIncidentRequested;
 import com.knowit.policesystem.common.events.locations.LinkLocationToCallRequested;
 import com.knowit.policesystem.common.events.locations.UnlinkLocationFromIncidentRequested;
+import com.knowit.policesystem.common.events.locations.UnlinkLocationFromCallRequested;
 import com.knowit.policesystem.common.events.locations.UpdateLocationRequested;
 import com.knowit.policesystem.edge.domain.LocationRoleType;
 import com.knowit.policesystem.edge.domain.LocationType;
@@ -1074,6 +1075,68 @@ class LocationControllerTest {
 
         // When - call REST API
         mockMvc.perform(delete("/api/v1/incidents/{incidentId}/locations/{locationId}", incidentId, locationId))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUnlinkLocationFromCall_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-001";
+        String locationId = "LOC-201";
+
+        // When - call REST API
+        mockMvc.perform(delete("/api/v1/calls/{callId}/locations/{locationId}", callId, locationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.locationId").value(locationId))
+                .andExpect(jsonPath("$.message").value("Location unlink request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(locationId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UnlinkLocationFromCallRequested event = eventObjectMapper.readValue(record.value(), UnlinkLocationFromCallRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(locationId);
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getLocationId()).isEqualTo(locationId);
+        assertThat(event.getEventType()).isEqualTo("UnlinkLocationFromCallRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUnlinkLocationFromCall_WithEmptyCallId_Returns400() throws Exception {
+        // Given - whitespace-only callId path parameter
+        String callId = "   ";
+        String locationId = "LOC-201";
+
+        // When - call REST API
+        mockMvc.perform(delete("/api/v1/calls/{callId}/locations/{locationId}", callId, locationId))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUnlinkLocationFromCall_WithEmptyLocationId_Returns400() throws Exception {
+        // Given - whitespace-only locationId path parameter
+        String callId = "CALL-001";
+        String locationId = "   ";
+
+        // When - call REST API
+        mockMvc.perform(delete("/api/v1/calls/{callId}/locations/{locationId}", callId, locationId))
                 .andExpect(status().isBadRequest());
 
         // Then - verify no event in Kafka

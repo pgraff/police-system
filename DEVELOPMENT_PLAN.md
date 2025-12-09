@@ -1337,7 +1337,7 @@ Events use request-based naming:
 ---
 
 #### Increment 6.6: Unlink Location from Call Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `DELETE /api/v1/calls/{callId}/locations/{locationId}`
@@ -1346,8 +1346,14 @@ Events use request-based naming:
 - Test criteria: Verify `UnlinkLocationFromCallRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testUnlinkLocationFromCall_WithValidData_ProducesEvent()` - Verify event
-- Event contains callId and locationId
+- `testUnlinkLocationFromCall_WithValidData_ProducesEvent()` - Verify topic/key/payload
+- Validation failures: whitespace callId, whitespace locationId -> 400, no event
+
+**Implementation Details**:
+- Added event `UnlinkLocationFromCallRequested` (common module)
+- Added command, validator, handler, and DELETE endpoint in `LocationController`
+- Kafka publish to `location-events` with key `locationId`
+- Tests added in `LocationControllerTest`; executed `mvn -pl edge -Dtest=LocationControllerTest test`, `mvn test` (all modules) ✅
 
 **Demo Suggestion**:
 1. Show DELETE /api/v1/calls/{callId}/locations/{locationId} request
