@@ -1486,24 +1486,240 @@ Events use request-based naming:
 ---
 
 #### Increment 7.5: Update Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `PUT /api/incidents/{incidentId}`
-- Request body: `{ priority, description, incidentType }` (all optional)
-- Response: `200 OK`
-- Produces event: `UpdateIncidentRequested` to Kafka topic `incident-events`
-- Test criteria: Verify `UpdateIncidentRequested` event appears in Kafka
+
+**REST API Specification**:
+- **Method**: `PUT`
+- **Path**: `/api/v1/incidents/{incidentId}`
+- **Path Parameter**: `incidentId` (String, required) - The identifier of the incident to update
+- **Request Body**: `UpdateIncidentRequestDto` with the following optional fields:
+  - `priority` (Priority enum: Emergency, High, Medium, Low) - Optional
+  - `description` (String) - Optional
+  - `incidentType` (IncidentType enum: Traffic, Theft, Assault, Domestic, Burglary, Other) - Optional
+- **Response**: `200 OK` with `SuccessResponse<IncidentResponseDto>` containing:
+  - `data.incidentId` - The incident identifier
+  - `message` - "Incident update request created"
+- **Error Responses**:
+  - `400 Bad Request` - Validation errors (invalid enum values, malformed request)
+  - `404 Not Found` - Incident not found (Note: In event-driven architecture, this may be handled by downstream services)
+
+**Kafka Event Specification**:
+- **Event Class**: `UpdateIncidentRequested` (extends `Event`)
+- **Topic**: `incident-events`
+- **Event Key**: `incidentId` (aggregate ID)
+- **Event Fields**:
+  - `eventId` (String) - Unique event identifier
+  - `timestamp` (Instant) - Event timestamp
+  - `aggregateId` (String) - Incident ID
+  - `incidentId` (String) - Incident identifier
+  - `priority` (String) - Priority value (nullable, only if provided)
+  - `description` (String) - Description (nullable, only if provided)
+  - `incidentType` (String) - Incident type (nullable, only if provided)
+  - `eventType` (String) - "UpdateIncidentRequested"
+  - `version` (Integer) - Event version (1)
 
 **Test Criteria**:
-- `testUpdateIncident_WithValidData_ProducesEvent()` - Verify event
-- `testUpdateIncident_WithNonExistentIncidentId_Returns404()` - Not found
-- Event contains incidentId and provided fields
+1. `testUpdateIncident_WithValidData_ProducesEvent()` - Happy path
+   - Call PUT with valid data (all fields provided)
+   - Verify 200 OK response
+   - Verify `UpdateIncidentRequested` event in Kafka
+   - Verify event contains all provided fields
+2. `testUpdateIncident_WithPartialData_ProducesEvent()` - Partial update
+   - Call PUT with only description provided
+   - Verify 200 OK response
+   - Verify event contains only description field (priority and incidentType are null)
+3. `testUpdateIncident_WithEmptyBody_ProducesEvent()` - Empty body allowed
+   - Call PUT with empty JSON object `{}`
+   - Verify 200 OK response
+   - Verify event is produced with all fields null except incidentId
+4. `testUpdateIncident_WithInvalidPriority_Returns400()` - Invalid enum
+   - Call PUT with invalid priority value
+   - Verify 400 Bad Request
+   - Verify no event produced
+5. `testUpdateIncident_WithInvalidIncidentType_Returns400()` - Invalid enum
+   - Call PUT with invalid incidentType value
+   - Verify 400 Bad Request
+   - Verify no event produced
+6. `testUpdateIncident_WithMissingIncidentId_Returns400()` - Path validation
+   - Call PUT without incidentId in path (if possible)
+   - Verify 400 Bad Request or 404 Not Found
+   - Verify no event produced
+7. `testUpdateIncident_WithNullIncidentId_Returns400()` - Null validation
+   - Call PUT with null/empty incidentId in path
+   - Verify 400 Bad Request
+   - Verify no event produced
 
-**Demo Suggestion**:
-1. Show PUT /api/incidents/{incidentId} request
-2. Show UpdateIncidentRequested event
-3. Show updating incident description
+**Implementation Details**:
+
+**Step 1: Write Tests**
+- Location: `edge/src/test/java/com/knowit/policesystem/edge/controllers/IncidentControllerTest.java`
+- Add test methods following the pattern of existing incident tests
+- Use Kafka test containers for event verification
+- Test all scenarios listed in Test Criteria above
+
+**Step 2: Create DTO**
+- **File**: `edge/src/main/java/com/knowit/policesystem/edge/dto/UpdateIncidentRequestDto.java`
+- **Fields**: 
+  - `priority` (Priority enum, optional, no validation annotations)
+  - `description` (String, optional)
+  - `incidentType` (IncidentType enum, optional)
+- **Pattern**: Similar to `ChangeIncidentStatusRequestDto` but with optional fields
+
+**Step 3: Create Command**
+- **File**: `edge/src/main/java/com/knowit/policesystem/edge/commands/incidents/UpdateIncidentCommand.java`
+- **Extends**: `Command`
+- **Fields**:
+  - `incidentId` (String)
+  - `priority` (Priority enum, nullable)
+  - `description` (String, nullable)
+  - `incidentType` (IncidentType enum, nullable)
+- **Constructor**: `UpdateIncidentCommand(String aggregateId, UpdateIncidentRequestDto dto)`
+- **Pattern**: Similar to `ChangeIncidentStatusCommand`
+
+**Step 4: Create Validator**
+- **File**: `edge/src/main/java/com/knowit/policesystem/edge/validation/incidents/UpdateIncidentCommandValidator.java`
+- **Extends**: `CommandValidator`
+- **Validations**:
+  - `incidentId` must not be null or empty
+  - At least one field (priority, description, or incidentType) should be provided (optional validation - may allow empty updates)
+  - If priority is provided, it must be a valid Priority enum value
+  - If incidentType is provided, it must be a valid IncidentType enum value
+- **Pattern**: Similar to `ChangeIncidentStatusCommandValidator`
+
+**Step 5: Create Event**
+- **File**: `common/src/main/java/com/knowit/policesystem/common/events/incidents/UpdateIncidentRequested.java`
+- **Extends**: `Event`
+- **Fields**: All fields nullable except incidentId
+- **Constructor**: `UpdateIncidentRequested(String incidentId, String priority, String description, String incidentType)`
+- **Pattern**: Similar to `ChangeIncidentStatusRequested`
+
+**Step 6: Create Command Handler**
+- **File**: `edge/src/main/java/com/knowit/policesystem/edge/commands/incidents/UpdateIncidentCommandHandler.java`
+- **Implements**: `CommandHandler<UpdateIncidentCommand, IncidentResponseDto>`
+- **Responsibilities**:
+  - Create `UpdateIncidentRequested` event from command
+  - Publish event to Kafka topic "incident-events" using `EventPublisher`
+  - Return `IncidentResponseDto` with incidentId
+- **Pattern**: Similar to `ChangeIncidentStatusCommandHandler`
+- **Register**: Use `@PostConstruct` to register in `CommandHandlerRegistry`
+
+**Step 7: Update Controller**
+- **File**: `edge/src/main/java/com/knowit/policesystem/edge/controllers/IncidentController.java`
+- **Add Method**: `updateIncident(@PathVariable String incidentId, @Valid @RequestBody UpdateIncidentRequestDto requestDto)`
+- **Annotation**: `@PutMapping("/incidents/{incidentId}")`
+- **Dependencies**: Add `UpdateIncidentCommandValidator` to constructor
+- **Flow**:
+  1. Create `UpdateIncidentCommand` from DTO and path variable
+  2. Validate command using validator
+  3. Get handler from registry
+  4. Execute handler
+  5. Return success response
+- **Pattern**: Similar to `changeIncidentStatus` method
+
+**Step 8: Register Handler**
+- The handler will auto-register via `@PostConstruct` annotation
+- No additional configuration needed
+
+**File Structure**:
+```
+edge/src/main/java/com/knowit/policesystem/edge/
+├── controllers/
+│   └── IncidentController.java (UPDATE - add updateIncident method)
+├── commands/incidents/
+│   ├── UpdateIncidentCommand.java (NEW)
+│   └── UpdateIncidentCommandHandler.java (NEW)
+├── validation/incidents/
+│   └── UpdateIncidentCommandValidator.java (NEW)
+└── dto/
+    └── UpdateIncidentRequestDto.java (NEW)
+
+common/src/main/java/com/knowit/policesystem/common/events/incidents/
+└── UpdateIncidentRequested.java (NEW)
+
+edge/src/test/java/com/knowit/policesystem/edge/controllers/
+└── IncidentControllerTest.java (UPDATE - add test methods)
+```
+
+**Step 3: Run Tests for the Feature**
+- Execute all new test methods
+- All tests must pass before proceeding
+
+**Step 4: Run All Tests (Regression Check)**
+- Execute full test suite
+- Ensure no existing functionality is broken
+
+**Step 5: Update Development Plan**
+- Mark Increment 7.5 as completed
+- Document any deviations or decisions
+
+**Step 6: Commit and Create Pull Request**
+- Commit message: `feat: add update incident endpoint`
+- PR description should include:
+  - API endpoint details
+  - Event structure
+  - Test coverage summary
+  - How to test (curl example)
+
+**Step 7: Technical Demo Suggestion**
+
+**Demo Outline (5 minutes)**:
+
+1. **Show the API Endpoint** (1 min)
+   ```bash
+   curl -X PUT http://localhost:8080/api/v1/incidents/INC-001 \
+     -H "Content-Type: application/json" \
+     -d '{
+       "priority": "High",
+       "description": "Updated description: Traffic accident with injuries",
+       "incidentType": "Traffic"
+     }'
+   ```
+   - Show 200 OK response
+   - Highlight that all fields are optional
+
+2. **Show Partial Update** (1 min)
+   ```bash
+   curl -X PUT http://localhost:8080/api/v1/incidents/INC-001 \
+     -H "Content-Type: application/json" \
+     -d '{
+       "description": "Only updating description"
+     }'
+   ```
+   - Demonstrate that only provided fields are updated
+
+3. **Show Kafka Event** (2 min)
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 \
+     --topic incident-events \
+     --from-beginning \
+     --property print.key=true
+   ```
+   - Show `UpdateIncidentRequested` event
+   - Highlight event structure:
+     - Event key is incidentId
+     - Event contains only provided fields (others are null)
+     - Event type is "UpdateIncidentRequested"
+   - Show that partial updates only include provided fields
+
+4. **Show Validation** (1 min)
+   ```bash
+   curl -X PUT http://localhost:8080/api/v1/incidents/INC-001 \
+     -H "Content-Type: application/json" \
+     -d '{
+       "priority": "InvalidPriority"
+     }'
+   ```
+   - Show 400 Bad Request
+   - Explain enum validation
+
+**Key Technical Points to Highlight**:
+- Event-driven architecture: REST → Command → Handler → Event → Kafka
+- Optional fields allow partial updates
+- Event only contains provided fields (null for omitted fields)
+- Validation at both DTO and Command levels
+- Follows existing incident endpoint patterns
 
 ---
 

@@ -7,6 +7,7 @@ import com.knowit.policesystem.common.events.incidents.ChangeIncidentStatusReque
 import com.knowit.policesystem.common.events.incidents.ClearIncidentRequested;
 import com.knowit.policesystem.common.events.incidents.DispatchIncidentRequested;
 import com.knowit.policesystem.common.events.incidents.ReportIncidentRequested;
+import com.knowit.policesystem.common.events.incidents.UpdateIncidentRequested;
 import com.knowit.policesystem.edge.domain.IncidentStatus;
 import com.knowit.policesystem.edge.domain.IncidentType;
 import com.knowit.policesystem.edge.domain.Priority;
@@ -15,6 +16,7 @@ import com.knowit.policesystem.edge.dto.ChangeIncidentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ClearIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.ReportIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateIncidentRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -45,6 +47,7 @@ import java.util.Properties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -560,6 +563,190 @@ class IncidentControllerTest {
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(patch("/api/v1/incidents/{incidentId}/status", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateIncident_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String incidentId = "INC-200";
+        UpdateIncidentRequestDto request = new UpdateIncidentRequestDto(
+                Priority.High,
+                "Updated description: Traffic accident with injuries",
+                IncidentType.Traffic
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/incidents/{incidentId}", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.incidentId").value(incidentId))
+                .andExpect(jsonPath("$.message").value("Incident update request created"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(incidentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdateIncidentRequested event = eventObjectMapper.readValue(record.value(), UpdateIncidentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(incidentId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getPriority()).isEqualTo("High");
+        assertThat(event.getDescription()).isEqualTo("Updated description: Traffic accident with injuries");
+        assertThat(event.getIncidentType()).isEqualTo("Traffic");
+        assertThat(event.getEventType()).isEqualTo("UpdateIncidentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateIncident_WithPartialData_ProducesEvent() throws Exception {
+        // Given - only description provided
+        String incidentId = "INC-201";
+        UpdateIncidentRequestDto request = new UpdateIncidentRequestDto(
+                null,
+                "Only updating description",
+                null
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/incidents/{incidentId}", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.incidentId").value(incidentId))
+                .andExpect(jsonPath("$.message").value("Incident update request created"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(incidentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdateIncidentRequested event = eventObjectMapper.readValue(record.value(), UpdateIncidentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(incidentId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getPriority()).isNull();
+        assertThat(event.getDescription()).isEqualTo("Only updating description");
+        assertThat(event.getIncidentType()).isNull();
+        assertThat(event.getEventType()).isEqualTo("UpdateIncidentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateIncident_WithEmptyBody_ProducesEvent() throws Exception {
+        // Given - empty body
+        String incidentId = "INC-202";
+        String requestJson = "{}";
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/incidents/{incidentId}", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.incidentId").value(incidentId))
+                .andExpect(jsonPath("$.message").value("Incident update request created"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(incidentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdateIncidentRequested event = eventObjectMapper.readValue(record.value(), UpdateIncidentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(incidentId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getPriority()).isNull();
+        assertThat(event.getDescription()).isNull();
+        assertThat(event.getIncidentType()).isNull();
+        assertThat(event.getEventType()).isEqualTo("UpdateIncidentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateIncident_WithInvalidPriority_Returns400() throws Exception {
+        // Given - invalid priority enum value
+        String incidentId = "INC-203";
+        String requestJson = """
+                {
+                    "priority": "InvalidPriority",
+                    "description": "Test description"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/incidents/{incidentId}", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateIncident_WithInvalidIncidentType_Returns400() throws Exception {
+        // Given - invalid incidentType enum value
+        String incidentId = "INC-204";
+        String requestJson = """
+                {
+                    "incidentType": "InvalidType",
+                    "description": "Test description"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/incidents/{incidentId}", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateIncident_WithEmptyIncidentId_Returns400() throws Exception {
+        // Given - whitespace path variable should fail validation
+        String incidentId = " ";
+        UpdateIncidentRequestDto request = new UpdateIncidentRequestDto(
+                Priority.High,
+                "Test description",
+                IncidentType.Traffic
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/incidents/{incidentId}", incidentId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
