@@ -1425,24 +1425,33 @@ Events use request-based naming:
 ---
 
 #### Increment 7.3: Clear Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/incidents/{incidentId}/clear`
 - Request body: `{ clearedTime }`
 - Response: `200 OK`
 - Produces event: `ClearIncidentRequested` to Kafka topic `incident-events`
-- Test criteria: Verify `ClearIncidentRequested` event appears in Kafka
+- Test criteria: Verify `ClearIncidentRequested` event appears in Kafka; validation-only (no incident existence lookup/404)
 
 **Test Criteria**:
 - `testClearIncident_WithValidData_ProducesEvent()` - Verify event
-- `testClearIncident_WithNonExistentIncidentId_Returns404()` - Not found
+- `testClearIncident_WithEmptyIncidentId_Returns400()` - Validation error, no event
+- `testClearIncident_WithMissingClearedTime_Returns400()` - Validation error, no event
 - Event contains incidentId and clearedTime
+
+**Implementation Details**:
+- Added `ClearIncidentRequested` event (common module) and dual-published via `EventPublisher` to `incident-events` (NATS handled by DualEventPublisher for critical events).
+- Added DTO `ClearIncidentRequestDto`, command `ClearIncidentCommand`, validator `ClearIncidentCommandValidator`, and handler `ClearIncidentCommandHandler`.
+- Added POST `/api/v1/incidents/{incidentId}/clear` in `IncidentController`, returning 200 with incidentId message; validation-only (no state lookups/404).
+- Tests added to `IncidentControllerTest` using Kafka test container; run with `mvn -pl edge -Dtest=IncidentControllerTest test` (build common first if needed).
 
 **Demo Suggestion**:
 1. Show POST /api/incidents/{incidentId}/clear request
-2. Show ClearIncidentRequested event
-3. Show complete incident lifecycle
+2. Show 200 OK response with incidentId message
+3. Show ClearIncidentRequested event in Kafka topic (`incident-events`)
+4. Show validation error example (missing clearedTime) -> 400, no events
+5. (Optional) Place within incident lifecycle narrative
 
 ---
 

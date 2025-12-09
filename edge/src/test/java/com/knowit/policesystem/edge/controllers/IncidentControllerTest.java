@@ -3,12 +3,14 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.incidents.ArriveAtIncidentRequested;
+import com.knowit.policesystem.common.events.incidents.ClearIncidentRequested;
 import com.knowit.policesystem.common.events.incidents.DispatchIncidentRequested;
 import com.knowit.policesystem.common.events.incidents.ReportIncidentRequested;
 import com.knowit.policesystem.edge.domain.IncidentStatus;
 import com.knowit.policesystem.edge.domain.IncidentType;
 import com.knowit.policesystem.edge.domain.Priority;
 import com.knowit.policesystem.edge.dto.ArriveAtIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.ClearIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.ReportIncidentRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -415,6 +417,77 @@ class IncidentControllerTest {
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(post("/api/v1/incidents/{incidentId}/arrive", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testClearIncident_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String incidentId = "INC-300";
+        Instant clearedTime = Instant.now();
+        ClearIncidentRequestDto request = new ClearIncidentRequestDto(clearedTime);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/clear", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.incidentId").value(incidentId))
+                .andExpect(jsonPath("$.message").value("Incident clear request created"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(incidentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        ClearIncidentRequested event = eventObjectMapper.readValue(record.value(), ClearIncidentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(incidentId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getClearedTime()).isEqualTo(clearedTime.truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
+        assertThat(event.getEventType()).isEqualTo("ClearIncidentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testClearIncident_WithEmptyIncidentId_Returns400() throws Exception {
+        // Given - whitespace path variable should fail validation
+        String incidentId = " ";
+        ClearIncidentRequestDto request = new ClearIncidentRequestDto(Instant.now());
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/clear", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testClearIncident_WithMissingClearedTime_Returns400() throws Exception {
+        // Given
+        String incidentId = "INC-301";
+        ClearIncidentRequestDto request = new ClearIncidentRequestDto(null);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/clear", incidentId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
