@@ -1456,24 +1456,32 @@ Events use request-based naming:
 ---
 
 #### Increment 7.4: Change Incident Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PATCH /api/incidents/{incidentId}/status`
-- Request body: `{ status }`
+- Request body: `{ status }` using IncidentStatus enum (Reported, Dispatched, Arrived, InProgress, Cleared, Closed)
 - Response: `200 OK`
-- Produces event: `ChangeIncidentStatusRequested` to Kafka topic `incident-events`
-- Test criteria: Verify `ChangeIncidentStatusRequested` event appears in Kafka
+- Produces event: `ChangeIncidentStatusRequested` to Kafka topic `incident-events` (dual-published to NATS/JetStream subject `commands.incident.change-status` via DualEventPublisher)
+- Test criteria: Verify `ChangeIncidentStatusRequested` event appears in Kafka; validation-only (no 404 checks)
 
-**Test Criteria**:
-- `testChangeIncidentStatus_WithValidStatus_ProducesEvent()` - Verify event
-- `testChangeIncidentStatus_WithInvalidStatus_Returns400()` - Invalid status
+**Test Criteria (implemented)**:
+- `testChangeIncidentStatus_WithValidStatus_ProducesEvent()` - Verify topic/key/payload
+- `testChangeIncidentStatus_WithInvalidStatus_Returns400()` - Invalid status rejected, no event
+- `testChangeIncidentStatus_WithEmptyIncidentId_Returns400()` - Path validation, no event
 - Event contains incidentId and status
 
+**Implementation Details**:
+- Added `ChangeIncidentStatusRequested` event (common module) and published via EventPublisher (DualEventPublisher handles NATS dual-publish).
+- Added DTO `ChangeIncidentStatusRequestDto`, command `ChangeIncidentStatusCommand`, validator `ChangeIncidentStatusCommandValidator`, and handler `ChangeIncidentStatusCommandHandler`.
+- Added `PATCH /api/v1/incidents/{incidentId}/status` in `IncidentController`, returning 200 with incidentId message; validation-only (enum + non-empty path).
+- Tests added to `IncidentControllerTest` using Kafka test container; run with `mvn -pl edge -Dtest=IncidentControllerTest test`, `mvn test` executed successfully.
+
 **Demo Suggestion**:
-1. Show PATCH /api/incidents/{incidentId}/status request
-2. Show ChangeIncidentStatusRequested event
-3. Show status transitions
+1. Show PATCH /api/v1/incidents/{incidentId}/status request with valid enum status
+2. Show 200 OK response with incidentId message
+3. Show ChangeIncidentStatusRequested event in Kafka topic (`incident-events`) and note dual-publish to NATS subject `commands.incident.change-status`
+4. Show validation error example (invalid status or blank incidentId) -> 400, no events
 
 ---
 

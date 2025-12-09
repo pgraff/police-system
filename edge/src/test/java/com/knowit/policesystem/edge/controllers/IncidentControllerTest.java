@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.incidents.ArriveAtIncidentRequested;
+import com.knowit.policesystem.common.events.incidents.ChangeIncidentStatusRequested;
 import com.knowit.policesystem.common.events.incidents.ClearIncidentRequested;
 import com.knowit.policesystem.common.events.incidents.DispatchIncidentRequested;
 import com.knowit.policesystem.common.events.incidents.ReportIncidentRequested;
@@ -10,6 +11,7 @@ import com.knowit.policesystem.edge.domain.IncidentStatus;
 import com.knowit.policesystem.edge.domain.IncidentType;
 import com.knowit.policesystem.edge.domain.Priority;
 import com.knowit.policesystem.edge.dto.ArriveAtIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.ChangeIncidentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ClearIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.ReportIncidentRequestDto;
@@ -41,6 +43,7 @@ import java.util.Collections;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -488,6 +491,75 @@ class IncidentControllerTest {
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(post("/api/v1/incidents/{incidentId}/clear", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeIncidentStatus_WithValidStatus_ProducesEvent() throws Exception {
+        // Given
+        String incidentId = "INC-400";
+        ChangeIncidentStatusRequestDto request = new ChangeIncidentStatusRequestDto(IncidentStatus.InProgress);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/incidents/{incidentId}/status", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.incidentId").value(incidentId))
+                .andExpect(jsonPath("$.message").value("Incident status change request created"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(incidentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        ChangeIncidentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeIncidentStatusRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(incidentId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getStatus()).isEqualTo("InProgress");
+        assertThat(event.getEventType()).isEqualTo("ChangeIncidentStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testChangeIncidentStatus_WithInvalidStatus_Returns400() throws Exception {
+        // Given
+        String incidentId = "INC-401";
+        String requestJson = "{\"status\":\"InvalidStatus\"}";
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/incidents/{incidentId}/status", incidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeIncidentStatus_WithEmptyIncidentId_Returns400() throws Exception {
+        // Given - whitespace path variable should fail validation
+        String incidentId = " ";
+        ChangeIncidentStatusRequestDto request = new ChangeIncidentStatusRequestDto(IncidentStatus.Reported);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/incidents/{incidentId}/status", incidentId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
