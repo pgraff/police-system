@@ -1364,7 +1364,7 @@ Events use request-based naming:
 ### Phase 7: Incident Domain
 
 #### Increment 7.1: Dispatch Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/v1/incidents/{incidentId}/dispatch`
@@ -1378,6 +1378,13 @@ Events use request-based naming:
 - `testDispatchIncident_WithEmptyIncidentId_Returns400()` - Validation error, no event
 - `testDispatchIncident_WithMissingDispatchedTime_Returns400()` - Validation error, no event
 - Event contains incidentId and dispatchedTime
+
+**Implementation Details**:
+- Added `DispatchIncidentRequestDto`, command, validator, handler, and event `DispatchIncidentRequested`
+- New controller endpoint `POST /api/v1/incidents/{incidentId}/dispatch` with validation and success response
+- Dual publish via existing `EventPublisher` (Kafka + NATS for critical events)
+- Validation only (no 404 state check)
+- Tests: `mvn -pl edge -Dtest=IncidentControllerTest test`
 
 **Demo Suggestion**:
 1. Show POST /api/incidents/{incidentId}/dispatch request
