@@ -2140,10 +2140,10 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 10: Assignment Domain
 
 #### Increment 10.1: Create Assignment Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/assignments`
+- REST API: `POST /api/v1/assignments`
 - Request body: `{ assignmentId, assignedTime, assignmentType, status, incidentId, callId }` (incidentId XOR callId)
 - Response: `201 Created` with `{ assignmentId }`
 - Produces event: `CreateAssignmentRequested` to Kafka topic `assignment-events`
@@ -2151,22 +2151,35 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CreateAssignmentRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testCreateAssignment_WithIncidentId_ProducesEvent()` - Verify event with incidentId
-- ⏳ `testCreateAssignment_WithCallId_ProducesEvent()` - Verify event with callId
-- ⏳ `testCreateAssignment_WithBothIncidentAndCall_Returns400()` - Validation error, no event produced
-- ⏳ `testCreateAssignment_WithNeitherIncidentNorCall_Returns400()` - Validation error, no event produced
-- ⏳ `testCreateAssignment_WithInvalidEnums_Returns400()` - assignmentType/status enums enforced
+- ✅ `testCreateAssignment_WithIncidentId_ProducesEvent()` - Verify event with incidentId
+- ✅ `testCreateAssignment_WithCallId_ProducesEvent()` - Verify event with callId
+- ✅ `testCreateAssignment_WithBothIncidentAndCall_Returns400()` - Validation error, no event produced
+- ✅ `testCreateAssignment_WithNeitherIncidentNorCall_Returns400()` - Validation error, no event produced
+- ✅ `testCreateAssignment_WithInvalidEnums_Returns400()` - assignmentType/status enums enforced
+- ✅ `testCreateAssignment_WithMissingRequiredFields_Returns400()` - Missing assignmentId/assignmentType/status
+- ✅ `testCreateAssignment_WithInProgressStatus_ConvertsToHyphenatedString()` - Status conversion verified
 - Event contains assignmentId, assignedTime, assignmentType, status, and incidentId or callId (keyed by assignmentId)
 
-**Implementation Plan**:
-- Add `CreateAssignmentRequestDto` enforcing required fields, enums, and XOR on incidentId/callId
-- Add command + validator (payload only) and handler producing `CreateAssignmentRequested` to `assignment-events` keyed by assignmentId
-- Expose controller `POST /api/v1/assignments` returning 201 with `{ assignmentId }`
-- Add event model to `common.events.assignments`
+**Implementation Details**:
+- Created domain enums: `AssignmentType` (Primary, Backup, Supervisor, Other) and `AssignmentStatus` (Created, Assigned, InProgress, Completed, Cancelled) in `edge/src/main/java/com/knowit/policesystem/edge/domain/`
+- Created DTO: `CreateAssignmentRequestDto` with validation annotations (`@NotBlank` for assignmentId, `@NotNull` for assignmentType and status)
+- Created DTO: `AssignmentResponseDto` with assignmentId field
+- Created `CreateAssignmentCommand` extending base `Command` class in `edge/src/main/java/com/knowit/policesystem/edge/commands/assignments/`
+- Created `CreateAssignmentRequested` event extending base `Event` class in `common/src/main/java/com/knowit/policesystem/common/events/assignments/`
+- Created `CreateAssignmentCommandValidator` with validation for required fields and XOR validation for incidentId/callId (exactly one must be provided)
+- Created `CreateAssignmentCommandHandler` that publishes events to Kafka topic "assignment-events" with assignmentId as key
+- Handler converts `AssignmentStatus.InProgress` enum to "In-Progress" string format in events
+- Added POST endpoint to `AssignmentController` with path `/api/v1/assignments` returning 201 Created
+- All components follow event-driven architecture pattern: REST Controller → Command → Command Handler → Event Publisher → Kafka Topic
+- Event uses request-based naming: `CreateAssignmentRequested` (not `AssignmentCreated`)
+- Validation occurs at both DTO level (via `@Valid`) and command level (via `CommandValidator`)
+- Created comprehensive integration tests in `AssignmentControllerTest` with Kafka test containers (7 test cases, all passing)
+- Tests verify Kafka event production with proper event structure, metadata, and XOR validation
+- AggregateId uses `assignmentId` (event goes to assignment-events topic)
 
 **Demo Suggestion**:
-1. Show POST /api/assignments request with incidentId
-2. Show CreateAssignmentRequested event
+1. Show POST /api/v1/assignments request with incidentId
+2. Show CreateAssignmentRequested event in Kafka topic "assignment-events"
 3. Show assignment with callId
 4. Show validation error (both incidentId and callId)
 
