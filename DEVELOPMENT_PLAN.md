@@ -2015,7 +2015,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 9.2: Complete Activity Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/activities/{activityId}/complete`
@@ -2025,15 +2025,17 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CompleteActivityRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testCompleteActivity_WithValidData_ProducesEvent()` - Verify event contains activityId and completedTime
-- ⏳ `testCompleteActivity_WithMissingCompletedTime_Returns400()` - Validation error, no event produced
+- ✅ `testCompleteActivity_WithValidData_ProducesEvent()` - Verify event contains activityId and completedTime
+- ✅ `testCompleteActivity_WithMissingCompletedTime_Returns400()` - Validation error, no event produced
 - Event assertions: activityId used as Kafka key; completedTime ISO-8601 required
 
-**Implementation Plan**:
-- Add `CompleteActivityRequestDto` requiring `completedTime`
-- Add command + validator (payload only) and handler producing `CompleteActivityRequested` to `activity-events` keyed by activityId
-- Expose controller `POST /api/v1/activities/{activityId}/complete` returning 200 with callout message
-- Add event model to `common.events.activities`
+**Implementation Summary**:
+- Created `CompleteActivityRequestDto` with required `completedTime` field and `@JsonFormat` annotation for ISO-8601 date-time format
+- Created `CompleteActivityCommand`, `CompleteActivityCommandValidator`, and `CompleteActivityCommandHandler` publishing `CompleteActivityRequested` to `activity-events` keyed by activityId
+- Created `CompleteActivityRequested` event in `common.events.activities` package
+- Added `POST /api/v1/activities/{activityId}/complete` endpoint to `ActivityController` returning 200 OK with message "Activity completion request processed"
+- Validator validates activityId (from path) and completedTime (from request body)
+- All tests passing (5/5 in ActivityControllerTest) and full regression suite passing (222 tests)
 
 **Demo Suggestion**:
 1. Show POST `/api/v1/activities/{activityId}/complete` request

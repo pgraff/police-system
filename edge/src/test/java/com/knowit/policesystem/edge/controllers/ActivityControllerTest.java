@@ -2,9 +2,11 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.activities.CompleteActivityRequested;
 import com.knowit.policesystem.common.events.activities.StartActivityRequested;
 import com.knowit.policesystem.edge.domain.ActivityStatus;
 import com.knowit.policesystem.edge.domain.ActivityType;
+import com.knowit.policesystem.edge.dto.CompleteActivityRequestDto;
 import com.knowit.policesystem.edge.dto.StartActivityRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -214,5 +216,60 @@ class ActivityControllerTest {
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records2 = consumer.poll(Duration.ofSeconds(2));
         assertThat(records2).isEmpty();
+    }
+
+    @Test
+    void testCompleteActivity_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String activityId = "ACT-004";
+        Instant completedTime = Instant.now();
+        CompleteActivityRequestDto request = new CompleteActivityRequestDto(completedTime);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/activities/{activityId}/complete", activityId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.activityId").value(activityId))
+                .andExpect(jsonPath("$.message").value("Activity completion request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(activityId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        CompleteActivityRequested event = eventObjectMapper.readValue(record.value(), CompleteActivityRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(activityId);
+        assertThat(event.getActivityId()).isEqualTo(activityId);
+        assertThat(event.getCompletedTime()).isEqualTo(completedTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getEventType()).isEqualTo("CompleteActivityRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testCompleteActivity_WithMissingCompletedTime_Returns400() throws Exception {
+        // Given - missing completedTime in request body
+        String requestJson = """
+                {
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/activities/{activityId}/complete", "ACT-005")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
     }
 }
