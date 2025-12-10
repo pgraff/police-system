@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.calls.ArriveAtCallRequested;
 import com.knowit.policesystem.common.events.calls.ClearCallRequested;
+import com.knowit.policesystem.common.events.calls.ChangeCallStatusRequested;
 import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
 import com.knowit.policesystem.common.events.calls.DispatchCallRequested;
 import com.knowit.policesystem.edge.domain.CallStatus;
 import com.knowit.policesystem.edge.domain.CallType;
 import com.knowit.policesystem.edge.domain.Priority;
 import com.knowit.policesystem.edge.dto.ArriveAtCallRequestDto;
+import com.knowit.policesystem.edge.dto.ChangeCallStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ClearCallRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
@@ -50,6 +52,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -372,6 +375,56 @@ class CallControllerTest {
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(post("/api/v1/calls/{callId}/clear", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeCallStatus_WithValidStatus_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-400";
+        String status = "OnScene";
+        ChangeCallStatusRequestDto request = new ChangeCallStatusRequestDto(status);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/calls/{callId}/status", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Call status updated"))
+                .andExpect(jsonPath("$.data.callId").value(callId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(callId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        ChangeCallStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeCallStatusRequested.class);
+        assertThat(event.getEventType()).isEqualTo("ChangeCallStatusRequested");
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getStatus()).isEqualTo(status);
+        assertThat(event.getAggregateId()).isEqualTo(callId);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+    }
+
+    @Test
+    void testChangeCallStatus_WithMissingStatus_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-401";
+        ChangeCallStatusRequestDto request = new ChangeCallStatusRequestDto(null);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/calls/{callId}/status", callId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());

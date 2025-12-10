@@ -1858,22 +1858,35 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 8.5: Change Call Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PATCH /api/calls/{callId}/status`
-- Request body: `{ status }`
+- Request body: `{ status }` (free-form, required non-blank)
 - Response: `200 OK`
 - Produces event: `ChangeCallStatusRequested` to Kafka topic `call-events`
 - Test criteria: Verify `ChangeCallStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testChangeCallStatus_WithValidStatus_ProducesEvent()` - Verify event
-- Event contains callId and status
+- ✅ `testChangeCallStatus_WithValidStatus_ProducesEvent()` - Verify event contains callId and status
+- ✅ `testChangeCallStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+
+**Implementation Summary**:
+- Added `ChangeCallStatusRequestDto` requiring non-blank status.
+- Added `ChangeCallStatusCommand`, validator, and handler publishing `ChangeCallStatusRequested` to `call-events` keyed by callId.
+- Introduced `ChangeCallStatusRequested` event in `common.events.calls`.
+- Exposed `PATCH /api/v1/calls/{callId}/status` in `CallController`, returning 200 with callId and message "Call status updated".
 
 **Demo Suggestion**:
-1. Show PATCH /api/calls/{callId}/status request
-2. Show ChangeCallStatusRequested event
+1. Show PATCH `/api/v1/calls/{callId}/status` request:
+   ```bash
+   curl -X PATCH http://localhost:8080/api/v1/calls/CALL-400/status \
+     -H "Content-Type: application/json" \
+     -d '{ "status": "OnScene" }'
+   ```
+   - Response: 200 OK, message "Call status updated"
+2. Show `ChangeCallStatusRequested` event on topic `call-events` (key = callId) with callId and status
+3. Validation example: missing/blank `status` returns 400 and no event
 
 ---
 
