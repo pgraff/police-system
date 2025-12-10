@@ -7,6 +7,7 @@ import com.knowit.policesystem.common.events.calls.ClearCallRequested;
 import com.knowit.policesystem.common.events.calls.ChangeCallStatusRequested;
 import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
 import com.knowit.policesystem.common.events.calls.DispatchCallRequested;
+import com.knowit.policesystem.common.events.calls.UpdateCallRequested;
 import com.knowit.policesystem.edge.domain.CallStatus;
 import com.knowit.policesystem.edge.domain.CallType;
 import com.knowit.policesystem.edge.domain.Priority;
@@ -52,6 +53,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -425,6 +427,82 @@ class CallControllerTest {
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(patch("/api/v1/calls/{callId}/status", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateCall_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-500";
+        String description = "Updated description";
+
+        String requestJson = """
+                {
+                    "priority": "High",
+                    "description": "Updated description"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/calls/{callId}", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Call updated"))
+                .andExpect(jsonPath("$.data.callId").value(callId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(callId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        UpdateCallRequested event = eventObjectMapper.readValue(record.value(), UpdateCallRequested.class);
+        assertThat(event.getEventType()).isEqualTo("UpdateCallRequested");
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getPriority()).isEqualTo("High");
+        assertThat(event.getDescription()).isEqualTo(description);
+        assertThat(event.getCallType()).isNull();
+        assertThat(event.getAggregateId()).isEqualTo(callId);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+    }
+
+    @Test
+    void testUpdateCall_WithNoBody_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-501";
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/calls/{callId}", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateCall_WithInvalidPriority_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-502";
+        String requestJson = """
+                {
+                    "priority": "InvalidPriority"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/calls/{callId}", callId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());

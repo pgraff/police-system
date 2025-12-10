@@ -1891,7 +1891,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 8.6: Update Call Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PUT /api/calls/{callId}`
@@ -1901,19 +1901,18 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UpdateCallRequested` event appears in Kafka with only the provided fields
 
 **Test Criteria**:
-- ⏳ `testUpdateCall_WithValidData_ProducesEvent()` - Call PUT with priority/description/callType and verify event payload matches provided fields
-- ⏳ `testUpdateCall_WithNoBody_Returns400()` - Empty body rejected and no event produced
-- ⏳ `testUpdateCall_WithInvalidPriority_Returns400()` - Validation error for priority outside allowed range (keep aligned with existing enum/range rules)
+- ✅ `testUpdateCall_WithValidData_ProducesEvent()` - Call PUT with partial body and verify `UpdateCallRequested` contains only provided fields
+- ✅ `testUpdateCall_WithNoBody_Returns400()` - Empty body rejected and no event produced
+- ✅ `testUpdateCall_WithInvalidPriority_Returns400()` - Validation error for invalid priority enum, no event
 - Event assertions: callId used as Kafka key; only supplied fields set in event
 
-**Implementation Plan**:
-- Add `UpdateCallRequestDto` allowing optional fields, enforce “at least one provided”
-- Add `UpdateCallCommand`, validator (payload only), and handler producing `UpdateCallRequested` to `call-events` keyed by callId
-- Wire controller `PUT /api/v1/calls/{callId}` returning 200 with `{ callId, message: "Call updated" }`
-- Ensure event model lives in `common.events.calls` and mirrors DTO fields
+**Implementation Summary**:
+- Added `UpdateCallRequestDto` (optional priority/description/callType with at-least-one check), `UpdateCallCommand`, and `UpdateCallCommandValidator`.
+- Added `UpdateCallRequested` event in `common.events.calls` and `UpdateCallCommandHandler` publishing to `call-events` keyed by callId.
+- Exposed `PUT /api/v1/calls/{callId}` in `CallController` returning 200 with `{ callId, message: "Call updated" }`.
 
 **Demo Suggestion**:
-1. Show PUT `/api/v1/calls/{callId}` with partial body (e.g., only priority)
+1. Show PUT `/api/v1/calls/{callId}` with partial body (e.g., only `priority`)
 2. Show `UpdateCallRequested` event on `call-events` (key = callId) containing only provided fields
 3. Show validation failure example (empty body) returning 400 and no event
 

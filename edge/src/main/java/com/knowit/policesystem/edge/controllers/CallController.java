@@ -6,18 +6,21 @@ import com.knowit.policesystem.edge.commands.calls.ChangeCallStatusCommand;
 import com.knowit.policesystem.edge.commands.calls.ClearCallCommand;
 import com.knowit.policesystem.edge.commands.calls.DispatchCallCommand;
 import com.knowit.policesystem.edge.commands.calls.ReceiveCallCommand;
+import com.knowit.policesystem.edge.commands.calls.UpdateCallCommand;
 import com.knowit.policesystem.edge.dto.CallResponseDto;
 import com.knowit.policesystem.edge.dto.ArriveAtCallRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeCallStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ClearCallRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateCallRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.calls.ArriveAtCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ChangeCallStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ClearCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.DispatchCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ReceiveCallCommandValidator;
+import com.knowit.policesystem.edge.validation.calls.UpdateCallCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 
 /**
  * REST controller for call operations.
@@ -41,6 +45,7 @@ public class CallController extends BaseRestController {
     private final ArriveAtCallCommandValidator arriveAtCallCommandValidator;
     private final ClearCallCommandValidator clearCallCommandValidator;
     private final ChangeCallStatusCommandValidator changeCallStatusCommandValidator;
+    private final UpdateCallCommandValidator updateCallCommandValidator;
 
     /**
      * Creates a new call controller.
@@ -49,17 +54,19 @@ public class CallController extends BaseRestController {
      * @param commandValidator the receive call command validator
      */
     public CallController(CommandHandlerRegistry commandHandlerRegistry,
-                          ReceiveCallCommandValidator commandValidator,
-                          DispatchCallCommandValidator dispatchCommandValidator,
-                          ArriveAtCallCommandValidator arriveAtCallCommandValidator,
-                          ClearCallCommandValidator clearCallCommandValidator,
-                          ChangeCallStatusCommandValidator changeCallStatusCommandValidator) {
+                              ReceiveCallCommandValidator commandValidator,
+                              DispatchCallCommandValidator dispatchCommandValidator,
+                              ArriveAtCallCommandValidator arriveAtCallCommandValidator,
+                              ClearCallCommandValidator clearCallCommandValidator,
+                              ChangeCallStatusCommandValidator changeCallStatusCommandValidator,
+                              UpdateCallCommandValidator updateCallCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.dispatchCommandValidator = dispatchCommandValidator;
         this.arriveAtCallCommandValidator = arriveAtCallCommandValidator;
         this.clearCallCommandValidator = clearCallCommandValidator;
         this.changeCallStatusCommandValidator = changeCallStatusCommandValidator;
+        this.updateCallCommandValidator = updateCallCommandValidator;
     }
 
     /**
@@ -194,5 +201,31 @@ public class CallController extends BaseRestController {
         CallResponseDto response = handler.handle(command);
 
         return success(response, "Call status updated");
+    }
+
+    /**
+     * Updates call details.
+     *
+     * @param callId the call identifier
+     * @param requestDto the update request DTO
+     * @return 200 OK with callId
+     */
+    @PutMapping("/calls/{callId}")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<CallResponseDto>> updateCall(
+            @PathVariable String callId,
+            @Valid @RequestBody UpdateCallRequestDto requestDto) {
+
+        UpdateCallCommand command = new UpdateCallCommand(callId, requestDto);
+
+        var validationResult = updateCallCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        com.knowit.policesystem.edge.commands.CommandHandler<UpdateCallCommand, CallResponseDto> handler =
+                commandHandlerRegistry.findHandler(UpdateCallCommand.class);
+        CallResponseDto response = handler.handle(command);
+
+        return success(response, "Call updated");
     }
 }
