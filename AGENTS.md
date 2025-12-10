@@ -173,7 +173,7 @@ Step 3: Run Feature Tests
 - All officer registration tests pass ✓
 - Events correctly produced to Kafka ✓
 
-Step 4: Run All Tests
+Step 4: (at the end of each phase) Run All Tests
 - Full test suite passes ✓
 
 Step 5: Update Plan

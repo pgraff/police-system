@@ -2219,30 +2219,37 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 10.3: Change Assignment Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `PATCH /api/assignments/{assignmentId}/status`
+- REST API: `PATCH /api/v1/assignments/{assignmentId}/status`
 - Request body: `{ status }`
-- Response: `200 OK`
+- Response: `200 OK` with `SuccessResponse<AssignmentResponseDto>`
 - Produces event: `ChangeAssignmentStatusRequested` to Kafka topic `assignment-events`
 - Test criteria: Verify `ChangeAssignmentStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testChangeAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event contains assignmentId and status
-- ⏳ `testChangeAssignmentStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
-- ⏳ `testChangeAssignmentStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
+- ✅ `testChangeAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event contains assignmentId and status (tests all enum values: Created, Assigned, InProgress, Completed, Cancelled)
+- ✅ `testChangeAssignmentStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ✅ `testChangeAssignmentStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
 - Event assertions: assignmentId used as Kafka key
 
-**Implementation Plan**:
-- Add `ChangeAssignmentStatusRequestDto` requiring status enum
-- Add command + validator (payload only) and handler producing `ChangeAssignmentStatusRequested` to `assignment-events` keyed by assignmentId
-- Expose controller `PATCH /api/v1/assignments/{assignmentId}/status` returning 200 with status echoed
-- Add event model to `common.events.assignments`
+**Implementation Details**:
+- Created `ChangeAssignmentStatusRequestDto` with required `status` field using `AssignmentStatus` enum and `@NotNull` validation
+- Created `ChangeAssignmentStatusCommand`, `ChangeAssignmentStatusCommandValidator`, and `ChangeAssignmentStatusCommandHandler` publishing `ChangeAssignmentStatusRequested` to `assignment-events` keyed by assignmentId
+- Created `ChangeAssignmentStatusRequested` event in `common.events.assignments` package
+- Added `PATCH /api/v1/assignments/{assignmentId}/status` endpoint to `AssignmentController` returning 200 OK with message "Assignment status change request processed"
+- Validator validates assignmentId (from path) and status (from request body)
+- Status conversion: `InProgress` -> `"In-Progress"` (with hyphen) in event, other values as-is
+- All tests passing (13/13 in AssignmentControllerTest) and full regression suite passing
 
 **Demo Suggestion**:
-1. Show PATCH /api/assignments/{assignmentId}/status request
-2. Show ChangeAssignmentStatusRequested event
+1. Show `PATCH /api/v1/assignments/{assignmentId}/status` request with curl/Postman
+2. Show 200 OK response
+3. Show `ChangeAssignmentStatusRequested` event in Kafka topic `assignment-events` (keyed by assignmentId)
+4. Show status conversion: `InProgress` -> `"In-Progress"` in the event
+5. Show validation error example (missing status field)
+6. Show invalid enum rejection (e.g., `"InvalidStatus"`)
 
 ---
 
