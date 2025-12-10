@@ -1948,7 +1948,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 8.8: Link Call to Dispatch Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/calls/{callId}/dispatches`
@@ -1958,15 +1958,18 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `LinkCallToDispatchRequested` event appears in Kafka with callId and dispatchId
 
 **Test Criteria**:
-- ⏳ `testLinkCallToDispatch_WithValidData_ProducesEvent()` - Verify event contains callId and dispatchId
-- ⏳ `testLinkCallToDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkCallToDispatch_WithValidData_ProducesEvent()` - Verify event contains callId and dispatchId
+- ✅ `testLinkCallToDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkCallToDispatch_WithNonExistentCallId_Returns404()` - Non-existent call returns 404
 - Event assertions: callId used as Kafka key; dispatchId required and non-blank
 
-**Implementation Plan**:
-- Add `LinkCallToDispatchRequestDto` with required `dispatchId`
-- Add command + validator (payload only) and handler producing `LinkCallToDispatchRequested` to `call-events` keyed by callId
-- Expose controller `POST /api/v1/calls/{callId}/dispatches` returning 200 with callId and dispatchId
-- Keep event class in `common.events.calls`
+**Implementation Summary**:
+- Created `LinkCallToDispatchRequestDto` with required `dispatchId` and `@NotBlank` validation
+- Created `LinkCallToDispatchResponseDto` with callId and dispatchId fields
+- Created `LinkCallToDispatchCommand`, `LinkCallToDispatchCommandValidator` (with call existence check), and `LinkCallToDispatchCommandHandler` publishing `LinkCallToDispatchRequested` to `call-events`
+- Created `LinkCallToDispatchRequested` event in `common.events.calls` package
+- Exposed `POST /api/v1/calls/{callId}/dispatches` in `CallController` returning 200 with callId and dispatchId
+- All tests passing (3/3) and full regression suite passing
 
 **Demo Suggestion**:
 1. Show POST `/api/v1/calls/{callId}/dispatches` request

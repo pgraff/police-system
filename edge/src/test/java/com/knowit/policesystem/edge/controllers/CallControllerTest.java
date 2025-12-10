@@ -6,6 +6,7 @@ import com.knowit.policesystem.common.events.calls.ArriveAtCallRequested;
 import com.knowit.policesystem.common.events.calls.ClearCallRequested;
 import com.knowit.policesystem.common.events.calls.ChangeCallStatusRequested;
 import com.knowit.policesystem.common.events.calls.LinkCallToIncidentRequested;
+import com.knowit.policesystem.common.events.calls.LinkCallToDispatchRequested;
 import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
 import com.knowit.policesystem.common.events.calls.DispatchCallRequested;
 import com.knowit.policesystem.common.events.calls.UpdateCallRequested;
@@ -17,6 +18,7 @@ import com.knowit.policesystem.edge.dto.ChangeCallStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ClearCallRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.LinkCallToDispatchRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
 import com.knowit.policesystem.edge.services.calls.CallExistenceService;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -585,6 +587,86 @@ class CallControllerTest {
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(post("/api/v1/calls/{callId}/incidents", missingCallId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isNotFound());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkCallToDispatch_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-700";
+        String dispatchId = "DISP-001";
+        callExistenceService.addExistingCall(callId);
+
+        LinkCallToDispatchRequestDto request = new LinkCallToDispatchRequestDto(dispatchId);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/dispatches", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Call link request processed"))
+                .andExpect(jsonPath("$.data.callId").value(callId))
+                .andExpect(jsonPath("$.data.dispatchId").value(dispatchId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(callId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        LinkCallToDispatchRequested event = eventObjectMapper.readValue(record.value(), LinkCallToDispatchRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(callId);
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getDispatchId()).isEqualTo(dispatchId);
+        assertThat(event.getEventType()).isEqualTo("LinkCallToDispatchRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testLinkCallToDispatch_WithMissingDispatchId_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-701";
+        callExistenceService.addExistingCall(callId);
+
+        com.knowit.policesystem.edge.dto.LinkCallToDispatchRequestDto request =
+                new com.knowit.policesystem.edge.dto.LinkCallToDispatchRequestDto(null);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/dispatches", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkCallToDispatch_WithNonExistentCallId_Returns404() throws Exception {
+        // Given
+        String missingCallId = "CALL-999";
+        String dispatchId = "DISP-001";
+
+        LinkCallToDispatchRequestDto request = new LinkCallToDispatchRequestDto(dispatchId);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/dispatches", missingCallId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isNotFound());
