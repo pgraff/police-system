@@ -3,10 +3,12 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
+import com.knowit.policesystem.common.events.calls.ArriveAtCallRequested;
 import com.knowit.policesystem.common.events.calls.DispatchCallRequested;
 import com.knowit.policesystem.edge.domain.CallStatus;
 import com.knowit.policesystem.edge.domain.CallType;
 import com.knowit.policesystem.edge.domain.Priority;
+import com.knowit.policesystem.edge.dto.ArriveAtCallRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
 import com.knowit.policesystem.edge.services.calls.CallExistenceService;
@@ -269,6 +271,57 @@ class CallControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isNotFound());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testArriveAtCall_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-200";
+        Instant arrivedTime = Instant.now();
+
+        ArriveAtCallRequestDto request = new ArriveAtCallRequestDto(arrivedTime);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/arrive", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Call arrival recorded"))
+                .andExpect(jsonPath("$.data.callId").value(callId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(callId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        ArriveAtCallRequested event = eventObjectMapper.readValue(record.value(), ArriveAtCallRequested.class);
+        assertThat(event.getEventType()).isEqualTo("ArriveAtCallRequested");
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getArrivedTime()).isEqualTo(arrivedTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getAggregateId()).isEqualTo(callId);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+    }
+
+    @Test
+    void testArriveAtCall_WithMissingArrivedTime_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-201";
+        ArriveAtCallRequestDto request = new ArriveAtCallRequestDto(null);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/arrive", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
 
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));

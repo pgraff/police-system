@@ -1788,22 +1788,35 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 8.3: Arrive at Call Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/calls/{callId}/arrive`
+- REST API: `POST /api/v1/calls/{callId}/arrive`
 - Request body: `{ arrivedTime }`
 - Response: `200 OK`
 - Produces event: `ArriveAtCallRequested` to Kafka topic `call-events`
 - Test criteria: Verify `ArriveAtCallRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testArriveAtCall_WithValidData_ProducesEvent()` - Verify event
-- Event contains callId and arrivedTime
+- ✅ `testArriveAtCall_WithValidData_ProducesEvent()` - Verify event contains callId and arrivedTime
+- ✅ `testArriveAtCall_WithMissingArrivedTime_Returns400()` - Validation error, no event produced
+
+**Implementation Summary**:
+- Added `ArriveAtCallRequestDto` with required `arrivedTime` and ISO-8601 formatting.
+- Added `ArriveAtCallCommand`, validator (payload-only; no existence check), and handler publishing `ArriveAtCallRequested` to `call-events` keyed by callId.
+- Introduced `ArriveAtCallRequested` event in `common.events.calls`.
+- Exposed `POST /api/v1/calls/{callId}/arrive` in `CallController` returning 200 OK with callId and message "Call arrival recorded".
 
 **Demo Suggestion**:
-1. Show POST /api/calls/{callId}/arrive request
-2. Show ArriveAtCallRequested event
+1. Show POST `/api/v1/calls/{callId}/arrive` request:
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/calls/CALL-200/arrive \
+     -H "Content-Type: application/json" \
+     -d '{ "arrivedTime": "2025-01-05T10:15:30.000Z" }'
+   ```
+   - Response: 200 OK, message "Call arrival recorded"
+2. Show `ArriveAtCallRequested` event on topic `call-events` (key = callId) with callId and arrivedTime
+3. Validation example: missing `arrivedTime` returns 400 and no event
 
 ---
 
