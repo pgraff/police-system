@@ -2045,7 +2045,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 9.3: Change Activity Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PATCH /api/activities/{activityId}/status`
@@ -2055,16 +2055,19 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ChangeActivityStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testChangeActivityStatus_WithValidStatus_ProducesEvent()` - Verify event contains activityId and status
-- ⏳ `testChangeActivityStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
-- ⏳ `testChangeActivityStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
-- Event assertions: activityId used as Kafka key
+- ✅ `testChangeActivityStatus_WithValidStatus_ProducesEvent()` - Verify event contains activityId and status (tests all enum values: Started, InProgress, Completed, Cancelled)
+- ✅ `testChangeActivityStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ✅ `testChangeActivityStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
+- Event assertions: activityId used as Kafka key; status enum correctly converted (InProgress -> "In-Progress")
 
-**Implementation Plan**:
-- Add `ChangeActivityStatusRequestDto` requiring status enum
-- Add command + validator (payload only) and handler producing `ChangeActivityStatusRequested` to `activity-events` keyed by activityId
-- Expose controller `PATCH /api/v1/activities/{activityId}/status` returning 200 with status echoed
-- Add event model to `common.events.activities`
+**Implementation Summary**:
+- Created `ChangeActivityStatusRequestDto` with required `status` field using `ActivityStatus` enum and `@NotNull` validation
+- Created `ChangeActivityStatusCommand`, `ChangeActivityStatusCommandValidator`, and `ChangeActivityStatusCommandHandler` publishing `ChangeActivityStatusRequested` to `activity-events` keyed by activityId
+- Created `ChangeActivityStatusRequested` event in `common.events.activities` package
+- Added `PATCH /api/v1/activities/{activityId}/status` endpoint to `ActivityController` returning 200 OK with message "Activity status change request processed"
+- Handler correctly converts `ActivityStatus.InProgress` enum to `"In-Progress"` string in events per OpenAPI spec (other values use `name()`)
+- Validator validates activityId (from path) and status (from request body)
+- All tests passing (8/8 in ActivityControllerTest) and full regression suite passing
 
 **Demo Suggestion**:
 1. Show PATCH `/api/v1/activities/{activityId}/status` request
