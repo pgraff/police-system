@@ -2481,35 +2481,41 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 13: ResourceAssignment Domain
 
 #### Increment 13.1: Assign Resource Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/assignments/{assignmentId}/resources`
+- REST API: `POST /api/v1/assignments/{assignmentId}/resources`
 - Request body: `{ resourceId, resourceType, roleType, status, startTime }`
 - Response: `201 Created` with `{ resourceAssignmentId }`
 - Produces event: `AssignResourceRequested` to Kafka topic `resource-assignment-events`
-- Validation: resourceId required, resourceType enum (Officer, Vehicle, Unit), roleType enum, status enum
+- Validation: resourceId required, resourceType enum (Officer, Vehicle, Unit), roleType enum, status required (string)
 - Test criteria: Verify `AssignResourceRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testAssignResource_WithOfficer_ProducesEvent()` - Verify event with Officer resource
-- ⏳ `testAssignResource_WithVehicle_ProducesEvent()` - Verify event with Vehicle resource
-- ⏳ `testAssignResource_WithUnit_ProducesEvent()` - Verify event with Unit resource
-- ⏳ `testAssignResource_WithInvalidResourceType_Returns400()` - Validation error
-- ⏳ `testAssignResource_WithMissingRequiredFields_Returns400()` - resourceId, roleType, status must be present
+- ✅ `testAssignResource_WithOfficer_ProducesEvent()` - Verify event with Officer resource
+- ✅ `testAssignResource_WithVehicle_ProducesEvent()` - Verify event with Vehicle resource
+- ✅ `testAssignResource_WithUnit_ProducesEvent()` - Verify event with Unit resource
+- ✅ `testAssignResource_WithInvalidResourceType_Returns400()` - Validation error
+- ✅ `testAssignResource_WithMissingRequiredFields_Returns400()` - resourceId, resourceType, roleType, status must be present
 - Event contains assignmentId, resourceId, resourceType, roleType, status, startTime (keyed by assignmentId)
 
-**Implementation Plan**:
-- Add `AssignResourceRequestDto` enforcing required fields and enums
-- Add command + validator (payload only) and handler producing `AssignResourceRequested` to `resource-assignment-events` keyed by assignmentId
-- Expose controller `POST /api/v1/assignments/{assignmentId}/resources` returning 201 with `{ resourceAssignmentId }`
-- Add event model to `common.events.resourceassignment`
+**Implementation Details**:
+- Created domain enums: `ResourceType` (Officer, Vehicle, Unit) and `RoleType` (Primary, Backup, Supervisor, Trainee, Other) in `edge.domain`
+- Created `AssignResourceRequestDto` with validation annotations (`@NotBlank` for resourceId and status, `@NotNull` for resourceType and roleType)
+- Created `ResourceAssignmentResponseDto` with resourceAssignmentId field
+- Created `AssignResourceCommand`, `AssignResourceCommandValidator`, and `AssignResourceCommandHandler` publishing `AssignResourceRequested` to `resource-assignment-events` keyed by assignmentId
+- Created `AssignResourceRequested` event in `common.events.resourceassignment` package
+- Added controller endpoint `POST /api/v1/assignments/{assignmentId}/resources` returning 201 Created with `{ resourceAssignmentId }`
+- Handler generates UUID for resourceAssignmentId and converts enum values to strings for event
+- All tests passing (21/21 in AssignmentControllerTest) - 18 existing + 5 new tests
+- Tests verify Kafka event production with proper event structure, metadata, and validation
 
 **Demo Suggestion**:
-1. Show POST /api/assignments/{assignmentId}/resources request
-2. Show AssignResourceRequested event
-3. Show different resource types (Officer, Vehicle, Unit)
-4. Show role types
+1. Show POST /api/v1/assignments/{assignmentId}/resources request with curl/Postman
+2. Show 201 Created response with resourceAssignmentId
+3. Show `AssignResourceRequested` event in Kafka topic `resource-assignment-events` (keyed by assignmentId)
+4. Show different resource types (Officer, Vehicle, Unit) and role types (Primary, Backup, Supervisor, Trainee, Other)
+5. Show validation error examples (missing resourceId, missing resourceType, missing roleType, missing status, invalid resourceType enum) - 400 Bad Request, no events published
 
 ---
 

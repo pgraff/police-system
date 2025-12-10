@@ -5,11 +5,15 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.assignments.CreateAssignmentRequested;
 import com.knowit.policesystem.common.events.assignments.CompleteAssignmentRequested;
 import com.knowit.policesystem.common.events.assignments.ChangeAssignmentStatusRequested;
+import com.knowit.policesystem.common.events.resourceassignment.AssignResourceRequested;
 import com.knowit.policesystem.edge.domain.AssignmentStatus;
 import com.knowit.policesystem.edge.domain.AssignmentType;
+import com.knowit.policesystem.edge.domain.ResourceType;
+import com.knowit.policesystem.edge.domain.RoleType;
 import com.knowit.policesystem.edge.dto.CreateAssignmentRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteAssignmentRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeAssignmentStatusRequestDto;
+import com.knowit.policesystem.edge.dto.AssignResourceRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -70,8 +74,10 @@ class AssignmentControllerTest {
     private ObjectMapper objectMapper;
 
     private Consumer<String, String> consumer;
+    private Consumer<String, String> resourceAssignmentConsumer;
     private ObjectMapper eventObjectMapper;
     private static final String TOPIC = "assignment-events";
+    private static final String RESOURCE_ASSIGNMENT_TOPIC = "resource-assignment-events";
 
     @BeforeEach
     void setUp() {
@@ -100,12 +106,35 @@ class AssignmentControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        // Create Kafka consumer for resource assignment events with different group ID
+        Properties resourceConsumerProps = new Properties();
+        resourceConsumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        resourceConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-resource-consumer-group-" + System.currentTimeMillis());
+        resourceConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        resourceConsumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        resourceConsumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+        resourceAssignmentConsumer = new KafkaConsumer<>(resourceConsumerProps);
+        resourceAssignmentConsumer.subscribe(Collections.singletonList(RESOURCE_ASSIGNMENT_TOPIC));
+        
+        // Wait for partition assignment and consume any existing events
+        resourceAssignmentConsumer.poll(Duration.ofSeconds(1));
+        
+        // Consume and discard all existing events to start fresh
+        ConsumerRecords<String, String> existingResourceRecords;
+        do {
+            existingResourceRecords = resourceAssignmentConsumer.poll(Duration.ofMillis(100));
+        } while (!existingResourceRecords.isEmpty());
     }
 
     @AfterEach
     void tearDown() {
         if (consumer != null) {
             consumer.close();
+        }
+        if (resourceAssignmentConsumer != null) {
+            resourceAssignmentConsumer.close();
         }
     }
 
@@ -629,5 +658,248 @@ class AssignmentControllerTest {
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testAssignResource_WithOfficer_ProducesEvent() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-019";
+        String resourceId = "12345";
+        Instant startTime = Instant.now();
+        AssignResourceRequestDto request = new AssignResourceRequestDto(
+                resourceId,
+                ResourceType.Officer,
+                RoleType.Primary,
+                "Assigned",
+                startTime
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.resourceAssignmentId").exists())
+                .andExpect(jsonPath("$.message").value("Resource assignment request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(assignmentId);
+        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+
+        // Deserialize and verify event data
+        AssignResourceRequested event = eventObjectMapper.readValue(record.value(), AssignResourceRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(assignmentId);
+        assertThat(event.getAssignmentId()).isEqualTo(assignmentId);
+        assertThat(event.getResourceId()).isEqualTo(resourceId);
+        assertThat(event.getResourceType()).isEqualTo("Officer");
+        assertThat(event.getRoleType()).isEqualTo("Primary");
+        assertThat(event.getStatus()).isEqualTo("Assigned");
+        assertThat(event.getStartTime()).isEqualTo(startTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getEventType()).isEqualTo("AssignResourceRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testAssignResource_WithVehicle_ProducesEvent() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-020";
+        String resourceId = "UNIT-001";
+        Instant startTime = Instant.now();
+        AssignResourceRequestDto request = new AssignResourceRequestDto(
+                resourceId,
+                ResourceType.Vehicle,
+                RoleType.Backup,
+                "Assigned",
+                startTime
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.resourceAssignmentId").exists())
+                .andExpect(jsonPath("$.message").value("Resource assignment request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(assignmentId);
+        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+
+        // Deserialize and verify event data
+        AssignResourceRequested event = eventObjectMapper.readValue(record.value(), AssignResourceRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(assignmentId);
+        assertThat(event.getAssignmentId()).isEqualTo(assignmentId);
+        assertThat(event.getResourceId()).isEqualTo(resourceId);
+        assertThat(event.getResourceType()).isEqualTo("Vehicle");
+        assertThat(event.getRoleType()).isEqualTo("Backup");
+        assertThat(event.getStatus()).isEqualTo("Assigned");
+        assertThat(event.getStartTime()).isEqualTo(startTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getEventType()).isEqualTo("AssignResourceRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testAssignResource_WithUnit_ProducesEvent() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-021";
+        String resourceId = "UNIT-002";
+        Instant startTime = Instant.now();
+        AssignResourceRequestDto request = new AssignResourceRequestDto(
+                resourceId,
+                ResourceType.Unit,
+                RoleType.Supervisor,
+                "Assigned",
+                startTime
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.resourceAssignmentId").exists())
+                .andExpect(jsonPath("$.message").value("Resource assignment request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(assignmentId);
+        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+
+        // Deserialize and verify event data
+        AssignResourceRequested event = eventObjectMapper.readValue(record.value(), AssignResourceRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(assignmentId);
+        assertThat(event.getAssignmentId()).isEqualTo(assignmentId);
+        assertThat(event.getResourceId()).isEqualTo(resourceId);
+        assertThat(event.getResourceType()).isEqualTo("Unit");
+        assertThat(event.getRoleType()).isEqualTo("Supervisor");
+        assertThat(event.getStatus()).isEqualTo("Assigned");
+        assertThat(event.getStartTime()).isEqualTo(startTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getEventType()).isEqualTo("AssignResourceRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testAssignResource_WithInvalidResourceType_Returns400() throws Exception {
+        // Given - invalid resourceType enum value
+        String requestJson = """
+                {
+                    "resourceId": "12345",
+                    "resourceType": "InvalidType",
+                    "roleType": "Primary",
+                    "status": "Assigned"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", "ASSIGN-022")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testAssignResource_WithMissingRequiredFields_Returns400() throws Exception {
+        // Given - missing resourceId
+        String requestJsonMissingResourceId = """
+                {
+                    "resourceType": "Officer",
+                    "roleType": "Primary",
+                    "status": "Assigned"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", "ASSIGN-023")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJsonMissingResourceId))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+
+        // Given - missing resourceType
+        String requestJsonMissingResourceType = """
+                {
+                    "resourceId": "12345",
+                    "roleType": "Primary",
+                    "status": "Assigned"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", "ASSIGN-024")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJsonMissingResourceType))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records2 = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records2).isEmpty();
+
+        // Given - missing roleType
+        String requestJsonMissingRoleType = """
+                {
+                    "resourceId": "12345",
+                    "resourceType": "Officer",
+                    "status": "Assigned"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", "ASSIGN-025")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJsonMissingRoleType))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records3 = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records3).isEmpty();
+
+        // Given - missing status
+        String requestJsonMissingStatus = """
+                {
+                    "resourceId": "12345",
+                    "resourceType": "Officer",
+                    "roleType": "Primary"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/resources", "ASSIGN-026")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJsonMissingStatus))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records4 = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records4).isEmpty();
     }
 }
