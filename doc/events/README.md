@@ -20,10 +20,27 @@ Each event specification follows this structure:
 
 ## Event Naming Convention
 
-Events follow a consistent naming pattern:
-- Creation events: `{Entity}Registered`, `{Entity}Created`, `{Entity}Reported`, `{Entity}Received`, `{Entity}Started`
-- Update events: `{Entity}Updated`
-- Status change events: `{Entity}StatusChanged`
-- Lifecycle events: `{Entity}Completed`, `{Entity}Ended`, `{Entity}Cleared`
-- Relationship events: `{Action}To{Entity}`, `{Entity}Linked`, `{Entity}Unlinked`
+**Important**: All events in this system follow the "Requested" naming convention. Events represent **requests/commands** from the edge layer, not state changes. These events are published to Kafka when operations are requested via the REST API.
 
+Events follow a consistent naming pattern with the "Requested" suffix:
+- Registration/Creation events: `Register{Entity}Requested`, `Create{Entity}Requested`, `Report{Entity}Requested`, `Receive{Entity}Requested`, `Start{Entity}Requested`
+- Update events: `Update{Entity}Requested`
+- Status change events: `Change{Entity}StatusRequested`
+- Lifecycle events: `Complete{Entity}Requested`, `End{Entity}Requested`, `Clear{Entity}Requested`
+- Relationship events: `Link{Entity}To{Target}Requested`, `Unlink{Entity}From{Target}Requested`
+- Action events: `Dispatch{Entity}Requested`, `ArriveAt{Entity}Requested`, `CheckIn{Entity}Requested`, `CheckOut{Entity}Requested`
+
+## Event-Driven Architecture
+
+This system follows an event-driven architecture where:
+- **Edge servers** receive HTTP requests (commands) and produce events to Kafka
+- **Events represent requests/commands** from the edge, not state changes
+- **No state reconstruction** in the edge layer - events are simply produced to Kafka
+- Events are published asynchronously and processed by downstream services
+
+## Examples
+
+- `RegisterOfficerRequested` - Request to register a new officer (not `OfficerRegistered`)
+- `StartActivityRequested` - Request to start an activity (not `ActivityStarted`)
+- `CheckInOfficerRequested` - Request to check in an officer to a shift (not `OfficerCheckedIn`)
+- `LinkCallToIncidentRequested` - Request to link a call to an incident (not `CallLinkedToIncident`)

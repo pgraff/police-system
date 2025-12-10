@@ -19,9 +19,9 @@ info:
     name: Proprietary
 
 servers:
-  - url: http://localhost:8080/api
+  - url: http://localhost:8080/api/v1
     description: Local development server
-  - url: https://api.policesystem.example.com/api
+  - url: https://api.policesystem.example.com/api/v1
     description: Production server
 
 tags:

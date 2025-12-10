@@ -1,39 +1,34 @@
-# ResourceAssigned
+# AssignResourceRequested
 
 ## Description
 
-This event is raised when a resource (PoliceOfficer, PoliceVehicle, or Unit) is assigned to an Assignment through a ResourceAssignment role.
+This event represents a request to assign a resource to an assignment. It is published to Kafka when a resource assignment is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class ResourceAssigned {
+    class AssignResourceRequested {
         +String eventId
         +DateTime timestamp
-        +String roleId
+        +String aggregateId
+        +String assignmentId
+        +String resourceId
+        +String resourceType
         +String roleType
         +String status
-        +DateTime startTime
-        +String assignmentId
-        +String resourceType
-        +String badgeNumber
-        +String vehicleUnitId
-        +String unitId
+        +Instant startTime
     }
 ```
 
 ## Domain Model Effect
 
-- **Creates**: A new `ResourceAssignment` role entity with the provided attributes
-- **Entity Identifier**: The `roleId` serves as the unique identifier
-- **Initial Status**: The `status` attribute is set to the provided value (typically "Active")
-- **Attributes**: All provided attributes (roleId, roleType, status, startTime) are set on the new ResourceAssignment entity
-- **Relationships**: 
-  - The ResourceAssignment is linked to the Assignment identified by `assignmentId`
-  - The ResourceAssignment is linked to exactly one resource based on `resourceType`:
-    - If `resourceType` is "PoliceOfficer", linked to PoliceOfficer identified by `badgeNumber`
-    - If `resourceType` is "PoliceVehicle", linked to PoliceVehicle identified by `vehicleUnitId`
-    - If `resourceType` is "Unit", linked to Unit identified by `unitId`
-- **Timestamps**: The `startTime` is set to the provided value (typically the event timestamp)
+This event represents a **request** to assign a resource to an assignment. The actual resource assignment creation and state management happens in downstream services that consume this event.
 
+- **Request Type**: Assignment request for a resource to an assignment
+- **Aggregate Identifier**: The `assignmentId` is used as `aggregateId`
+- **Requested Attributes**: All provided attributes (resourceId, resourceType, roleType, status, startTime) are included in the request
+- **Resource Types**: The `resourceType` indicates the type of resource (Officer, Vehicle, or Unit) and is provided as a string enum name
+- **Role Type**: The `roleType` indicates the role the resource plays (e.g., Primary, Backup, Supervisor) and is provided as a string enum name
+- **Timestamps**: The `startTime` is provided as an Instant
+- **Relationship**: The event represents a request to create a ResourceAssignment relationship between a resource and an assignment

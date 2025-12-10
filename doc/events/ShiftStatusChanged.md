@@ -1,25 +1,28 @@
-# ShiftStatusChanged
+# ChangeShiftStatusRequested
 
 ## Description
 
-This event is raised when a shift's status changes.
+This event represents a request to change a shift's status. It is published to Kafka when a shift status change is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class ShiftStatusChanged {
+    class ChangeShiftStatusRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String shiftId
-        +String previousStatus
-        +String newStatus
+        +String status
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `Shift` entity identified by `shiftId`
-- **Status Update**: The `status` attribute of the Shift is updated from `previousStatus` to `newStatus`
-- **State Transition**: The event documents the state transition for audit purposes
+This event represents a **request** to change the status of an existing `Shift` entity. The actual status change and state management happens in downstream services that consume this event.
 
+- **Request Type**: Status change request for an existing shift
+- **Entity Identifier**: The `shiftId` identifies the shift whose status should be changed (also used as `aggregateId`)
+- **Status Update**: The `status` attribute contains the requested new status value
+- **Valid Status Values**: Started, In-Progress, Ended, Cancelled
+- **State Transition**: The event represents a request for a state transition, which will be processed by downstream services

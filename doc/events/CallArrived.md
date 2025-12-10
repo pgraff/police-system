@@ -1,24 +1,28 @@
-# CallArrived
+# ArriveAtCallRequested
 
 ## Description
 
-This event is raised when units arrive at the call location.
+This event represents a request to record arrival at a call location. It is published to Kafka when an arrival is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class CallArrived {
+    class ArriveAtCallRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String callId
-        +DateTime arrivedTime
+        +Instant arrivedTime
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `CallForService` entity identified by `callId`
-- **Timestamp Update**: The `arrivedTime` attribute of the CallForService is set to the provided `arrivedTime` (typically the event timestamp)
-- **Status Transition**: The call status typically transitions to "On Scene" or "In Progress"
+This event represents a **request** to record arrival at a call location. The actual arrival processing and state management happens in downstream services that consume this event.
 
+- **Request Type**: Arrival request for a call
+- **Entity Identifier**: The `callId` identifies the call where arrival is recorded (also used as `aggregateId`)
+- **Requested Attributes**: The `arrivedTime` is included in the request
+- **Timestamps**: The `arrivedTime` is provided as an Instant
+- **State Transition**: The event represents a request to transition the call to an arrived state

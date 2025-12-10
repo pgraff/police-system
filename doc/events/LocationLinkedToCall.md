@@ -1,31 +1,30 @@
-# LocationLinkedToCall
+# LinkLocationToCallRequested
 
 ## Description
 
-This event is raised when a location is linked to a call for service through a CallLocation role.
+This event represents a request to link a location to a call for service. It is published to Kafka when a location is linked to a call via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class LocationLinkedToCall {
+    class LinkLocationToCallRequested {
         +String eventId
         +DateTime timestamp
-        +String roleId
+        +String aggregateId
+        +String callId
+        +String locationId
         +String locationRoleType
         +String description
-        +String locationId
-        +String callId
     }
 ```
 
 ## Domain Model Effect
 
-- **Creates**: A new `CallLocation` role entity with the provided attributes
-- **Entity Identifier**: The `roleId` serves as the unique identifier
-- **Attributes**: All provided attributes (roleId, locationRoleType, description) are set on the new CallLocation entity
-- **Relationships**: 
-  - The CallLocation is linked to the Location identified by `locationId`
-  - The CallLocation is linked to the CallForService identified by `callId`
-- **Role Type**: The `locationRoleType` indicates the type of location (e.g., Primary, Secondary, Related)
+This event represents a **request** to link a location to a call for service. The actual relationship creation and state management happens in downstream services that consume this event.
 
+- **Request Type**: Link request to associate a location with a call
+- **Aggregate Identifier**: The `locationId` is used as `aggregateId`
+- **Requested Attributes**: All provided attributes (callId, locationId, locationRoleType, description) are included in the request
+- **Role Type**: The `locationRoleType` indicates the type of location (e.g., Primary, Secondary, Related) and is provided as a string enum name
+- **Relationship**: The event represents a request to establish a relationship between the Location and CallForService entities

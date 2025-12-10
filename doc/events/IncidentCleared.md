@@ -1,24 +1,28 @@
-# IncidentCleared
+# ClearIncidentRequested
 
 ## Description
 
-This event is raised when an incident is cleared or completed.
+This event represents a request to clear an incident. It is published to Kafka when an incident clear is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class IncidentCleared {
+    class ClearIncidentRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String incidentId
-        +DateTime clearedTime
+        +Instant clearedTime
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `Incident` entity identified by `incidentId`
-- **Timestamp Update**: The `clearedTime` attribute of the Incident is set to the provided `clearedTime` (typically the event timestamp)
-- **Status Transition**: The incident status typically transitions to "Cleared" or "Completed"
+This event represents a **request** to clear an incident. The actual clear processing and state management happens in downstream services that consume this event.
 
+- **Request Type**: Clear request for an incident
+- **Entity Identifier**: The `incidentId` identifies the incident to clear (also used as `aggregateId`)
+- **Requested Attributes**: The `clearedTime` is included in the request
+- **Timestamps**: The `clearedTime` is provided as an Instant
+- **State Transition**: The event represents a request to transition the incident to a cleared state

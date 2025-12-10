@@ -1,18 +1,19 @@
-# ActivityStarted
+# StartActivityRequested
 
 ## Description
 
-This event is raised when an activity is started (e.g., arrest, interview, evidence collection).
+This event represents a request to start an activity. It is published to Kafka when an activity start is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class ActivityStarted {
+    class StartActivityRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String activityId
-        +DateTime activityTime
+        +Instant activityTime
         +String activityType
         +String description
         +String status
@@ -21,9 +22,11 @@ classDiagram
 
 ## Domain Model Effect
 
-- **Creates**: A new `Activity` entity with the provided attributes
-- **Entity Identifier**: The `activityId` serves as the unique identifier
-- **Initial Status**: The `status` attribute is set to the provided value (typically "In Progress" or "Active")
-- **Attributes**: All provided attributes (activityId, activityTime, activityType, description, status) are set on the new Activity entity
-- **Timestamps**: The `activityTime` is set to the provided value (typically the event timestamp)
+This event represents a **request** to create a new `Activity` entity. The actual creation and state management happens in downstream services that consume this event.
 
+- **Request Type**: Start request for a new activity
+- **Entity Identifier**: The `activityId` serves as the unique identifier (also used as `aggregateId`)
+- **Requested Attributes**: All provided attributes (activityTime, activityType, description, status) are included in the request
+- **Status**: The `status` attribute is provided in the request (typically "Started" or "In-Progress")
+- **Timestamps**: The `activityTime` is provided as an Instant
+- **Enum Values**: The `activityType` and `status` are provided as string enum names

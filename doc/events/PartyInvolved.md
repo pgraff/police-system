@@ -1,39 +1,35 @@
-# PartyInvolved
+# InvolvePartyRequested
 
 ## Description
 
-This event is raised when a person becomes involved in an Incident, CallForService, or Activity through an InvolvedParty role.
+This event represents a request to involve a party in an incident, call, or activity. It is published to Kafka when a party involvement is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class PartyInvolved {
+    class InvolvePartyRequested {
         +String eventId
         +DateTime timestamp
-        +String roleId
-        +String partyRoleType
-        +String description
-        +DateTime involvementStartTime
+        +String aggregateId
         +String personId
-        +String involvementType
         +String incidentId
         +String callId
         +String activityId
+        +String partyRoleType
+        +String description
+        +Instant involvementStartTime
     }
 ```
 
 ## Domain Model Effect
 
-- **Creates**: A new `InvolvedParty` role entity with the provided attributes
-- **Entity Identifier**: The `roleId` serves as the unique identifier
-- **Attributes**: All provided attributes (roleId, partyRoleType, description, involvementStartTime) are set on the new InvolvedParty entity
-- **Relationships**: 
-  - The InvolvedParty is linked to the Person identified by `personId`
-  - The InvolvedParty is linked to exactly one of the following based on `involvementType`:
-    - If `involvementType` is "Incident", linked to Incident identified by `incidentId`
-    - If `involvementType` is "CallForService", linked to CallForService identified by `callId`
-    - If `involvementType` is "Activity", linked to Activity identified by `activityId`
-- **Timestamps**: The `involvementStartTime` is set to the provided value (typically the event timestamp)
-- **Role Type**: The `partyRoleType` indicates how the person is involved (e.g., Victim, Suspect, Witness, Complainant)
+This event represents a **request** to involve a party in an incident, call, or activity. The actual involvement creation and state management happens in downstream services that consume this event.
 
+- **Request Type**: Involvement request for a party
+- **Aggregate Identifier**: The `personId` is used as `aggregateId`
+- **Requested Attributes**: All provided attributes (personId, partyRoleType, description, involvementStartTime) are included in the request
+- **Relationships**: Exactly one of `incidentId`, `callId`, or `activityId` must be provided to specify which entity the party is involved in
+- **Role Type**: The `partyRoleType` indicates the role the party plays (e.g., Victim, Suspect, Witness, Complainant) and is provided as a string enum name
+- **Timestamps**: The `involvementStartTime` is provided as an Instant
+- **Relationship**: The event represents a request to create an InvolvedParty relationship between a Person and an Incident, CallForService, or Activity

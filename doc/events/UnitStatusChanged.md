@@ -1,26 +1,28 @@
-# UnitStatusChanged
+# ChangeUnitStatusRequested
 
 ## Description
 
-This event is raised when a unit's status changes.
+This event represents a request to change a unit's status. It is published to Kafka when a unit status change is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class UnitStatusChanged {
+    class ChangeUnitStatusRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String unitId
-        +String previousStatus
-        +String newStatus
+        +String status
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `Unit` entity identified by `unitId`
-- **Status Update**: The `status` attribute of the Unit is updated from `previousStatus` to `newStatus`
-- **lastStatusChange**: The `lastStatusChange` attribute is updated to the event timestamp
-- **State Transition**: The event documents the state transition for audit purposes
+This event represents a **request** to change the status of an existing `Unit` entity. The actual status change and state management happens in downstream services that consume this event.
 
+- **Request Type**: Status change request for an existing unit
+- **Entity Identifier**: The `unitId` identifies the unit whose status should be changed (also used as `aggregateId`)
+- **Status Update**: The `status` attribute contains the requested new status value
+- **Valid Status Values**: Available, Assigned, In-Use, Maintenance, Out-of-Service
+- **State Transition**: The event represents a request for a state transition, which will be processed by downstream services

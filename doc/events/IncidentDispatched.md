@@ -1,24 +1,28 @@
-# IncidentDispatched
+# DispatchIncidentRequested
 
 ## Description
 
-This event is raised when an incident is dispatched to units.
+This event represents a request to dispatch an incident to units. It is published to Kafka when an incident dispatch is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class IncidentDispatched {
+    class DispatchIncidentRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String incidentId
-        +DateTime dispatchedTime
+        +Instant dispatchedTime
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `Incident` entity identified by `incidentId`
-- **Timestamp Update**: The `dispatchedTime` attribute of the Incident is set to the provided `dispatchedTime` (typically the event timestamp)
-- **Status Transition**: The incident status typically transitions to "Dispatched" or "In Progress"
+This event represents a **request** to dispatch an incident. The actual dispatch processing and state management happens in downstream services that consume this event.
 
+- **Request Type**: Dispatch request for an incident
+- **Entity Identifier**: The `incidentId` identifies the incident to dispatch (also used as `aggregateId`)
+- **Requested Attributes**: The `dispatchedTime` is included in the request
+- **Timestamps**: The `dispatchedTime` is provided as an Instant
+- **State Transition**: The event represents a request to transition the incident to a dispatched state

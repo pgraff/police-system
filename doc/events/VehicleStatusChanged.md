@@ -1,26 +1,28 @@
-# VehicleStatusChanged
+# ChangeVehicleStatusRequested
 
 ## Description
 
-This event is raised when a police vehicle's status changes (e.g., Available, Assigned, In-Use, Maintenance, Out-of-Service).
+This event represents a request to change a police vehicle's status. It is published to Kafka when a vehicle status change is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class VehicleStatusChanged {
+    class ChangeVehicleStatusRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String unitId
-        +String previousStatus
-        +String newStatus
+        +String status
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `PoliceVehicle` entity identified by `unitId`
-- **Status Update**: The `status` attribute of the PoliceVehicle is updated from `previousStatus` to `newStatus`
-- **State Transition**: The event documents the state transition for audit purposes
-- **Valid Status Values**: Available, Assigned, In-Use, Maintenance, Out-of-Service
+This event represents a **request** to change the status of an existing `PoliceVehicle` entity. The actual status change and state management happens in downstream services that consume this event.
 
+- **Request Type**: Status change request for an existing police vehicle
+- **Entity Identifier**: The `unitId` identifies the vehicle whose status should be changed (also used as `aggregateId`)
+- **Status Update**: The `status` attribute contains the requested new status value
+- **Valid Status Values**: Available, Assigned, In-Use, Maintenance, Out-of-Service
+- **State Transition**: The event represents a request for a state transition, which will be processed by downstream services

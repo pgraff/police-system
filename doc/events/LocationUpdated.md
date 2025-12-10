@@ -1,30 +1,36 @@
-# LocationUpdated
+# UpdateLocationRequested
 
 ## Description
 
-This event is raised when an existing location's information is updated.
+This event represents a request to update an existing location's information. It is published to Kafka when a location update is requested via the REST API. This is a request/command event, not a state change event. All fields are nullable to support partial updates - null fields mean "don't update this field".
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class LocationUpdated {
+    class UpdateLocationRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String locationId
         +String address
         +String city
         +String state
         +String zipCode
-        +Double latitude
-        +Double longitude
+        +String latitude
+        +String longitude
         +String locationType
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `Location` entity identified by `locationId`
-- **Updated Attributes**: All provided attributes (address, city, state, zipCode, latitude, longitude, locationType) are updated on the Location entity
-- **Note**: The `locationId` cannot be changed as it serves as the entity identifier
+This event represents a **request** to update an existing `Location` entity. The actual update and state management happens in downstream services that consume this event.
 
+- **Request Type**: Update request for an existing location
+- **Entity Identifier**: The `locationId` identifies the location to update (also used as `aggregateId`)
+- **Partial Updates**: All fields are nullable - only non-null fields will be updated
+- **Updated Attributes**: Any provided attributes (address, city, state, zipCode, latitude, longitude, locationType) are included in the update request
+- **Note**: The `locationId` cannot be changed as it serves as the entity identifier
+- **Coordinates**: The `latitude` and `longitude` are provided as strings if provided
+- **Enum Values**: The `locationType` is provided as a string enum name if provided

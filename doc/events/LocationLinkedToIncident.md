@@ -1,31 +1,30 @@
-# LocationLinkedToIncident
+# LinkLocationToIncidentRequested
 
 ## Description
 
-This event is raised when a location is linked to an incident through an IncidentLocation role.
+This event represents a request to link a location to an incident. It is published to Kafka when a location is linked to an incident via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class LocationLinkedToIncident {
+    class LinkLocationToIncidentRequested {
         +String eventId
         +DateTime timestamp
-        +String roleId
+        +String aggregateId
+        +String incidentId
+        +String locationId
         +String locationRoleType
         +String description
-        +String locationId
-        +String incidentId
     }
 ```
 
 ## Domain Model Effect
 
-- **Creates**: A new `IncidentLocation` role entity with the provided attributes
-- **Entity Identifier**: The `roleId` serves as the unique identifier
-- **Attributes**: All provided attributes (roleId, locationRoleType, description) are set on the new IncidentLocation entity
-- **Relationships**: 
-  - The IncidentLocation is linked to the Location identified by `locationId`
-  - The IncidentLocation is linked to the Incident identified by `incidentId`
-- **Role Type**: The `locationRoleType` indicates the type of location (e.g., Primary, Secondary, Related)
+This event represents a **request** to link a location to an incident. The actual relationship creation and state management happens in downstream services that consume this event.
 
+- **Request Type**: Link request to associate a location with an incident
+- **Aggregate Identifier**: The `locationId` is used as `aggregateId`
+- **Requested Attributes**: All provided attributes (incidentId, locationId, locationRoleType, description) are included in the request
+- **Role Type**: The `locationRoleType` indicates the type of location (e.g., Primary, Secondary, Related) and is provided as a string enum name
+- **Relationship**: The event represents a request to establish a relationship between the Location and Incident entities

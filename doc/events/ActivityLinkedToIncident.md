@@ -1,16 +1,17 @@
-# ActivityLinkedToIncident
+# LinkActivityToIncidentRequested
 
 ## Description
 
-This event is raised when an activity is linked to an incident.
+This event represents a request to link an activity to an incident. It is published to Kafka when an activity is linked to an incident via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class ActivityLinkedToIncident {
+    class LinkActivityToIncidentRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String activityId
         +String incidentId
     }
@@ -18,7 +19,9 @@ classDiagram
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `Activity` entity identified by `activityId`
-- **Relationships**: The Activity is linked to the Incident identified by `incidentId`
-- **Note**: This establishes the relationship where an Incident can contain multiple Activity entities
+This event represents a **request** to link an activity to an incident. The actual relationship creation and state management happens in downstream services that consume this event.
 
+- **Request Type**: Link request to associate an activity with an incident
+- **Aggregate Identifier**: The `activityId` is used as `aggregateId`
+- **Requested Attributes**: Both `activityId` and `incidentId` are included in the request
+- **Relationship**: The event represents a request to establish a relationship between the Activity and Incident entities

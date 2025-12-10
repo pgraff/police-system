@@ -1,16 +1,17 @@
-# IncidentUpdated
+# UpdateIncidentRequested
 
 ## Description
 
-This event is raised when an existing incident's information is updated (excluding status changes, which use IncidentStatusChanged).
+This event represents a request to update an existing incident's information. It is published to Kafka when an incident update is requested via the REST API. This is a request/command event, not a state change event. All fields are nullable to support partial updates - null fields mean "don't update this field".
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class IncidentUpdated {
+    class UpdateIncidentRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String incidentId
         +String priority
         +String description
@@ -20,9 +21,12 @@ classDiagram
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `Incident` entity identified by `incidentId`
-- **Updated Attributes**: All provided attributes (priority, description, incidentType) are updated on the Incident entity
-- **Note**: The `incidentId` and `incidentNumber` cannot be changed as they serve as entity identifiers
-- **Note**: Status changes should use the `IncidentStatusChanged` event instead
-- **Note**: Timestamp fields (reportedTime, dispatchedTime, arrivedTime, clearedTime) should use their specific events
+This event represents a **request** to update an existing `Incident` entity. The actual update and state management happens in downstream services that consume this event.
 
+- **Request Type**: Update request for an existing incident
+- **Entity Identifier**: The `incidentId` identifies the incident to update (also used as `aggregateId`)
+- **Partial Updates**: All fields are nullable - only non-null fields will be updated
+- **Updated Attributes**: Any provided attributes (priority, description, incidentType) are included in the update request
+- **Note**: The `incidentId` cannot be changed as it serves as the entity identifier
+- **Note**: Status changes should use the `ChangeIncidentStatusRequested` event instead
+- **Enum Values**: The `priority` and `incidentType` are provided as string enum names if provided

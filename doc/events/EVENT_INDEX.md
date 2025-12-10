@@ -2,102 +2,97 @@
 
 This document provides a complete index of all events in the police incident management system, organized by domain model archetype.
 
+**Note**: All events follow the "Requested" naming convention, representing requests/commands from the edge layer, not state changes. These events are published to Kafka when operations are requested via the REST API.
+
 ## Party/Place/Thing (PPT) Events
 
 ### PoliceOfficer Events
-- [`OfficerRegistered`](OfficerRegistered.md) - New officer added to system
-- [`OfficerUpdated`](OfficerUpdated.md) - Officer information modified
-- [`OfficerStatusChanged`](OfficerStatusChanged.md) - Officer status updated
+- [`RegisterOfficerRequested`](RegisterOfficerRequested.md) - Request to register a new officer
+- [`UpdateOfficerRequested`](UpdateOfficerRequested.md) - Request to update officer information
+- [`ChangeOfficerStatusRequested`](ChangeOfficerStatusRequested.md) - Request to change officer status
 
 ### PoliceVehicle Events
-- [`VehicleRegistered`](VehicleRegistered.md) - New vehicle added to system
-- [`VehicleUpdated`](VehicleUpdated.md) - Vehicle information modified
-- [`VehicleStatusChanged`](VehicleStatusChanged.md) - Vehicle status updated
+- [`RegisterVehicleRequested`](RegisterVehicleRequested.md) - Request to register a new vehicle
+- [`UpdateVehicleRequested`](UpdateVehicleRequested.md) - Request to update vehicle information
+- [`ChangeVehicleStatusRequested`](ChangeVehicleStatusRequested.md) - Request to change vehicle status
 
 ### Unit Events
-- [`UnitCreated`](UnitCreated.md) - New unit created
-- [`UnitUpdated`](UnitUpdated.md) - Unit information modified
-- [`UnitStatusChanged`](UnitStatusChanged.md) - Unit status updated
+- [`CreateUnitRequested`](CreateUnitRequested.md) - Request to create a new unit
+- [`UpdateUnitRequested`](UpdateUnitRequested.md) - Request to update unit information
+- [`ChangeUnitStatusRequested`](ChangeUnitStatusRequested.md) - Request to change unit status
 
 ### Person Events
-- [`PersonRegistered`](PersonRegistered.md) - New person added to system
-- [`PersonUpdated`](PersonUpdated.md) - Person information modified
+- [`RegisterPersonRequested`](RegisterPersonRequested.md) - Request to register a new person
+- [`UpdatePersonRequested`](UpdatePersonRequested.md) - Request to update person information
 
 ### Location Events
-- [`LocationCreated`](LocationCreated.md) - New location added
-- [`LocationUpdated`](LocationUpdated.md) - Location information modified
+- [`CreateLocationRequested`](CreateLocationRequested.md) - Request to create a new location
+- [`UpdateLocationRequested`](UpdateLocationRequested.md) - Request to update location information
+- [`LinkLocationToIncidentRequested`](LinkLocationToIncidentRequested.md) - Request to link location to incident
+- [`UnlinkLocationFromIncidentRequested`](UnlinkLocationFromIncidentRequested.md) - Request to unlink location from incident
+- [`LinkLocationToCallRequested`](LinkLocationToCallRequested.md) - Request to link location to call
+- [`UnlinkLocationFromCallRequested`](UnlinkLocationFromCallRequested.md) - Request to unlink location from call
 
 ## Moment-Interval (MI) Events
 
 ### Incident Events
-- [`IncidentReported`](IncidentReported.md) - New incident created
-- [`IncidentDispatched`](IncidentDispatched.md) - Incident dispatched to units
-- [`IncidentArrived`](IncidentArrived.md) - Units arrived at incident
-- [`IncidentCleared`](IncidentCleared.md) - Incident cleared/completed
-- [`IncidentStatusChanged`](IncidentStatusChanged.md) - Incident status updated
-- [`IncidentUpdated`](IncidentUpdated.md) - Incident information modified
+- [`ReportIncidentRequested`](ReportIncidentRequested.md) - Request to report a new incident
+- [`DispatchIncidentRequested`](DispatchIncidentRequested.md) - Request to dispatch incident to units
+- [`ArriveAtIncidentRequested`](ArriveAtIncidentRequested.md) - Request to record arrival at incident
+- [`ClearIncidentRequested`](ClearIncidentRequested.md) - Request to clear incident
+- [`ChangeIncidentStatusRequested`](ChangeIncidentStatusRequested.md) - Request to change incident status
+- [`UpdateIncidentRequested`](UpdateIncidentRequested.md) - Request to update incident information
 
 ### CallForService Events
-- [`CallReceived`](CallReceived.md) - New call for service received
-- [`CallDispatched`](CallDispatched.md) - Call dispatched to units
-- [`CallArrived`](CallArrived.md) - Units arrived at call location
-- [`CallCleared`](CallCleared.md) - Call cleared/completed
-- [`CallStatusChanged`](CallStatusChanged.md) - Call status updated
-- [`CallUpdated`](CallUpdated.md) - Call information modified
-- [`CallLinkedToIncident`](CallLinkedToIncident.md) - Call linked to incident
-- [`CallLinkedToDispatch`](CallLinkedToDispatch.md) - Call linked to dispatch
+- [`ReceiveCallRequested`](ReceiveCallRequested.md) - Request to receive a new call for service
+- [`DispatchCallRequested`](DispatchCallRequested.md) - Request to dispatch call to units
+- [`ArriveAtCallRequested`](ArriveAtCallRequested.md) - Request to record arrival at call location
+- [`ClearCallRequested`](ClearCallRequested.md) - Request to clear call
+- [`ChangeCallStatusRequested`](ChangeCallStatusRequested.md) - Request to change call status
+- [`UpdateCallRequested`](UpdateCallRequested.md) - Request to update call information
+- [`LinkCallToIncidentRequested`](LinkCallToIncidentRequested.md) - Request to link call to incident
+- [`LinkCallToDispatchRequested`](LinkCallToDispatchRequested.md) - Request to link call to dispatch
 
 ### Activity Events
-- [`ActivityStarted`](ActivityStarted.md) - Activity initiated
-- [`ActivityCompleted`](ActivityCompleted.md) - Activity finished
-- [`ActivityStatusChanged`](ActivityStatusChanged.md) - Activity status updated
-- [`ActivityUpdated`](ActivityUpdated.md) - Activity information modified
-- [`ActivityLinkedToIncident`](ActivityLinkedToIncident.md) - Activity linked to incident
+- [`StartActivityRequested`](StartActivityRequested.md) - Request to start an activity
+- [`CompleteActivityRequested`](CompleteActivityRequested.md) - Request to complete an activity
+- [`ChangeActivityStatusRequested`](ChangeActivityStatusRequested.md) - Request to change activity status
+- [`UpdateActivityRequested`](UpdateActivityRequested.md) - Request to update activity information
+- [`LinkActivityToIncidentRequested`](LinkActivityToIncidentRequested.md) - Request to link activity to incident
 
 ### Assignment Events
-- [`AssignmentCreated`](AssignmentCreated.md) - Resource assigned to incident/call
-- [`AssignmentCompleted`](AssignmentCompleted.md) - Assignment finished
-- [`AssignmentStatusChanged`](AssignmentStatusChanged.md) - Assignment status updated
-- [`AssignmentLinkedToDispatch`](AssignmentLinkedToDispatch.md) - Assignment linked to dispatch
+- [`CreateAssignmentRequested`](CreateAssignmentRequested.md) - Request to create an assignment
+- [`CompleteAssignmentRequested`](CompleteAssignmentRequested.md) - Request to complete an assignment
+- [`ChangeAssignmentStatusRequested`](ChangeAssignmentStatusRequested.md) - Request to change assignment status
+- [`LinkAssignmentToDispatchRequested`](LinkAssignmentToDispatchRequested.md) - Request to link assignment to dispatch
 
 ### Shift Events
-- [`ShiftStarted`](ShiftStarted.md) - Shift begins
-- [`ShiftEnded`](ShiftEnded.md) - Shift ends
-- [`ShiftStatusChanged`](ShiftStatusChanged.md) - Shift status updated
-
-### ShiftChange Events
-- [`ShiftChangeRecorded`](ShiftChangeRecorded.md) - Shift change documented
+- [`StartShiftRequested`](StartShiftRequested.md) - Request to start a shift
+- [`EndShiftRequested`](EndShiftRequested.md) - Request to end a shift
+- [`ChangeShiftStatusRequested`](ChangeShiftStatusRequested.md) - Request to change shift status
+- [`RecordShiftChangeRequested`](RecordShiftChangeRequested.md) - Request to record a shift change
 
 ### Dispatch Events
-- [`DispatchCreated`](DispatchCreated.md) - New dispatch created
-- [`DispatchStatusChanged`](DispatchStatusChanged.md) - Dispatch status updated
+- [`CreateDispatchRequested`](CreateDispatchRequested.md) - Request to create a new dispatch
+- [`ChangeDispatchStatusRequested`](ChangeDispatchStatusRequested.md) - Request to change dispatch status
 
 ## Role Events
 
 ### ResourceAssignment Events
-- [`ResourceAssigned`](ResourceAssigned.md) - Resource assigned to assignment
-- [`ResourceUnassigned`](ResourceUnassigned.md) - Resource removed from assignment
-- [`ResourceAssignmentStatusChanged`](ResourceAssignmentStatusChanged.md) - Resource assignment status updated
+- [`AssignResourceRequested`](AssignResourceRequested.md) - Request to assign a resource to an assignment
+- [`UnassignResourceRequested`](UnassignResourceRequested.md) - Request to unassign a resource from an assignment
+- [`ChangeResourceAssignmentStatusRequested`](ChangeResourceAssignmentStatusRequested.md) - Request to change resource assignment status
 
 ### InvolvedParty Events
-- [`PartyInvolved`](PartyInvolved.md) - Person involved in incident/call/activity
-- [`PartyInvolvementEnded`](PartyInvolvementEnded.md) - Person no longer involved
-- [`PartyInvolvementUpdated`](PartyInvolvementUpdated.md) - Involvement details modified
+- [`InvolvePartyRequested`](InvolvePartyRequested.md) - Request to involve a party in incident/call/activity
+- [`EndPartyInvolvementRequested`](EndPartyInvolvementRequested.md) - Request to end party involvement
+- [`UpdatePartyInvolvementRequested`](UpdatePartyInvolvementRequested.md) - Request to update party involvement information
 
 ### OfficerShift Events
-- [`OfficerCheckedIn`](OfficerCheckedIn.md) - Officer checks in to shift
-- [`OfficerCheckedOut`](OfficerCheckedOut.md) - Officer checks out of shift
-- [`OfficerShiftUpdated`](OfficerShiftUpdated.md) - Officer shift details modified
-
-### IncidentLocation Events
-- [`LocationLinkedToIncident`](LocationLinkedToIncident.md) - Location linked to incident
-- [`LocationUnlinkedFromIncident`](LocationUnlinkedFromIncident.md) - Location removed from incident
-
-### CallLocation Events
-- [`LocationLinkedToCall`](LocationLinkedToCall.md) - Location linked to call
-- [`LocationUnlinkedFromCall`](LocationUnlinkedFromCall.md) - Location removed from call
+- [`CheckInOfficerRequested`](CheckInOfficerRequested.md) - Request to check in an officer to a shift
+- [`CheckOutOfficerRequested`](CheckOutOfficerRequested.md) - Request to check out an officer from a shift
+- [`UpdateOfficerShiftRequested`](UpdateOfficerShiftRequested.md) - Request to update officer shift information
 
 ## Total Event Count
 
-**50 events** covering all entity lifecycle transitions and relationship changes in the domain model.
-
+**55 events** covering all entity lifecycle transitions and relationship changes in the domain model. All events represent requests/commands from the edge layer and are published to Kafka.

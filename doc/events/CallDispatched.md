@@ -1,24 +1,28 @@
-# CallDispatched
+# DispatchCallRequested
 
 ## Description
 
-This event is raised when a call for service is dispatched to units.
+This event represents a request to dispatch a call to units. It is published to Kafka when a call dispatch is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class CallDispatched {
+    class DispatchCallRequested {
         +String eventId
         +DateTime timestamp
+        +String aggregateId
         +String callId
-        +DateTime dispatchedTime
+        +Instant dispatchedTime
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `CallForService` entity identified by `callId`
-- **Timestamp Update**: The `dispatchedTime` attribute of the CallForService is set to the provided `dispatchedTime` (typically the event timestamp)
-- **Status Transition**: The call status typically transitions to "Dispatched" or "In Progress"
+This event represents a **request** to dispatch a call. The actual dispatch processing and state management happens in downstream services that consume this event.
 
+- **Request Type**: Dispatch request for a call
+- **Entity Identifier**: The `callId` identifies the call to dispatch (also used as `aggregateId`)
+- **Requested Attributes**: The `dispatchedTime` is included in the request
+- **Timestamps**: The `dispatchedTime` is provided as an Instant
+- **State Transition**: The event represents a request to transition the call to a dispatched state

@@ -1,32 +1,31 @@
-# OfficerCheckedIn
+# CheckInOfficerRequested
 
 ## Description
 
-This event is raised when a police officer checks in to a shift, creating an OfficerShift role.
+This event represents a request to check in an officer to a shift. It is published to Kafka when an officer check-in is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class OfficerCheckedIn {
+    class CheckInOfficerRequested {
         +String eventId
         +DateTime timestamp
-        +String roleId
-        +String shiftRoleType
-        +DateTime checkInTime
-        +String badgeNumber
+        +String aggregateId
         +String shiftId
+        +String badgeNumber
+        +Instant checkInTime
+        +String shiftRoleType
     }
 ```
 
 ## Domain Model Effect
 
-- **Creates**: A new `OfficerShift` role entity with the provided attributes
-- **Entity Identifier**: The `roleId` serves as the unique identifier
-- **Attributes**: All provided attributes (roleId, shiftRoleType, checkInTime) are set on the new OfficerShift entity
-- **Relationships**: 
-  - The OfficerShift is linked to the PoliceOfficer identified by `badgeNumber`
-  - The OfficerShift is linked to the Shift identified by `shiftId`
-- **Timestamps**: The `checkInTime` is set to the provided value (typically the event timestamp)
-- **Role Type**: The `shiftRoleType` indicates the type of role the officer plays in the shift (e.g., Regular, Supervisor, Trainee)
+This event represents a **request** to check in an officer to a shift. The actual check-in processing and state management happens in downstream services that consume this event.
 
+- **Request Type**: Check-in request for an officer to a shift
+- **Aggregate Identifier**: The `shiftId` is used as `aggregateId`
+- **Requested Attributes**: All provided attributes (shiftId, badgeNumber, checkInTime, shiftRoleType) are included in the request
+- **Timestamps**: The `checkInTime` is provided as an Instant
+- **Enum Values**: The `shiftRoleType` is provided as a string enum name (e.g., Regular, Supervisor, Trainee)
+- **Relationship**: The event represents a request to establish an OfficerShift relationship between the PoliceOfficer and Shift entities

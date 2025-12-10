@@ -1,25 +1,29 @@
-# ResourceUnassigned
+# UnassignResourceRequested
 
 ## Description
 
-This event is raised when a resource is unassigned from an Assignment, ending the ResourceAssignment role.
+This event represents a request to unassign a resource from an assignment. It is published to Kafka when a resource unassignment is requested via the REST API. This is a request/command event, not a state change event.
 
 ## UML Class Diagram
 
 ```mermaid
 classDiagram
-    class ResourceUnassigned {
+    class UnassignResourceRequested {
         +String eventId
         +DateTime timestamp
-        +String roleId
-        +DateTime endTime
+        +String aggregateId
+        +String assignmentId
+        +String resourceId
+        +Instant endTime
     }
 ```
 
 ## Domain Model Effect
 
-- **Modifies**: The existing `ResourceAssignment` role entity identified by `roleId`
-- **Timestamp Update**: The `endTime` attribute of the ResourceAssignment is set to the provided `endTime` (typically the event timestamp)
-- **Status Transition**: The ResourceAssignment status typically transitions to "Completed" or "Ended"
-- **Note**: The ResourceAssignment entity may be marked as inactive or archived, but the historical relationship is preserved
+This event represents a **request** to unassign a resource from an assignment. The actual resource unassignment processing and state management happens in downstream services that consume this event.
 
+- **Request Type**: Unassignment request for a resource from an assignment
+- **Aggregate Identifier**: The `assignmentId` is used as `aggregateId`
+- **Requested Attributes**: Both `resourceId` and `endTime` are included in the request
+- **Timestamps**: The `endTime` is provided as an Instant
+- **Relationship**: The event represents a request to update or end the ResourceAssignment relationship between a resource and an assignment
