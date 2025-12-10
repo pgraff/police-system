@@ -2706,10 +2706,10 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 15: OfficerShift Domain
 
 #### Increment 15.1: Check In Officer Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/shifts/{shiftId}/officers/{badgeNumber}/check-in`
+- REST API: `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in`
 - Request body: `{ checkInTime, shiftRoleType }`
 - Response: `200 OK`
 - Produces event: `CheckInOfficerRequested` to Kafka topic `officer-shift-events`
@@ -2717,16 +2717,19 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CheckInOfficerRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testCheckInOfficer_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, checkInTime, shiftRoleType
-- ⏳ `testCheckInOfficer_WithMissingCheckInTime_Returns400()` - Validation error, no event produced
-- ⏳ `testCheckInOfficer_WithInvalidShiftRoleType_Returns400()` - Validation error, no event produced
+- ✅ `testCheckInOfficer_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, checkInTime, shiftRoleType
+- ✅ `testCheckInOfficer_WithMissingCheckInTime_Returns400()` - Validation error, no event produced
+- ✅ `testCheckInOfficer_WithInvalidShiftRoleType_Returns400()` - Validation error, no event produced
 - Event assertions: shiftId used as Kafka key; checkInTime ISO-8601 required
 
 **Implementation Plan**:
-- Add `CheckInOfficerRequestDto` requiring `checkInTime` and shiftRoleType enum
-- Add command + validator (payload only) and handler producing `CheckInOfficerRequested` to `officer-shift-events` keyed by shiftId
-- Expose controller `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in` returning 200 with message
-- Add event model to `common.events.officershift`
+- ✅ Add `CheckInOfficerRequestDto` requiring `checkInTime` and shiftRoleType enum
+- ✅ Add `ShiftRoleType` enum with values: Regular, Supervisor, Trainee, Other
+- ✅ Add command + validator (payload only) and handler producing `CheckInOfficerRequested` to `officer-shift-events` keyed by shiftId
+- ✅ Expose controller `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in` returning 200 with message
+- ✅ Add event model to `common.events.officershifts.CheckInOfficerRequested`
+- ✅ Add `OfficerShiftResponseDto` for response
+- ✅ All tests passing (3/3 in ShiftControllerTest)
 
 **Demo Suggestion**:
 1. Show POST /api/shifts/{shiftId}/officers/{badgeNumber}/check-in request

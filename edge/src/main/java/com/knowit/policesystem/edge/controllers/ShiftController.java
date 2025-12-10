@@ -2,17 +2,21 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.shifts.ChangeShiftStatusCommand;
+import com.knowit.policesystem.edge.commands.shifts.CheckInOfficerCommand;
 import com.knowit.policesystem.edge.commands.shifts.EndShiftCommand;
 import com.knowit.policesystem.edge.commands.shifts.RecordShiftChangeCommand;
 import com.knowit.policesystem.edge.commands.shifts.StartShiftCommand;
 import com.knowit.policesystem.edge.dto.ChangeShiftStatusRequestDto;
+import com.knowit.policesystem.edge.dto.CheckInOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
 import com.knowit.policesystem.edge.dto.ShiftChangeResponseDto;
 import com.knowit.policesystem.edge.dto.ShiftResponseDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
+import com.knowit.policesystem.edge.dto.OfficerShiftResponseDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.shifts.ChangeShiftStatusCommandValidator;
+import com.knowit.policesystem.edge.validation.shifts.CheckInOfficerCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.EndShiftCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.RecordShiftChangeCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.StartShiftCommandValidator;
@@ -38,6 +42,7 @@ public class ShiftController extends BaseRestController {
     private final EndShiftCommandValidator endShiftCommandValidator;
     private final ChangeShiftStatusCommandValidator changeShiftStatusCommandValidator;
     private final RecordShiftChangeCommandValidator recordShiftChangeCommandValidator;
+    private final CheckInOfficerCommandValidator checkInOfficerCommandValidator;
 
     /**
      * Creates a new shift controller.
@@ -47,17 +52,20 @@ public class ShiftController extends BaseRestController {
      * @param endShiftCommandValidator the end shift command validator
      * @param changeShiftStatusCommandValidator the change shift status command validator
      * @param recordShiftChangeCommandValidator the record shift change command validator
+     * @param checkInOfficerCommandValidator the check-in officer command validator
      */
     public ShiftController(CommandHandlerRegistry commandHandlerRegistry,
                            StartShiftCommandValidator commandValidator,
                            EndShiftCommandValidator endShiftCommandValidator,
                            ChangeShiftStatusCommandValidator changeShiftStatusCommandValidator,
-                           RecordShiftChangeCommandValidator recordShiftChangeCommandValidator) {
+                           RecordShiftChangeCommandValidator recordShiftChangeCommandValidator,
+                           CheckInOfficerCommandValidator checkInOfficerCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.endShiftCommandValidator = endShiftCommandValidator;
         this.changeShiftStatusCommandValidator = changeShiftStatusCommandValidator;
         this.recordShiftChangeCommandValidator = recordShiftChangeCommandValidator;
+        this.checkInOfficerCommandValidator = checkInOfficerCommandValidator;
     }
 
     /**
@@ -164,5 +172,34 @@ public class ShiftController extends BaseRestController {
         ShiftChangeResponseDto response = handler.handle(command);
 
         return created(response, "Shift change record request processed");
+    }
+
+    /**
+     * Checks in an officer to a shift.
+     * Accepts check-in time and shift role type, validates it, and publishes a CheckInOfficerRequested event to Kafka.
+     *
+     * @param shiftId the shift identifier from the path
+     * @param badgeNumber the badge number from the path
+     * @param requestDto the check-in officer request DTO
+     * @return 200 OK with shift ID and badge number
+     */
+    @PostMapping("/shifts/{shiftId}/officers/{badgeNumber}/check-in")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<OfficerShiftResponseDto>> checkInOfficer(
+            @PathVariable String shiftId,
+            @PathVariable String badgeNumber,
+            @Valid @RequestBody CheckInOfficerRequestDto requestDto) {
+
+        CheckInOfficerCommand command = new CheckInOfficerCommand(shiftId, badgeNumber, requestDto);
+
+        var validationResult = checkInOfficerCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        com.knowit.policesystem.edge.commands.CommandHandler<CheckInOfficerCommand, OfficerShiftResponseDto> handler =
+                commandHandlerRegistry.findHandler(CheckInOfficerCommand.class);
+        OfficerShiftResponseDto response = handler.handle(command);
+
+        return success(response, "Officer check-in request processed");
     }
 }

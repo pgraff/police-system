@@ -2,12 +2,15 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.officershifts.CheckInOfficerRequested;
 import com.knowit.policesystem.common.events.shifts.EndShiftRequested;
 import com.knowit.policesystem.common.events.shifts.RecordShiftChangeRequested;
 import com.knowit.policesystem.common.events.shifts.StartShiftRequested;
 import com.knowit.policesystem.edge.domain.ChangeType;
+import com.knowit.policesystem.edge.domain.ShiftRoleType;
 import com.knowit.policesystem.edge.domain.ShiftStatus;
 import com.knowit.policesystem.edge.domain.ShiftType;
+import com.knowit.policesystem.edge.dto.CheckInOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
@@ -72,8 +75,10 @@ class ShiftControllerTest {
     private ObjectMapper objectMapper;
 
     private Consumer<String, String> consumer;
+    private Consumer<String, String> officerShiftConsumer;
     private ObjectMapper eventObjectMapper;
     private static final String TOPIC = "shift-events";
+    private static final String OFFICER_SHIFT_TOPIC = "officer-shift-events";
 
     @BeforeEach
     void setUp() {
@@ -98,12 +103,33 @@ class ShiftControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        // Set up consumer for officer-shift-events topic
+        Properties officerShiftConsumerProps = new Properties();
+        officerShiftConsumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        officerShiftConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-officer-shift-consumer-group-" + System.currentTimeMillis());
+        officerShiftConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        officerShiftConsumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        officerShiftConsumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+
+        officerShiftConsumer = new KafkaConsumer<>(officerShiftConsumerProps);
+        officerShiftConsumer.subscribe(Collections.singletonList(OFFICER_SHIFT_TOPIC));
+
+        officerShiftConsumer.poll(Duration.ofSeconds(1));
+
+        ConsumerRecords<String, String> existingOfficerShiftRecords;
+        do {
+            existingOfficerShiftRecords = officerShiftConsumer.poll(Duration.ofMillis(100));
+        } while (!existingOfficerShiftRecords.isEmpty());
     }
 
     @AfterEach
     void tearDown() {
         if (consumer != null) {
             consumer.close();
+        }
+        if (officerShiftConsumer != null) {
+            officerShiftConsumer.close();
         }
     }
 
@@ -414,6 +440,83 @@ class ShiftControllerTest {
                 .andExpect(status().isBadRequest());
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testCheckInOfficer_WithValidData_ProducesEvent() throws Exception {
+        String shiftId = "SHIFT-040";
+        String badgeNumber = "BADGE-001";
+        Instant checkInTime = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        ShiftRoleType shiftRoleType = ShiftRoleType.Regular;
+
+        CheckInOfficerRequestDto request = new CheckInOfficerRequestDto(checkInTime, shiftRoleType);
+        String requestJson = objectMapper.writeValueAsString(request);
+
+        mockMvc.perform(post("/api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(Objects.requireNonNull(requestJson)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shiftId").value(shiftId))
+                .andExpect(jsonPath("$.data.badgeNumber").value(badgeNumber))
+                .andExpect(jsonPath("$.message").value("Officer check-in request processed"));
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(shiftId);
+        assertThat(record.topic()).isEqualTo(OFFICER_SHIFT_TOPIC);
+
+        CheckInOfficerRequested event = eventObjectMapper.readValue(record.value(), CheckInOfficerRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(shiftId);
+        assertThat(event.getShiftId()).isEqualTo(shiftId);
+        assertThat(event.getBadgeNumber()).isEqualTo(badgeNumber);
+        assertThat(event.getCheckInTime()).isEqualTo(checkInTime);
+        assertThat(event.getShiftRoleType()).isEqualTo("Regular");
+        assertThat(event.getEventType()).isEqualTo("CheckInOfficerRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testCheckInOfficer_WithMissingCheckInTime_Returns400() throws Exception {
+        String shiftId = "SHIFT-041";
+        String badgeNumber = "BADGE-002";
+        String missingCheckInTimeJson = """
+                {
+                    "shiftRoleType": "Regular"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(missingCheckInTimeJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testCheckInOfficer_WithInvalidShiftRoleType_Returns400() throws Exception {
+        String shiftId = "SHIFT-042";
+        String badgeNumber = "BADGE-003";
+        String invalidShiftRoleTypeJson = """
+                {
+                    "checkInTime": "2024-01-15T08:00:00Z",
+                    "shiftRoleType": "InvalidRoleType"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(invalidShiftRoleTypeJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
     }
 }
