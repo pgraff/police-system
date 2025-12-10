@@ -2350,7 +2350,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 11.3: Change Shift Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PATCH /api/shifts/{shiftId}/status`
@@ -2360,16 +2360,18 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ChangeShiftStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testChangeShiftStatus_WithValidStatus_ProducesEvent()` - Verify event contains shiftId and status
-- ⏳ `testChangeShiftStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
-- ⏳ `testChangeShiftStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
+- ✅ `testChangeShiftStatus_WithValidStatus_ProducesEvent()` - Verify event contains shiftId and status
+- ✅ `testChangeShiftStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ✅ `testChangeShiftStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
 - Event assertions: shiftId used as Kafka key
 
-**Implementation Plan**:
-- Add `ChangeShiftStatusRequestDto` requiring status enum
-- Add command + validator (payload only) and handler producing `ChangeShiftStatusRequested` to `shift-events` keyed by shiftId
-- Expose controller `PATCH /api/v1/shifts/{shiftId}/status` returning 200 with status echoed
-- Add event model to `common.events.shifts`
+**Implementation Details**:
+- Added `ChangeShiftStatusRequestDto` requiring `status` (ShiftStatus enum) with `@NotNull` validation
+- Added `ChangeShiftStatusCommand`, `ChangeShiftStatusCommandValidator`, and `ChangeShiftStatusCommandHandler` publishing `ChangeShiftStatusRequested` to `shift-events` keyed by shiftId
+- Added `ChangeShiftStatusRequested` event in `common.events.shifts`
+- Added controller endpoint `PATCH /api/v1/shifts/{shiftId}/status` returning 200 OK with message "Shift status change request processed"
+- Handler converts `ShiftStatus.InProgress` enum to `"In-Progress"` string format for event (matching StartShiftRequested pattern)
+- Tests added in `ShiftControllerTest` covering happy path, missing status, and invalid enum (Kafka assertions included)
 
 **Demo Suggestion**:
 1. Show PATCH /api/shifts/{shiftId}/status request

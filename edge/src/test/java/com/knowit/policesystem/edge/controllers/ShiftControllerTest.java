@@ -266,4 +266,71 @@ class ShiftControllerTest {
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
     }
+
+    @Test
+    void testChangeShiftStatus_WithValidStatus_ProducesEvent() throws Exception {
+        String shiftId = "SHIFT-020";
+        String statusJson = """
+                {
+                    "status": "InProgress"
+                }
+                """;
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/shifts/{shiftId}/status", shiftId)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(statusJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shiftId").value(shiftId))
+                .andExpect(jsonPath("$.message").value("Shift status change request processed"));
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(shiftId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        com.knowit.policesystem.common.events.shifts.ChangeShiftStatusRequested event = 
+                eventObjectMapper.readValue(record.value(), com.knowit.policesystem.common.events.shifts.ChangeShiftStatusRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(shiftId);
+        assertThat(event.getShiftId()).isEqualTo(shiftId);
+        assertThat(event.getStatus()).isEqualTo("In-Progress");
+        assertThat(event.getEventType()).isEqualTo("ChangeShiftStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testChangeShiftStatus_WithMissingStatus_Returns400() throws Exception {
+        String shiftId = "SHIFT-021";
+        String emptyJson = "{}";
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/shifts/{shiftId}/status", shiftId)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(emptyJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeShiftStatus_WithInvalidStatusEnum_Returns400() throws Exception {
+        String shiftId = "SHIFT-022";
+        String invalidStatusJson = """
+                {
+                    "status": "InvalidStatus"
+                }
+                """;
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/shifts/{shiftId}/status", shiftId)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(invalidStatusJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
 }
