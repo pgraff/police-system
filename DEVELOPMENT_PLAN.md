@@ -2291,10 +2291,10 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 11: Shift Domain
 
 #### Increment 11.1: Start Shift Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/shifts`
+- REST API: `POST /api/v1/shifts`
 - Request body: `{ shiftId, startTime, endTime, shiftType, status }`
 - Response: `201 Created` with `{ shiftId }`
 - Produces event: `StartShiftRequested` to Kafka topic `shift-events`
@@ -2302,16 +2302,17 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `StartShiftRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testStartShift_WithValidData_ProducesEvent()` - Verify event contains all shift data and uses shiftId as Kafka key
-- ⏳ `testStartShift_WithMissingShiftId_Returns400()` - Validation error, no event produced
-- ⏳ `testStartShift_WithInvalidEnum_Returns400()` - Invalid shiftType/status rejected
+- ✅ `testStartShift_WithValidData_ProducesEvent()` - Verify event contains all shift data and uses shiftId as Kafka key
+- ✅ `testStartShift_WithMissingShiftId_Returns400()` - Validation error, no event produced
+- ✅ `testStartShift_WithInvalidEnum_Returns400()` - Invalid shiftType/status rejected
+- ✅ `testStartShift_WithMissingRequiredFields_Returns400()` - Missing shiftType/status rejected, no event
 - Event contains all shift data; no event on validation failures
 
-**Implementation Plan**:
-- Add `StartShiftRequestDto` enforcing required/enum fields
-- Add command + validator (payload only) and handler producing `StartShiftRequested` to `shift-events` keyed by shiftId
-- Expose controller `POST /api/v1/shifts` returning 201 with `{ shiftId }`
-- Add event model to `common.events.shifts`
+**Implementation Summary**:
+- Added `StartShiftRequestDto` enforcing required/enum fields and `ShiftResponseDto`
+- Added command, validator, and handler producing `StartShiftRequested` to `shift-events` keyed by shiftId
+- Exposed controller `POST /api/v1/shifts` returning 201 with `{ shiftId }`
+- Added event model to `common.events.shifts`
 
 **Demo Suggestion**:
 1. Show POST /api/shifts request
