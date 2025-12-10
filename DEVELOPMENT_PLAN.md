@@ -1981,27 +1981,31 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 9: Activity Domain
 
 #### Increment 9.1: Start Activity Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/activities`
+- REST API: `POST /api/v1/activities`
 - Request body: `{ activityId, activityTime, activityType, description, status }`
 - Response: `201 Created` with `{ activityId }`
-- Produces event: `StartActivityRequested` to Kafka topic `activity-events`
+- Produces event: `StartActivityRequested` to Kafka topic `activity-events` (keyed by activityId)
 - Validation: activityId required, activityType enum, status enum
-- Test criteria: Verify `StartActivityRequested` event appears in Kafka
+- Test criteria: Verify `StartActivityRequested` event appears in Kafka with correct data
 
 **Test Criteria**:
-- ⏳ `testStartActivity_WithValidData_ProducesEvent()` - Verify event contains all activity data and uses activityId as Kafka key
-- ⏳ `testStartActivity_WithMissingActivityId_Returns400()` - Validation error, no event produced
-- ⏳ `testStartActivity_WithInvalidEnum_Returns400()` - Invalid activityType/status rejected, no event
-- Event assertions: all fields persisted in event; activityTime ISO-8601 enforced
+- ✅ `testStartActivity_WithValidData_ProducesEvent()` - Verify event contains all activity data and uses activityId as Kafka key
+- ✅ `testStartActivity_WithMissingActivityId_Returns400()` - Validation error, no event produced
+- ✅ `testStartActivity_WithInvalidEnum_Returns400()` - Invalid activityType/status rejected, no event
+- Event assertions: all fields persisted in event; activityTime ISO-8601 enforced; status enum correctly converted (InProgress -> "In-Progress")
 
-**Implementation Plan**:
-- Add `StartActivityRequestDto` enforcing required/enum fields
-- Add command + validator (payload only) and handler producing `StartActivityRequested` to `activity-events` keyed by activityId
-- Expose controller `POST /api/v1/activities` returning 201 with `{ activityId }`
-- Add event model to `common.events.activities`
+**Implementation Summary**:
+- Created `ActivityType` enum (Arrest, Interview, Evidence, Report, Other) and `ActivityStatus` enum (Started, InProgress, Completed, Cancelled) in `edge.domain` package
+- Created `StartActivityRequestDto` with required fields (`activityId`, `activityType`, `status`) and optional fields (`activityTime`, `description`) with validation annotations
+- Created `ActivityResponseDto` with `activityId` field
+- Created `StartActivityCommand`, `StartActivityCommandValidator`, and `StartActivityCommandHandler` publishing `StartActivityRequested` to `activity-events` keyed by activityId
+- Created `StartActivityRequested` event in `common.events.activities` package
+- Created `ActivityController` with `POST /api/v1/activities` endpoint returning 201 Created
+- Handler correctly converts `InProgress` enum to `"In-Progress"` string in events per OpenAPI spec
+- All tests passing (3/3) and full regression suite passing (220 tests)
 
 **Demo Suggestion**:
 1. Show POST `/api/v1/activities` request
