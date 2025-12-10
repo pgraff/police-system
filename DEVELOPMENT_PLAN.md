@@ -1759,7 +1759,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 8.2: Dispatch Call Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/calls/{callId}/dispatch`
@@ -1769,9 +1769,17 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `DispatchCallRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testDispatchCall_WithValidData_ProducesEvent()` - Verify event
-- `testDispatchCall_WithNonExistentCallId_Returns404()` - Not found
-- Event contains callId and dispatchedTime
+- ✅ `testDispatchCall_WithValidData_ProducesEvent()` - Verify event
+- ✅ `testDispatchCall_WithNonExistentCallId_Returns404()` - Not found
+- Event contains callId and dispatchedTime (keyed by callId)
+
+**Implementation Summary**:
+- Added `DispatchCallRequestDto`, `DispatchCallCommand`, validator (with call existence check), and handler publishing `DispatchCallRequested` to `call-events`.
+- Introduced `DispatchCallRequested` event in `common.events.calls`.
+- Added default `CallExistenceService` (overridable in tests) to support 404 for missing calls.
+- Exposed `POST /api/v1/calls/{callId}/dispatch` in `CallController` with validation and Kafka publishing.
+- Ensured controllers own `/api/v1` mapping (removed from `BaseRestController`).
+- All tests passing (dispatch suite 5/5) and full regression suite passing.
 
 **Demo Suggestion**:
 1. Show POST /api/calls/{callId}/dispatch request

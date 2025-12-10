@@ -3,10 +3,13 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
+import com.knowit.policesystem.common.events.calls.DispatchCallRequested;
 import com.knowit.policesystem.edge.domain.CallStatus;
 import com.knowit.policesystem.edge.domain.CallType;
 import com.knowit.policesystem.edge.domain.Priority;
+import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
+import com.knowit.policesystem.edge.services.calls.CallExistenceService;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -24,6 +27,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -31,8 +38,11 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -42,10 +52,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for CallController.
  * Tests the full flow from REST API call to Kafka event production.
  */
-@SpringBootTest
+@SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
+@Import(CallControllerTest.TestCallExistenceConfig.class)
 class CallControllerTest {
 
     @Container
@@ -63,6 +74,12 @@ class CallControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private CallController callController;
+
+    @Autowired
+    private InMemoryCallExistenceService callExistenceService;
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
@@ -95,6 +112,9 @@ class CallControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        callExistenceService.clear();
+
     }
 
     @AfterEach
@@ -201,5 +221,99 @@ class CallControllerTest {
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testDispatchCall_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-100";
+        Instant dispatchedTime = Instant.now();
+        callExistenceService.addExistingCall(callId);
+
+        DispatchCallRequestDto request = new DispatchCallRequestDto(dispatchedTime);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/dispatch", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Call dispatch recorded"))
+                .andExpect(jsonPath("$.data.callId").value(callId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(callId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        DispatchCallRequested event = eventObjectMapper.readValue(record.value(), DispatchCallRequested.class);
+        assertThat(event.getEventType()).isEqualTo("DispatchCallRequested");
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getDispatchedTime()).isEqualTo(dispatchedTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getAggregateId()).isEqualTo(callId);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+    }
+
+    @Test
+    void testDispatchCall_WithNonExistentCallId_Returns404() throws Exception {
+        // Given
+        String missingCallId = "CALL-999";
+        DispatchCallRequestDto request = new DispatchCallRequestDto(Instant.now());
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/dispatch", missingCallId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isNotFound());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    /**
+     * Test-only in-memory call existence service to control 404 scenarios.
+     */
+    static class InMemoryCallExistenceService implements CallExistenceService {
+        private final Set<String> existingCalls = new HashSet<>();
+
+        @Override
+        public boolean exists(String callId) {
+            return existingCalls.contains(callId);
+        }
+
+        void addExistingCall(String callId) {
+            existingCalls.add(callId);
+        }
+
+        void clear() {
+            existingCalls.clear();
+        }
+    }
+
+    /**
+     * Test configuration to override CallExistenceService with in-memory implementation.
+     */
+    @Configuration
+    static class TestCallExistenceConfig {
+        @Bean
+        @Primary
+        InMemoryCallExistenceService inMemoryCallExistenceService() {
+            return new InMemoryCallExistenceService();
+        }
+
+        @Bean
+        @Primary
+        ObjectMapper testObjectMapper() {
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.registerModule(new JavaTimeModule());
+            mapper.configure(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+            mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            return mapper;
+        }
     }
 }

@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Handles HTTP requests for incident-related endpoints.
  */
 @RestController
+@RequestMapping("/api/v1")
 public class IncidentController extends BaseRestController {
 
     private final CommandHandlerRegistry commandHandlerRegistry;

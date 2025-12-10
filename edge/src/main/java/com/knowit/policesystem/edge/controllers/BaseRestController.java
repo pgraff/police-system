@@ -3,16 +3,12 @@ package com.knowit.policesystem.edge.controllers;
 import com.knowit.policesystem.edge.dto.SuccessResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Base REST controller for all API endpoints.
  * Provides common functionality and response helpers.
  * All REST controllers should extend this class.
  */
-@RestController
-@RequestMapping("/api/v1")
 public abstract class BaseRestController {
 
     /**

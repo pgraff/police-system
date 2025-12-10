@@ -2,6 +2,7 @@ package com.knowit.policesystem.edge.controllers;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Map;
  * Provides a simple health endpoint to verify the API infrastructure is working.
  */
 @RestController
+@RequestMapping("/api/v1")
 public class HealthController extends BaseRestController {
 
     /**
