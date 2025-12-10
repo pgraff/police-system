@@ -2416,7 +2416,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 12: Dispatch Domain
 
 #### Increment 12.1: Create Dispatch Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/dispatches`
@@ -2427,16 +2427,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CreateDispatchRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testCreateDispatch_WithValidData_ProducesEvent()` - Verify event contains all dispatch data and uses dispatchId as Kafka key
-- ⏳ `testCreateDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
-- ⏳ `testCreateDispatch_WithInvalidEnum_Returns400()` - Invalid dispatchType/status rejected
+- ✅ `testCreateDispatch_WithValidData_ProducesEvent()` - Verify event contains all dispatch data and uses dispatchId as Kafka key
+- ✅ `testCreateDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- ✅ `testCreateDispatch_WithInvalidEnum_Returns400()` - Invalid dispatchType/status rejected
 - Event assertions: dispatchTime ISO-8601 required; enums enforced
 
 **Implementation Plan**:
-- Add `CreateDispatchRequestDto` enforcing required/enum fields
-- Add command + validator (payload only) and handler producing `CreateDispatchRequested` to `dispatch-events` keyed by dispatchId
-- Expose controller `POST /api/v1/dispatches` returning 201 with `{ dispatchId }`
-- Add event model to `common.events.dispatches`
+- ✅ Add `CreateDispatchRequestDto` enforcing required/enum fields
+- ✅ Add command + validator (payload only) and handler producing `CreateDispatchRequested` to `dispatch-events` keyed by dispatchId
+- ✅ Expose controller `POST /api/v1/dispatches` returning 201 with `{ dispatchId }`
+- ✅ Add event model to `common.events.dispatches`
 
 **Demo Suggestion**:
 1. Show POST /api/dispatches request
