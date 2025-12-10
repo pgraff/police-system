@@ -2,9 +2,11 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.shifts.EndShiftRequested;
 import com.knowit.policesystem.common.events.shifts.StartShiftRequested;
 import com.knowit.policesystem.edge.domain.ShiftStatus;
 import com.knowit.policesystem.edge.domain.ShiftType;
+import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -212,6 +214,53 @@ class ShiftControllerTest {
         mockMvc.perform(post("/api/v1/shifts")
                         .contentType(MediaType.APPLICATION_JSON_VALUE)
                         .content(missingStatusJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testEndShift_WithValidData_ProducesEvent() throws Exception {
+        String shiftId = "SHIFT-010";
+        Instant endTime = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+        EndShiftRequestDto request = new EndShiftRequestDto(endTime);
+        String requestJson = objectMapper.writeValueAsString(request);
+
+        mockMvc.perform(post("/api/v1/shifts/{shiftId}/end", shiftId)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(Objects.requireNonNull(requestJson)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shiftId").value(shiftId))
+                .andExpect(jsonPath("$.message").value("Shift end request processed"));
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(shiftId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        EndShiftRequested event = eventObjectMapper.readValue(record.value(), EndShiftRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(shiftId);
+        assertThat(event.getShiftId()).isEqualTo(shiftId);
+        assertThat(event.getEndTime()).isEqualTo(endTime);
+        assertThat(event.getEventType()).isEqualTo("EndShiftRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testEndShift_WithMissingEndTime_Returns400() throws Exception {
+        EndShiftRequestDto request = new EndShiftRequestDto();
+        String requestJson = objectMapper.writeValueAsString(request);
+
+        mockMvc.perform(post("/api/v1/shifts/{shiftId}/end", "SHIFT-011")
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(Objects.requireNonNull(requestJson)))
                 .andExpect(status().isBadRequest());
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));

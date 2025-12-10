@@ -2322,7 +2322,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 11.2: End Shift Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/shifts/{shiftId}/end`
@@ -2332,15 +2332,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `EndShiftRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testEndShift_WithValidData_ProducesEvent()` - Verify event contains shiftId and endTime
-- ⏳ `testEndShift_WithMissingEndTime_Returns400()` - Validation error, no event produced
+- ✅ `testEndShift_WithValidData_ProducesEvent()` - Verify event contains shiftId and endTime
+- ✅ `testEndShift_WithMissingEndTime_Returns400()` - Validation error, no event produced
 - Event assertions: shiftId used as Kafka key; endTime ISO-8601 required
 
-**Implementation Plan**:
-- Add `EndShiftRequestDto` requiring `endTime`
-- Add command + validator (payload only) and handler producing `EndShiftRequested` to `shift-events` keyed by shiftId
-- Expose controller `POST /api/v1/shifts/{shiftId}/end` returning 200 with message
-- Add event model to `common.events.shifts`
+**Implementation Details**:
+- Added `EndShiftRequestDto` requiring `endTime` (ISO-8601 `Instant`)
+- Added `EndShiftCommand`, `EndShiftCommandValidator`, and `EndShiftCommandHandler` publishing `EndShiftRequested` to `shift-events` keyed by shiftId
+- Added `EndShiftRequested` event in `common.events.shifts`
+- Added controller endpoint `POST /api/v1/shifts/{shiftId}/end` returning 200 OK with message "Shift end request processed"
+- Tests added in `ShiftControllerTest` covering happy path and missing endTime (Kafka assertions included)
 
 **Demo Suggestion**:
 1. Show POST /api/shifts/{shiftId}/end request
