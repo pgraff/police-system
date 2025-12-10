@@ -2766,7 +2766,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 15.3: Update Officer Shift Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PUT /api/shifts/{shiftId}/officers/{badgeNumber}`
@@ -2776,19 +2776,29 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UpdateOfficerShiftRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testUpdateOfficerShift_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, shiftRoleType
-- ⏳ `testUpdateOfficerShift_WithNoBody_Returns400()` - Validation error when no fields provided
+- ✅ `testUpdateOfficerShift_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, shiftRoleType
+- ✅ `testUpdateOfficerShift_WithNoBody_Returns400()` - Validation error when no fields provided
+- ✅ `testUpdateOfficerShift_WithInvalidShiftRoleType_Returns400()` - Validation error for invalid enum
 - Event assertions: shiftId used as Kafka key; shiftRoleType enum enforced if provided
 
 **Implementation Plan**:
-- Add `UpdateOfficerShiftRequestDto` allowing optional non-blank shiftRoleType; require at least one field
-- Add command + validator (payload only) and handler producing `UpdateOfficerShiftRequested` to `officer-shift-events` keyed by shiftId
-- Expose controller `PUT /api/v1/shifts/{shiftId}/officers/{badgeNumber}` returning 200 with `{ shiftId, badgeNumber, message }`
-- Add event model to `common.events.officershift`
+- ✅ Add `UpdateOfficerShiftRequestDto` allowing optional non-blank shiftRoleType; require at least one field
+- ✅ Add command + validator (payload only) and handler producing `UpdateOfficerShiftRequested` to `officer-shift-events` keyed by shiftId
+- ✅ Expose controller `PUT /api/v1/shifts/{shiftId}/officers/{badgeNumber}` returning 200 with `{ shiftId, badgeNumber, message }`
+- ✅ Add event model to `common.events.officershifts`
 
 **Demo Suggestion**:
-1. Show PUT /api/shifts/{shiftId}/officers/{badgeNumber} request
-2. Show UpdateOfficerShiftRequested event
+1. Show PUT /api/v1/shifts/{shiftId}/officers/{badgeNumber} request with curl or Postman
+   ```bash
+   curl -X PUT http://localhost:8080/api/v1/shifts/SHIFT-001/officers/BADGE-001 \
+     -H "Content-Type: application/json" \
+     -d '{"shiftRoleType": "Supervisor"}'
+   ```
+2. Show 200 OK response with shiftId, badgeNumber, and message
+3. Show UpdateOfficerShiftRequested event in Kafka topic `officer-shift-events` using kafka-console-consumer
+4. Highlight event structure: shiftId (as key), badgeNumber, shiftRoleType
+5. Show validation error example (empty body or invalid shiftRoleType)
+6. Explain event-driven architecture approach
 
 ---
 

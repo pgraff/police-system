@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.officershifts.CheckInOfficerRequested;
 import com.knowit.policesystem.common.events.officershifts.CheckOutOfficerRequested;
+import com.knowit.policesystem.common.events.officershifts.UpdateOfficerShiftRequested;
 import com.knowit.policesystem.common.events.shifts.EndShiftRequested;
 import com.knowit.policesystem.common.events.shifts.RecordShiftChangeRequested;
 import com.knowit.policesystem.common.events.shifts.StartShiftRequested;
@@ -13,6 +14,7 @@ import com.knowit.policesystem.edge.domain.ShiftStatus;
 import com.knowit.policesystem.edge.domain.ShiftType;
 import com.knowit.policesystem.edge.dto.CheckInOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.CheckOutOfficerRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateOfficerShiftRequestDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
@@ -47,6 +49,7 @@ import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -567,6 +570,76 @@ class ShiftControllerTest {
         mockMvc.perform(post("/api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-out", shiftId, badgeNumber)
                         .contentType(MediaType.APPLICATION_JSON_VALUE)
                         .content(missingCheckOutTimeJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateOfficerShift_WithValidData_ProducesEvent() throws Exception {
+        String shiftId = "SHIFT-060";
+        String badgeNumber = "BADGE-020";
+        ShiftRoleType shiftRoleType = ShiftRoleType.Supervisor;
+
+        UpdateOfficerShiftRequestDto request = new UpdateOfficerShiftRequestDto(shiftRoleType);
+        String requestJson = objectMapper.writeValueAsString(request);
+
+        mockMvc.perform(put("/api/v1/shifts/{shiftId}/officers/{badgeNumber}", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(Objects.requireNonNull(requestJson)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shiftId").value(shiftId))
+                .andExpect(jsonPath("$.data.badgeNumber").value(badgeNumber))
+                .andExpect(jsonPath("$.message").value("Officer shift update request processed"));
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(shiftId);
+        assertThat(record.topic()).isEqualTo(OFFICER_SHIFT_TOPIC);
+
+        UpdateOfficerShiftRequested event = eventObjectMapper.readValue(record.value(), UpdateOfficerShiftRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(shiftId);
+        assertThat(event.getShiftId()).isEqualTo(shiftId);
+        assertThat(event.getBadgeNumber()).isEqualTo(badgeNumber);
+        assertThat(event.getShiftRoleType()).isEqualTo("Supervisor");
+        assertThat(event.getEventType()).isEqualTo("UpdateOfficerShiftRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateOfficerShift_WithNoBody_Returns400() throws Exception {
+        String shiftId = "SHIFT-061";
+        String badgeNumber = "BADGE-021";
+        String emptyJson = "{}";
+
+        mockMvc.perform(put("/api/v1/shifts/{shiftId}/officers/{badgeNumber}", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(emptyJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateOfficerShift_WithInvalidShiftRoleType_Returns400() throws Exception {
+        String shiftId = "SHIFT-062";
+        String badgeNumber = "BADGE-022";
+        String invalidShiftRoleTypeJson = """
+                {
+                    "shiftRoleType": "InvalidRoleType"
+                }
+                """;
+
+        mockMvc.perform(put("/api/v1/shifts/{shiftId}/officers/{badgeNumber}", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(invalidShiftRoleTypeJson))
                 .andExpect(status().isBadRequest());
 
         ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(2));
