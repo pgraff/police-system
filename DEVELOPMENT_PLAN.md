@@ -2380,10 +2380,10 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 11.4: Record Shift Change Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/shifts/{shiftId}/shift-changes`
+- REST API: `POST /api/v1/shifts/{shiftId}/shift-changes`
 - Request body: `{ shiftChangeId, changeTime, changeType, notes }`
 - Response: `201 Created` with `{ shiftChangeId }`
 - Produces event: `RecordShiftChangeRequested` to Kafka topic `shift-events`
@@ -2391,19 +2391,23 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `RecordShiftChangeRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testRecordShiftChange_WithValidData_ProducesEvent()` - Verify event contains shiftId, shiftChangeId, changeTime, changeType, notes
-- ⏳ `testRecordShiftChange_WithMissingShiftChangeId_Returns400()` - Validation error, no event produced
-- ⏳ `testRecordShiftChange_WithInvalidChangeType_Returns400()` - Enum validation, no event produced
+- ✅ `testRecordShiftChange_WithValidData_ProducesEvent()` - Verify event contains shiftId, shiftChangeId, changeTime, changeType, notes
+- ✅ `testRecordShiftChange_WithMissingShiftChangeId_Returns400()` - Validation error, no event produced
+- ✅ `testRecordShiftChange_WithInvalidChangeType_Returns400()` - Enum validation, no event produced
 - Event assertions: shiftId used as Kafka key; changeTime ISO-8601 required
 
-**Implementation Plan**:
-- Add `RecordShiftChangeRequestDto` enforcing required fields and enums
-- Add command + validator (payload only) and handler producing `RecordShiftChangeRequested` to `shift-events` keyed by shiftId
-- Expose controller `POST /api/v1/shifts/{shiftId}/shift-changes` returning 201 with `{ shiftChangeId }`
-- Add event model to `common.events.shifts`
+**Implementation**:
+- Added `ChangeType` enum in `edge.domain` (Briefing, Handoff, Status, Other)
+- Added `RecordShiftChangeRequestDto` enforcing required fields and enums
+- Added `ShiftChangeResponseDto` for response
+- Added `RecordShiftChangeCommand`, `RecordShiftChangeCommandValidator`, and `RecordShiftChangeCommandHandler` publishing `RecordShiftChangeRequested` to `shift-events` keyed by shiftId
+- Added `RecordShiftChangeRequested` event in `common.events.shifts`
+- Added controller endpoint `POST /api/v1/shifts/{shiftId}/shift-changes` returning 201 Created with `{ shiftChangeId }`
+- Handler converts `ChangeType` enum to string format for event
+- Tests added in `ShiftControllerTest` covering happy path, missing shiftChangeId, and invalid enum (Kafka assertions included)
 
 **Demo Suggestion**:
-1. Show POST /api/shifts/{shiftId}/shift-changes request
+1. Show POST /api/v1/shifts/{shiftId}/shift-changes request
 2. Show RecordShiftChangeRequested event
 3. Show shift change types
 

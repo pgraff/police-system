@@ -3,14 +3,18 @@ package com.knowit.policesystem.edge.controllers;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.shifts.ChangeShiftStatusCommand;
 import com.knowit.policesystem.edge.commands.shifts.EndShiftCommand;
+import com.knowit.policesystem.edge.commands.shifts.RecordShiftChangeCommand;
 import com.knowit.policesystem.edge.commands.shifts.StartShiftCommand;
 import com.knowit.policesystem.edge.dto.ChangeShiftStatusRequestDto;
+import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
+import com.knowit.policesystem.edge.dto.ShiftChangeResponseDto;
 import com.knowit.policesystem.edge.dto.ShiftResponseDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.shifts.ChangeShiftStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.EndShiftCommandValidator;
+import com.knowit.policesystem.edge.validation.shifts.RecordShiftChangeCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.StartShiftCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +37,7 @@ public class ShiftController extends BaseRestController {
     private final StartShiftCommandValidator commandValidator;
     private final EndShiftCommandValidator endShiftCommandValidator;
     private final ChangeShiftStatusCommandValidator changeShiftStatusCommandValidator;
+    private final RecordShiftChangeCommandValidator recordShiftChangeCommandValidator;
 
     /**
      * Creates a new shift controller.
@@ -41,15 +46,18 @@ public class ShiftController extends BaseRestController {
      * @param commandValidator the start shift command validator
      * @param endShiftCommandValidator the end shift command validator
      * @param changeShiftStatusCommandValidator the change shift status command validator
+     * @param recordShiftChangeCommandValidator the record shift change command validator
      */
     public ShiftController(CommandHandlerRegistry commandHandlerRegistry,
                            StartShiftCommandValidator commandValidator,
                            EndShiftCommandValidator endShiftCommandValidator,
-                           ChangeShiftStatusCommandValidator changeShiftStatusCommandValidator) {
+                           ChangeShiftStatusCommandValidator changeShiftStatusCommandValidator,
+                           RecordShiftChangeCommandValidator recordShiftChangeCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.endShiftCommandValidator = endShiftCommandValidator;
         this.changeShiftStatusCommandValidator = changeShiftStatusCommandValidator;
+        this.recordShiftChangeCommandValidator = recordShiftChangeCommandValidator;
     }
 
     /**
@@ -129,5 +137,32 @@ public class ShiftController extends BaseRestController {
         ShiftResponseDto response = handler.handle(command);
 
         return success(response, "Shift status change request processed");
+    }
+
+    /**
+     * Records a shift change.
+     * Accepts shift change data, validates it, and publishes a RecordShiftChangeRequested event to Kafka.
+     *
+     * @param shiftId the shift identifier from the path
+     * @param requestDto the record shift change request DTO
+     * @return 201 Created with shift change ID
+     */
+    @PostMapping("/shifts/{shiftId}/shift-changes")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<ShiftChangeResponseDto>> recordShiftChange(
+            @PathVariable String shiftId,
+            @Valid @RequestBody RecordShiftChangeRequestDto requestDto) {
+
+        RecordShiftChangeCommand command = new RecordShiftChangeCommand(shiftId, requestDto);
+
+        var validationResult = recordShiftChangeCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        com.knowit.policesystem.edge.commands.CommandHandler<RecordShiftChangeCommand, ShiftChangeResponseDto> handler =
+                commandHandlerRegistry.findHandler(RecordShiftChangeCommand.class);
+        ShiftChangeResponseDto response = handler.handle(command);
+
+        return created(response, "Shift change record request processed");
     }
 }
