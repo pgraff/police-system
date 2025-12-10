@@ -1895,18 +1895,27 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 
 **Step 0: Requirements**
 - REST API: `PUT /api/calls/{callId}`
-- Request body: `{ priority, description, callType }` (all optional)
-- Response: `200 OK`
-- Produces event: `UpdateCallRequested` to Kafka topic `call-events`
-- Test criteria: Verify `UpdateCallRequested` event appears in Kafka
+- Request body: `{ priority, description, callType }` (all optional but at least one must be provided)
+- Response: `200 OK` with `{ callId, message }`
+- Produces event: `UpdateCallRequested` to Kafka topic `call-events` (keyed by callId)
+- Test criteria: Verify `UpdateCallRequested` event appears in Kafka with only the provided fields
 
 **Test Criteria**:
-- `testUpdateCall_WithValidData_ProducesEvent()` - Verify event
-- Event contains callId and provided fields
+- ⏳ `testUpdateCall_WithValidData_ProducesEvent()` - Call PUT with priority/description/callType and verify event payload matches provided fields
+- ⏳ `testUpdateCall_WithNoBody_Returns400()` - Empty body rejected and no event produced
+- ⏳ `testUpdateCall_WithInvalidPriority_Returns400()` - Validation error for priority outside allowed range (keep aligned with existing enum/range rules)
+- Event assertions: callId used as Kafka key; only supplied fields set in event
+
+**Implementation Plan**:
+- Add `UpdateCallRequestDto` allowing optional fields, enforce “at least one provided”
+- Add `UpdateCallCommand`, validator (payload only), and handler producing `UpdateCallRequested` to `call-events` keyed by callId
+- Wire controller `PUT /api/v1/calls/{callId}` returning 200 with `{ callId, message: "Call updated" }`
+- Ensure event model lives in `common.events.calls` and mirrors DTO fields
 
 **Demo Suggestion**:
-1. Show PUT /api/calls/{callId} request
-2. Show UpdateCallRequested event
+1. Show PUT `/api/v1/calls/{callId}` with partial body (e.g., only priority)
+2. Show `UpdateCallRequested` event on `call-events` (key = callId) containing only provided fields
+3. Show validation failure example (empty body) returning 400 and no event
 
 ---
 
@@ -1916,18 +1925,25 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 **Step 0: Requirements**
 - REST API: `POST /api/calls/{callId}/incidents`
 - Request body: `{ incidentId }`
-- Response: `200 OK`
-- Produces event: `LinkCallToIncidentRequested` to Kafka topic `call-events`
-- Test criteria: Verify `LinkCallToIncidentRequested` event appears in Kafka
+- Response: `200 OK` with `{ callId, incidentId, message }`
+- Produces event: `LinkCallToIncidentRequested` to Kafka topic `call-events` (keyed by callId)
+- Test criteria: Verify `LinkCallToIncidentRequested` event appears in Kafka with callId and incidentId
 
 **Test Criteria**:
-- `testLinkCallToIncident_WithValidData_ProducesEvent()` - Verify event
-- Event contains callId and incidentId
+- ⏳ `testLinkCallToIncident_WithValidData_ProducesEvent()` - Verify event contains callId and incidentId
+- ⏳ `testLinkCallToIncident_WithMissingIncidentId_Returns400()` - Validation error, no event produced
+- Event assertions: callId used as Kafka key; incidentId required and non-blank
+
+**Implementation Plan**:
+- Add `LinkCallToIncidentRequestDto` with required `incidentId`
+- Add command + validator (payload only) and handler producing `LinkCallToIncidentRequested` to `call-events` keyed by callId
+- Expose controller `POST /api/v1/calls/{callId}/incidents` returning 200 with callId and incidentId
+- Keep event class in `common.events.calls`
 
 **Demo Suggestion**:
-1. Show POST /api/calls/{callId}/incidents request
-2. Show LinkCallToIncidentRequested event
-3. Show relationship between calls and incidents
+1. Show POST `/api/v1/calls/{callId}/incidents` request
+2. Show `LinkCallToIncidentRequested` on `call-events` (key = callId) with callId + incidentId
+3. Show validation example missing incidentId returning 400
 
 ---
 
@@ -1937,17 +1953,25 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 **Step 0: Requirements**
 - REST API: `POST /api/calls/{callId}/dispatches`
 - Request body: `{ dispatchId }`
-- Response: `200 OK`
-- Produces event: `LinkCallToDispatchRequested` to Kafka topic `call-events`
-- Test criteria: Verify `LinkCallToDispatchRequested` event appears in Kafka
+- Response: `200 OK` with `{ callId, dispatchId, message }`
+- Produces event: `LinkCallToDispatchRequested` to Kafka topic `call-events` (keyed by callId)
+- Test criteria: Verify `LinkCallToDispatchRequested` event appears in Kafka with callId and dispatchId
 
 **Test Criteria**:
-- `testLinkCallToDispatch_WithValidData_ProducesEvent()` - Verify event
-- Event contains callId and dispatchId
+- ⏳ `testLinkCallToDispatch_WithValidData_ProducesEvent()` - Verify event contains callId and dispatchId
+- ⏳ `testLinkCallToDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- Event assertions: callId used as Kafka key; dispatchId required and non-blank
+
+**Implementation Plan**:
+- Add `LinkCallToDispatchRequestDto` with required `dispatchId`
+- Add command + validator (payload only) and handler producing `LinkCallToDispatchRequested` to `call-events` keyed by callId
+- Expose controller `POST /api/v1/calls/{callId}/dispatches` returning 200 with callId and dispatchId
+- Keep event class in `common.events.calls`
 
 **Demo Suggestion**:
-1. Show POST /api/calls/{callId}/dispatches request
-2. Show LinkCallToDispatchRequested event
+1. Show POST `/api/v1/calls/{callId}/dispatches` request
+2. Show `LinkCallToDispatchRequested` on `call-events` (key = callId) with callId + dispatchId
+3. Show validation example missing dispatchId returning 400
 
 ---
 
@@ -1965,14 +1989,21 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `StartActivityRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testStartActivity_WithValidData_ProducesEvent()` - Verify event
-- `testStartActivity_WithMissingActivityId_Returns400()` - Validation error
-- Event contains all activity data
+- ⏳ `testStartActivity_WithValidData_ProducesEvent()` - Verify event contains all activity data and uses activityId as Kafka key
+- ⏳ `testStartActivity_WithMissingActivityId_Returns400()` - Validation error, no event produced
+- ⏳ `testStartActivity_WithInvalidEnum_Returns400()` - Invalid activityType/status rejected, no event
+- Event assertions: all fields persisted in event; activityTime ISO-8601 enforced
+
+**Implementation Plan**:
+- Add `StartActivityRequestDto` enforcing required/enum fields
+- Add command + validator (payload only) and handler producing `StartActivityRequested` to `activity-events` keyed by activityId
+- Expose controller `POST /api/v1/activities` returning 201 with `{ activityId }`
+- Add event model to `common.events.activities`
 
 **Demo Suggestion**:
-1. Show POST /api/activities request
-2. Show StartActivityRequested event in Kafka
-3. Show activity types
+1. Show POST `/api/v1/activities` request
+2. Show `StartActivityRequested` event on `activity-events` (key = activityId)
+3. Show validation example missing activityId returning 400
 
 ---
 
@@ -1987,12 +2018,20 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CompleteActivityRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testCompleteActivity_WithValidData_ProducesEvent()` - Verify event
-- Event contains activityId and completedTime
+- ⏳ `testCompleteActivity_WithValidData_ProducesEvent()` - Verify event contains activityId and completedTime
+- ⏳ `testCompleteActivity_WithMissingCompletedTime_Returns400()` - Validation error, no event produced
+- Event assertions: activityId used as Kafka key; completedTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `CompleteActivityRequestDto` requiring `completedTime`
+- Add command + validator (payload only) and handler producing `CompleteActivityRequested` to `activity-events` keyed by activityId
+- Expose controller `POST /api/v1/activities/{activityId}/complete` returning 200 with callout message
+- Add event model to `common.events.activities`
 
 **Demo Suggestion**:
-1. Show POST /api/activities/{activityId}/complete request
-2. Show CompleteActivityRequested event
+1. Show POST `/api/v1/activities/{activityId}/complete` request
+2. Show `CompleteActivityRequested` event on `activity-events` (key = activityId) with completedTime
+3. Show validation example missing completedTime returning 400
 
 ---
 
@@ -2007,12 +2046,21 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ChangeActivityStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testChangeActivityStatus_WithValidStatus_ProducesEvent()` - Verify event
-- Event contains activityId and status
+- ⏳ `testChangeActivityStatus_WithValidStatus_ProducesEvent()` - Verify event contains activityId and status
+- ⏳ `testChangeActivityStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ⏳ `testChangeActivityStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
+- Event assertions: activityId used as Kafka key
+
+**Implementation Plan**:
+- Add `ChangeActivityStatusRequestDto` requiring status enum
+- Add command + validator (payload only) and handler producing `ChangeActivityStatusRequested` to `activity-events` keyed by activityId
+- Expose controller `PATCH /api/v1/activities/{activityId}/status` returning 200 with status echoed
+- Add event model to `common.events.activities`
 
 **Demo Suggestion**:
-1. Show PATCH /api/activities/{activityId}/status request
-2. Show ChangeActivityStatusRequested event
+1. Show PATCH `/api/v1/activities/{activityId}/status` request
+2. Show `ChangeActivityStatusRequested` event on `activity-events` (key = activityId) with status
+3. Show validation example missing/invalid status returning 400
 
 ---
 
@@ -2027,12 +2075,20 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UpdateActivityRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testUpdateActivity_WithValidData_ProducesEvent()` - Verify event
-- Event contains activityId and description
+- ⏳ `testUpdateActivity_WithValidData_ProducesEvent()` - Verify event includes activityId and description
+- ⏳ `testUpdateActivity_WithBlankDescription_Returns400()` - Validation error for blank description
+- Event assertions: activityId used as Kafka key; description optional but non-blank if provided
+
+**Implementation Plan**:
+- Add `UpdateActivityRequestDto` allowing optional non-blank description
+- Add command + validator (payload only) and handler producing `UpdateActivityRequested` to `activity-events` keyed by activityId
+- Expose controller `PUT /api/v1/activities/{activityId}` returning 200 with `{ activityId, message }`
+- Add event model to `common.events.activities`
 
 **Demo Suggestion**:
-1. Show PUT /api/activities/{activityId} request
-2. Show UpdateActivityRequested event
+1. Show PUT `/api/v1/activities/{activityId}` request
+2. Show `UpdateActivityRequested` event on `activity-events` (key = activityId) with description
+3. Show validation example with blank description returning 400
 
 ---
 
@@ -2047,12 +2103,20 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `LinkActivityToIncidentRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testLinkActivityToIncident_WithValidData_ProducesEvent()` - Verify event
-- Event contains activityId and incidentId
+- ⏳ `testLinkActivityToIncident_WithValidData_ProducesEvent()` - Verify event contains activityId and incidentId
+- ⏳ `testLinkActivityToIncident_WithMissingIncidentId_Returns400()` - Validation error, no event produced
+- Event assertions: activityId used as Kafka key; incidentId required and non-blank
+
+**Implementation Plan**:
+- Add `LinkActivityToIncidentRequestDto` with required incidentId
+- Add command + validator (payload only) and handler producing `LinkActivityToIncidentRequested` to `activity-events` keyed by activityId
+- Expose controller `POST /api/v1/activities/{activityId}/incidents` returning 200 with activityId + incidentId
+- Add event model to `common.events.activities`
 
 **Demo Suggestion**:
-1. Show POST /api/activities/{activityId}/incidents request
-2. Show LinkActivityToIncidentRequested event
+1. Show POST `/api/v1/activities/{activityId}/incidents` request
+2. Show `LinkActivityToIncidentRequested` event on `activity-events` (key = activityId) with incidentId
+3. Show validation example missing incidentId returning 400
 
 ---
 
@@ -2070,11 +2134,18 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CreateAssignmentRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testCreateAssignment_WithIncidentId_ProducesEvent()` - Verify event with incidentId
-- `testCreateAssignment_WithCallId_ProducesEvent()` - Verify event with callId
-- `testCreateAssignment_WithBothIncidentAndCall_Returns400()` - Validation error
-- `testCreateAssignment_WithNeitherIncidentNorCall_Returns400()` - Validation error
-- Event contains assignmentId, assignedTime, assignmentType, status, and incidentId or callId
+- ⏳ `testCreateAssignment_WithIncidentId_ProducesEvent()` - Verify event with incidentId
+- ⏳ `testCreateAssignment_WithCallId_ProducesEvent()` - Verify event with callId
+- ⏳ `testCreateAssignment_WithBothIncidentAndCall_Returns400()` - Validation error, no event produced
+- ⏳ `testCreateAssignment_WithNeitherIncidentNorCall_Returns400()` - Validation error, no event produced
+- ⏳ `testCreateAssignment_WithInvalidEnums_Returns400()` - assignmentType/status enums enforced
+- Event contains assignmentId, assignedTime, assignmentType, status, and incidentId or callId (keyed by assignmentId)
+
+**Implementation Plan**:
+- Add `CreateAssignmentRequestDto` enforcing required fields, enums, and XOR on incidentId/callId
+- Add command + validator (payload only) and handler producing `CreateAssignmentRequested` to `assignment-events` keyed by assignmentId
+- Expose controller `POST /api/v1/assignments` returning 201 with `{ assignmentId }`
+- Add event model to `common.events.assignments`
 
 **Demo Suggestion**:
 1. Show POST /api/assignments request with incidentId
@@ -2095,8 +2166,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CompleteAssignmentRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testCompleteAssignment_WithValidData_ProducesEvent()` - Verify event
-- Event contains assignmentId and completedTime
+- ⏳ `testCompleteAssignment_WithValidData_ProducesEvent()` - Verify event contains assignmentId and completedTime
+- ⏳ `testCompleteAssignment_WithMissingCompletedTime_Returns400()` - Validation error, no event produced
+- Event assertions: assignmentId used as Kafka key; completedTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `CompleteAssignmentRequestDto` requiring `completedTime`
+- Add command + validator (payload only) and handler producing `CompleteAssignmentRequested` to `assignment-events` keyed by assignmentId
+- Expose controller `POST /api/v1/assignments/{assignmentId}/complete` returning 200 with message
+- Add event model to `common.events.assignments`
 
 **Demo Suggestion**:
 1. Show POST /api/assignments/{assignmentId}/complete request
@@ -2115,8 +2193,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ChangeAssignmentStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testChangeAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event
-- Event contains assignmentId and status
+- ⏳ `testChangeAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event contains assignmentId and status
+- ⏳ `testChangeAssignmentStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ⏳ `testChangeAssignmentStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
+- Event assertions: assignmentId used as Kafka key
+
+**Implementation Plan**:
+- Add `ChangeAssignmentStatusRequestDto` requiring status enum
+- Add command + validator (payload only) and handler producing `ChangeAssignmentStatusRequested` to `assignment-events` keyed by assignmentId
+- Expose controller `PATCH /api/v1/assignments/{assignmentId}/status` returning 200 with status echoed
+- Add event model to `common.events.assignments`
 
 **Demo Suggestion**:
 1. Show PATCH /api/assignments/{assignmentId}/status request
@@ -2135,8 +2221,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `LinkAssignmentToDispatchRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testLinkAssignmentToDispatch_WithValidData_ProducesEvent()` - Verify event
-- Event contains assignmentId and dispatchId
+- ⏳ `testLinkAssignmentToDispatch_WithValidData_ProducesEvent()` - Verify event contains assignmentId and dispatchId
+- ⏳ `testLinkAssignmentToDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- Event assertions: assignmentId used as Kafka key; dispatchId required and non-blank
+
+**Implementation Plan**:
+- Add `LinkAssignmentToDispatchRequestDto` with required dispatchId
+- Add command + validator (payload only) and handler producing `LinkAssignmentToDispatchRequested` to `assignment-events` keyed by assignmentId
+- Expose controller `POST /api/v1/assignments/{assignmentId}/dispatches` returning 200 with assignmentId + dispatchId
+- Add event model to `common.events.assignments`
 
 **Demo Suggestion**:
 1. Show POST /api/assignments/{assignmentId}/dispatches request
@@ -2158,9 +2251,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `StartShiftRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testStartShift_WithValidData_ProducesEvent()` - Verify event
-- `testStartShift_WithMissingShiftId_Returns400()` - Validation error
-- Event contains all shift data
+- ⏳ `testStartShift_WithValidData_ProducesEvent()` - Verify event contains all shift data and uses shiftId as Kafka key
+- ⏳ `testStartShift_WithMissingShiftId_Returns400()` - Validation error, no event produced
+- ⏳ `testStartShift_WithInvalidEnum_Returns400()` - Invalid shiftType/status rejected
+- Event contains all shift data; no event on validation failures
+
+**Implementation Plan**:
+- Add `StartShiftRequestDto` enforcing required/enum fields
+- Add command + validator (payload only) and handler producing `StartShiftRequested` to `shift-events` keyed by shiftId
+- Expose controller `POST /api/v1/shifts` returning 201 with `{ shiftId }`
+- Add event model to `common.events.shifts`
 
 **Demo Suggestion**:
 1. Show POST /api/shifts request
@@ -2180,8 +2280,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `EndShiftRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testEndShift_WithValidData_ProducesEvent()` - Verify event
-- Event contains shiftId and endTime
+- ⏳ `testEndShift_WithValidData_ProducesEvent()` - Verify event contains shiftId and endTime
+- ⏳ `testEndShift_WithMissingEndTime_Returns400()` - Validation error, no event produced
+- Event assertions: shiftId used as Kafka key; endTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `EndShiftRequestDto` requiring `endTime`
+- Add command + validator (payload only) and handler producing `EndShiftRequested` to `shift-events` keyed by shiftId
+- Expose controller `POST /api/v1/shifts/{shiftId}/end` returning 200 with message
+- Add event model to `common.events.shifts`
 
 **Demo Suggestion**:
 1. Show POST /api/shifts/{shiftId}/end request
@@ -2200,8 +2307,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ChangeShiftStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testChangeShiftStatus_WithValidStatus_ProducesEvent()` - Verify event
-- Event contains shiftId and status
+- ⏳ `testChangeShiftStatus_WithValidStatus_ProducesEvent()` - Verify event contains shiftId and status
+- ⏳ `testChangeShiftStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ⏳ `testChangeShiftStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
+- Event assertions: shiftId used as Kafka key
+
+**Implementation Plan**:
+- Add `ChangeShiftStatusRequestDto` requiring status enum
+- Add command + validator (payload only) and handler producing `ChangeShiftStatusRequested` to `shift-events` keyed by shiftId
+- Expose controller `PATCH /api/v1/shifts/{shiftId}/status` returning 200 with status echoed
+- Add event model to `common.events.shifts`
 
 **Demo Suggestion**:
 1. Show PATCH /api/shifts/{shiftId}/status request
@@ -2221,8 +2336,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `RecordShiftChangeRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testRecordShiftChange_WithValidData_ProducesEvent()` - Verify event
-- Event contains shiftId, shiftChangeId, changeTime, changeType, notes
+- ⏳ `testRecordShiftChange_WithValidData_ProducesEvent()` - Verify event contains shiftId, shiftChangeId, changeTime, changeType, notes
+- ⏳ `testRecordShiftChange_WithMissingShiftChangeId_Returns400()` - Validation error, no event produced
+- ⏳ `testRecordShiftChange_WithInvalidChangeType_Returns400()` - Enum validation, no event produced
+- Event assertions: shiftId used as Kafka key; changeTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `RecordShiftChangeRequestDto` enforcing required fields and enums
+- Add command + validator (payload only) and handler producing `RecordShiftChangeRequested` to `shift-events` keyed by shiftId
+- Expose controller `POST /api/v1/shifts/{shiftId}/shift-changes` returning 201 with `{ shiftChangeId }`
+- Add event model to `common.events.shifts`
 
 **Demo Suggestion**:
 1. Show POST /api/shifts/{shiftId}/shift-changes request
@@ -2245,9 +2368,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CreateDispatchRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testCreateDispatch_WithValidData_ProducesEvent()` - Verify event
-- `testCreateDispatch_WithMissingDispatchId_Returns400()` - Validation error
-- Event contains all dispatch data
+- ⏳ `testCreateDispatch_WithValidData_ProducesEvent()` - Verify event contains all dispatch data and uses dispatchId as Kafka key
+- ⏳ `testCreateDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- ⏳ `testCreateDispatch_WithInvalidEnum_Returns400()` - Invalid dispatchType/status rejected
+- Event assertions: dispatchTime ISO-8601 required; enums enforced
+
+**Implementation Plan**:
+- Add `CreateDispatchRequestDto` enforcing required/enum fields
+- Add command + validator (payload only) and handler producing `CreateDispatchRequested` to `dispatch-events` keyed by dispatchId
+- Expose controller `POST /api/v1/dispatches` returning 201 with `{ dispatchId }`
+- Add event model to `common.events.dispatches`
 
 **Demo Suggestion**:
 1. Show POST /api/dispatches request
@@ -2267,8 +2397,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ChangeDispatchStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testChangeDispatchStatus_WithValidStatus_ProducesEvent()` - Verify event
-- Event contains dispatchId and status
+- ⏳ `testChangeDispatchStatus_WithValidStatus_ProducesEvent()` - Verify event contains dispatchId and status
+- ⏳ `testChangeDispatchStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ⏳ `testChangeDispatchStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected
+- Event assertions: dispatchId used as Kafka key
+
+**Implementation Plan**:
+- Add `ChangeDispatchStatusRequestDto` requiring status enum
+- Add command + validator (payload only) and handler producing `ChangeDispatchStatusRequested` to `dispatch-events` keyed by dispatchId
+- Expose controller `PATCH /api/v1/dispatches/{dispatchId}/status` returning 200 with status echoed
+- Add event model to `common.events.dispatches`
 
 **Demo Suggestion**:
 1. Show PATCH /api/dispatches/{dispatchId}/status request
@@ -2290,11 +2428,18 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `AssignResourceRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testAssignResource_WithOfficer_ProducesEvent()` - Verify event with Officer resource
-- `testAssignResource_WithVehicle_ProducesEvent()` - Verify event with Vehicle resource
-- `testAssignResource_WithUnit_ProducesEvent()` - Verify event with Unit resource
-- `testAssignResource_WithInvalidResourceType_Returns400()` - Validation error
-- Event contains assignmentId, resourceId, resourceType, roleType, status, startTime
+- ⏳ `testAssignResource_WithOfficer_ProducesEvent()` - Verify event with Officer resource
+- ⏳ `testAssignResource_WithVehicle_ProducesEvent()` - Verify event with Vehicle resource
+- ⏳ `testAssignResource_WithUnit_ProducesEvent()` - Verify event with Unit resource
+- ⏳ `testAssignResource_WithInvalidResourceType_Returns400()` - Validation error
+- ⏳ `testAssignResource_WithMissingRequiredFields_Returns400()` - resourceId, roleType, status must be present
+- Event contains assignmentId, resourceId, resourceType, roleType, status, startTime (keyed by assignmentId)
+
+**Implementation Plan**:
+- Add `AssignResourceRequestDto` enforcing required fields and enums
+- Add command + validator (payload only) and handler producing `AssignResourceRequested` to `resource-assignment-events` keyed by assignmentId
+- Expose controller `POST /api/v1/assignments/{assignmentId}/resources` returning 201 with `{ resourceAssignmentId }`
+- Add event model to `common.events.resourceassignment`
 
 **Demo Suggestion**:
 1. Show POST /api/assignments/{assignmentId}/resources request
@@ -2315,8 +2460,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UnassignResourceRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testUnassignResource_WithValidData_ProducesEvent()` - Verify event
-- Event contains assignmentId, resourceId, endTime
+- ⏳ `testUnassignResource_WithValidData_ProducesEvent()` - Verify event contains assignmentId, resourceId, endTime
+- ⏳ `testUnassignResource_WithMissingEndTime_Returns400()` - Validation error, no event produced
+- Event assertions: assignmentId used as Kafka key; endTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `UnassignResourceRequestDto` requiring `endTime`
+- Add command + validator (payload only) and handler producing `UnassignResourceRequested` to `resource-assignment-events` keyed by assignmentId
+- Expose controller `DELETE /api/v1/assignments/{assignmentId}/resources/{resourceId}` accepting body with endTime, returning 200 with message
+- Add event model to `common.events.resourceassignment`
 
 **Demo Suggestion**:
 1. Show DELETE /api/assignments/{assignmentId}/resources/{resourceId} request
@@ -2335,8 +2487,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ChangeResourceAssignmentStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testChangeResourceAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event
-- Event contains assignmentId, resourceId, status
+- ⏳ `testChangeResourceAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event contains assignmentId, resourceId, status
+- ⏳ `testChangeResourceAssignmentStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ⏳ `testChangeResourceAssignmentStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected
+- Event assertions: assignmentId used as Kafka key
+
+**Implementation Plan**:
+- Add `ChangeResourceAssignmentStatusRequestDto` requiring status enum
+- Add command + validator (payload only) and handler producing `ChangeResourceAssignmentStatusRequested` to `resource-assignment-events` keyed by assignmentId
+- Expose controller `PATCH /api/v1/assignments/{assignmentId}/resources/{resourceId}/status` returning 200 with status echoed
+- Add event model to `common.events.resourceassignment`
 
 **Demo Suggestion**:
 1. Show PATCH /api/assignments/{assignmentId}/resources/{resourceId}/status request
@@ -2358,11 +2518,18 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `InvolvePartyRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testInvolveParty_WithIncident_ProducesEvent()` - Verify event with incidentId
-- `testInvolveParty_WithCall_ProducesEvent()` - Verify event with callId
-- `testInvolveParty_WithActivity_ProducesEvent()` - Verify event with activityId
-- `testInvolveParty_WithMultipleTargets_Returns400()` - Validation error
-- Event contains personId, incidentId/callId/activityId, partyRoleType, description, involvementStartTime
+- ⏳ `testInvolveParty_WithIncident_ProducesEvent()` - Verify event with incidentId
+- ⏳ `testInvolveParty_WithCall_ProducesEvent()` - Verify event with callId
+- ⏳ `testInvolveParty_WithActivity_ProducesEvent()` - Verify event with activityId
+- ⏳ `testInvolveParty_WithMultipleTargets_Returns400()` - Validation error, no event produced
+- ⏳ `testInvolveParty_WithMissingPersonId_Returns400()` - Validation error, no event produced
+- Event contains personId, incidentId/callId/activityId, partyRoleType, description, involvementStartTime (keyed consistently)
+
+**Implementation Plan**:
+- Add `InvolvePartyRequestDto` enforcing required fields, enum, and XOR for incidentId/callId/activityId
+- Add command + validator (payload only) and handler producing `InvolvePartyRequested` to `involved-party-events` keyed consistently (personId or involvementId per domain decision)
+- Expose controller `POST /api/v1/involved-parties` returning 201 with `{ involvementId }`
+- Add event model to `common.events.involvedparty`
 
 **Demo Suggestion**:
 1. Show POST /api/involved-parties request with incidentId
@@ -2383,8 +2550,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `EndPartyInvolvementRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testEndPartyInvolvement_WithValidData_ProducesEvent()` - Verify event
-- Event contains involvementId and involvementEndTime
+- ⏳ `testEndPartyInvolvement_WithValidData_ProducesEvent()` - Verify event contains involvementId and involvementEndTime
+- ⏳ `testEndPartyInvolvement_WithMissingEndTime_Returns400()` - Validation error, no event produced
+- Event assertions: involvementId used as Kafka key; involvementEndTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `EndPartyInvolvementRequestDto` requiring `involvementEndTime`
+- Add command + validator (payload only) and handler producing `EndPartyInvolvementRequested` to `involved-party-events` keyed by involvementId
+- Expose controller `POST /api/v1/involved-parties/{involvementId}/end` returning 200 with message
+- Add event model to `common.events.involvedparty`
 
 **Demo Suggestion**:
 1. Show POST /api/involved-parties/{involvementId}/end request
@@ -2403,8 +2577,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UpdatePartyInvolvementRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testUpdatePartyInvolvement_WithValidData_ProducesEvent()` - Verify event
-- Event contains involvementId and provided fields
+- ⏳ `testUpdatePartyInvolvement_WithValidData_ProducesEvent()` - Verify event contains involvementId and provided fields
+- ⏳ `testUpdatePartyInvolvement_WithNoBody_Returns400()` - Validation error when no fields provided
+- Event assertions: involvementId used as Kafka key; provided fields optional but non-blank if sent
+
+**Implementation Plan**:
+- Add `UpdatePartyInvolvementRequestDto` allowing optional non-blank partyRoleType/description, enforce at least one field
+- Add command + validator (payload only) and handler producing `UpdatePartyInvolvementRequested` to `involved-party-events` keyed by involvementId
+- Expose controller `PUT /api/v1/involved-parties/{involvementId}` returning 200 with `{ involvementId, message }`
+- Add event model to `common.events.involvedparty`
 
 **Demo Suggestion**:
 1. Show PUT /api/involved-parties/{involvementId} request
@@ -2426,9 +2607,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CheckInOfficerRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testCheckInOfficer_WithValidData_ProducesEvent()` - Verify event
-- `testCheckInOfficer_WithInvalidShiftRoleType_Returns400()` - Validation error
-- Event contains shiftId, badgeNumber, checkInTime, shiftRoleType
+- ⏳ `testCheckInOfficer_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, checkInTime, shiftRoleType
+- ⏳ `testCheckInOfficer_WithMissingCheckInTime_Returns400()` - Validation error, no event produced
+- ⏳ `testCheckInOfficer_WithInvalidShiftRoleType_Returns400()` - Validation error, no event produced
+- Event assertions: shiftId used as Kafka key; checkInTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `CheckInOfficerRequestDto` requiring `checkInTime` and shiftRoleType enum
+- Add command + validator (payload only) and handler producing `CheckInOfficerRequested` to `officer-shift-events` keyed by shiftId
+- Expose controller `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in` returning 200 with message
+- Add event model to `common.events.officershift`
 
 **Demo Suggestion**:
 1. Show POST /api/shifts/{shiftId}/officers/{badgeNumber}/check-in request
@@ -2448,8 +2636,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `CheckOutOfficerRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testCheckOutOfficer_WithValidData_ProducesEvent()` - Verify event
-- Event contains shiftId, badgeNumber, checkOutTime
+- ⏳ `testCheckOutOfficer_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, checkOutTime
+- ⏳ `testCheckOutOfficer_WithMissingCheckOutTime_Returns400()` - Validation error, no event produced
+- Event assertions: shiftId used as Kafka key; checkOutTime ISO-8601 required
+
+**Implementation Plan**:
+- Add `CheckOutOfficerRequestDto` requiring `checkOutTime`
+- Add command + validator (payload only) and handler producing `CheckOutOfficerRequested` to `officer-shift-events` keyed by shiftId
+- Expose controller `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-out` returning 200 with message
+- Add event model to `common.events.officershift`
 
 **Demo Suggestion**:
 1. Show POST /api/shifts/{shiftId}/officers/{badgeNumber}/check-out request
@@ -2468,8 +2663,15 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UpdateOfficerShiftRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testUpdateOfficerShift_WithValidData_ProducesEvent()` - Verify event
-- Event contains shiftId, badgeNumber, shiftRoleType
+- ⏳ `testUpdateOfficerShift_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, shiftRoleType
+- ⏳ `testUpdateOfficerShift_WithNoBody_Returns400()` - Validation error when no fields provided
+- Event assertions: shiftId used as Kafka key; shiftRoleType enum enforced if provided
+
+**Implementation Plan**:
+- Add `UpdateOfficerShiftRequestDto` allowing optional non-blank shiftRoleType; require at least one field
+- Add command + validator (payload only) and handler producing `UpdateOfficerShiftRequested` to `officer-shift-events` keyed by shiftId
+- Expose controller `PUT /api/v1/shifts/{shiftId}/officers/{badgeNumber}` returning 200 with `{ shiftId, badgeNumber, message }`
+- Add event model to `common.events.officershift`
 
 **Demo Suggestion**:
 1. Show PUT /api/shifts/{shiftId}/officers/{badgeNumber} request
