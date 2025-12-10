@@ -3,15 +3,19 @@ package com.knowit.policesystem.edge.controllers;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.assignments.CreateAssignmentCommand;
 import com.knowit.policesystem.edge.commands.assignments.CompleteAssignmentCommand;
+import com.knowit.policesystem.edge.commands.assignments.ChangeAssignmentStatusCommand;
 import com.knowit.policesystem.edge.dto.AssignmentResponseDto;
 import com.knowit.policesystem.edge.dto.CreateAssignmentRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteAssignmentRequestDto;
+import com.knowit.policesystem.edge.dto.ChangeAssignmentStatusRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.assignments.CreateAssignmentCommandValidator;
 import com.knowit.policesystem.edge.validation.assignments.CompleteAssignmentCommandValidator;
+import com.knowit.policesystem.edge.validation.assignments.ChangeAssignmentStatusCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +32,7 @@ public class AssignmentController extends BaseRestController {
     private final CommandHandlerRegistry commandHandlerRegistry;
     private final CreateAssignmentCommandValidator commandValidator;
     private final CompleteAssignmentCommandValidator completeAssignmentCommandValidator;
+    private final ChangeAssignmentStatusCommandValidator changeAssignmentStatusCommandValidator;
 
     /**
      * Creates a new assignment controller.
@@ -35,13 +40,16 @@ public class AssignmentController extends BaseRestController {
      * @param commandHandlerRegistry the command handler registry
      * @param commandValidator the create assignment command validator
      * @param completeAssignmentCommandValidator the complete assignment command validator
+     * @param changeAssignmentStatusCommandValidator the change assignment status command validator
      */
     public AssignmentController(CommandHandlerRegistry commandHandlerRegistry,
                                CreateAssignmentCommandValidator commandValidator,
-                               CompleteAssignmentCommandValidator completeAssignmentCommandValidator) {
+                               CompleteAssignmentCommandValidator completeAssignmentCommandValidator,
+                               ChangeAssignmentStatusCommandValidator changeAssignmentStatusCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.completeAssignmentCommandValidator = completeAssignmentCommandValidator;
+        this.changeAssignmentStatusCommandValidator = changeAssignmentStatusCommandValidator;
     }
 
     /**
@@ -102,5 +110,36 @@ public class AssignmentController extends BaseRestController {
 
         // Return 200 OK response
         return success(response, "Assignment completion request processed");
+    }
+
+    /**
+     * Changes an assignment's status.
+     * Accepts status change data, validates it, and publishes a ChangeAssignmentStatusRequested event to Kafka.
+     *
+     * @param assignmentId the assignment identifier from the path
+     * @param requestDto the change assignment status request DTO
+     * @return 200 OK with assignment ID
+     */
+    @PatchMapping("/assignments/{assignmentId}/status")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<AssignmentResponseDto>> changeAssignmentStatus(
+            @PathVariable String assignmentId,
+            @Valid @RequestBody ChangeAssignmentStatusRequestDto requestDto) {
+
+        // Create command from path variable and DTO
+        ChangeAssignmentStatusCommand command = new ChangeAssignmentStatusCommand(assignmentId, requestDto);
+
+        // Validate command
+        var validationResult = changeAssignmentStatusCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<ChangeAssignmentStatusCommand, AssignmentResponseDto> handler =
+                commandHandlerRegistry.findHandler(ChangeAssignmentStatusCommand.class);
+        AssignmentResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Assignment status change request processed");
     }
 }

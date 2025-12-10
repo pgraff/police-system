@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.assignments.CreateAssignmentRequested;
 import com.knowit.policesystem.common.events.assignments.CompleteAssignmentRequested;
+import com.knowit.policesystem.common.events.assignments.ChangeAssignmentStatusRequested;
 import com.knowit.policesystem.edge.domain.AssignmentStatus;
 import com.knowit.policesystem.edge.domain.AssignmentType;
 import com.knowit.policesystem.edge.dto.CreateAssignmentRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteAssignmentRequestDto;
+import com.knowit.policesystem.edge.dto.ChangeAssignmentStatusRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -37,6 +39,7 @@ import java.util.Collections;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -447,6 +450,101 @@ class AssignmentControllerTest {
 
         // When - call REST API
         mockMvc.perform(post("/api/v1/assignments/{assignmentId}/complete", "ASSIGN-012")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeAssignmentStatus_WithValidStatus_ProducesEvent() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-013";
+        ChangeAssignmentStatusRequestDto request = new ChangeAssignmentStatusRequestDto(AssignmentStatus.InProgress);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/status", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.assignmentId").value(assignmentId))
+                .andExpect(jsonPath("$.message").value("Assignment status change request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(assignmentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        ChangeAssignmentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeAssignmentStatusRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(assignmentId);
+        assertThat(event.getAssignmentId()).isEqualTo(assignmentId);
+        assertThat(event.getStatus()).isEqualTo("In-Progress");
+        assertThat(event.getEventType()).isEqualTo("ChangeAssignmentStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Test other status values
+        testStatusConversion(assignmentId + "-1", AssignmentStatus.Created, "Created");
+        testStatusConversion(assignmentId + "-2", AssignmentStatus.Assigned, "Assigned");
+        testStatusConversion(assignmentId + "-3", AssignmentStatus.Completed, "Completed");
+        testStatusConversion(assignmentId + "-4", AssignmentStatus.Cancelled, "Cancelled");
+    }
+
+    private void testStatusConversion(String assignmentId, AssignmentStatus status, String expectedStatusString) throws Exception {
+        ChangeAssignmentStatusRequestDto request = new ChangeAssignmentStatusRequestDto(status);
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/status", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        ChangeAssignmentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeAssignmentStatusRequested.class);
+        assertThat(event.getStatus()).isEqualTo(expectedStatusString);
+    }
+
+    @Test
+    void testChangeAssignmentStatus_WithMissingStatus_Returns400() throws Exception {
+        // Given - missing status in request body
+        String requestJson = """
+                {
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/status", "ASSIGN-014")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeAssignmentStatus_WithInvalidStatusEnum_Returns400() throws Exception {
+        // Given - invalid status enum value
+        String requestJson = """
+                {
+                    "status": "InvalidStatus"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/status", "ASSIGN-015")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
