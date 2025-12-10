@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.involvedparty.EndPartyInvolvementRequested;
 import com.knowit.policesystem.common.events.involvedparty.InvolvePartyRequested;
+import com.knowit.policesystem.common.events.involvedparty.UpdatePartyInvolvementRequested;
 import com.knowit.policesystem.edge.domain.PartyRoleType;
 import com.knowit.policesystem.edge.dto.EndPartyInvolvementRequestDto;
 import com.knowit.policesystem.edge.dto.InvolvePartyRequestDto;
@@ -37,6 +38,7 @@ import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -419,6 +421,171 @@ class InvolvedPartyControllerTest {
 
         // When - call REST API
         mockMvc.perform(post("/api/v1/involved-parties/{involvementId}/end", involvementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event produced
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdatePartyInvolvement_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String involvementId = "INVOLVEMENT-003";
+        String requestJson = """
+                {
+                    "partyRoleType": "Victim",
+                    "description": "Updated involvement description"
+                }
+                """;
+
+        // When - call REST API
+        String responseContent = mockMvc.perform(put("/api/v1/involved-parties/{involvementId}", involvementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.involvementId").value(involvementId))
+                .andExpect(jsonPath("$.message").value("Party involvement update request processed"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(involvementId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdatePartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), UpdatePartyInvolvementRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(involvementId);
+        assertThat(event.getInvolvementId()).isEqualTo(involvementId);
+        assertThat(event.getPartyRoleType()).isEqualTo("Victim");
+        assertThat(event.getDescription()).isEqualTo("Updated involvement description");
+        assertThat(event.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdatePartyInvolvement_WithPartyRoleTypeOnly_ProducesEvent() throws Exception {
+        // Given
+        String involvementId = "INVOLVEMENT-004";
+        String requestJson = """
+                {
+                    "partyRoleType": "Suspect"
+                }
+                """;
+
+        // When - call REST API
+        String responseContent = mockMvc.perform(put("/api/v1/involved-parties/{involvementId}", involvementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.involvementId").value(involvementId))
+                .andExpect(jsonPath("$.message").value("Party involvement update request processed"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(involvementId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdatePartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), UpdatePartyInvolvementRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(involvementId);
+        assertThat(event.getInvolvementId()).isEqualTo(involvementId);
+        assertThat(event.getPartyRoleType()).isEqualTo("Suspect");
+        assertThat(event.getDescription()).isNull();
+        assertThat(event.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdatePartyInvolvement_WithDescriptionOnly_ProducesEvent() throws Exception {
+        // Given
+        String involvementId = "INVOLVEMENT-005";
+        String requestJson = """
+                {
+                    "description": "Updated description only"
+                }
+                """;
+
+        // When - call REST API
+        String responseContent = mockMvc.perform(put("/api/v1/involved-parties/{involvementId}", involvementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.involvementId").value(involvementId))
+                .andExpect(jsonPath("$.message").value("Party involvement update request processed"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(involvementId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdatePartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), UpdatePartyInvolvementRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(involvementId);
+        assertThat(event.getInvolvementId()).isEqualTo(involvementId);
+        assertThat(event.getPartyRoleType()).isNull();
+        assertThat(event.getDescription()).isEqualTo("Updated description only");
+        assertThat(event.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdatePartyInvolvement_WithNoFields_Returns400() throws Exception {
+        // Given - empty body (should fail)
+        String involvementId = "INVOLVEMENT-006";
+        String requestJson = "{}";
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/involved-parties/{involvementId}", involvementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event produced
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdatePartyInvolvement_WithBlankDescription_Returns400() throws Exception {
+        // Given - blank description (should fail)
+        String involvementId = "INVOLVEMENT-007";
+        String requestJson = """
+                {
+                    "description": "   "
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/involved-parties/{involvementId}", involvementId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());

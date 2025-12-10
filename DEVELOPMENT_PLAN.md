@@ -2664,29 +2664,42 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 14.3: Update Party Involvement Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `PUT /api/involved-parties/{involvementId}`
-- Request body: `{ partyRoleType, description }` (all optional)
-- Response: `200 OK`
-- Produces event: `UpdatePartyInvolvementRequested` to Kafka topic `involved-party-events`
-- Test criteria: Verify `UpdatePartyInvolvementRequested` event appears in Kafka
+- REST API: `PUT /api/v1/involved-parties/{involvementId}`
+- Request body: `{ partyRoleType?: PartyRoleType, description?: string }` (both optional, but at least one must be provided)
+- Response: `200 OK` with `{ involvementId, message: "Party involvement update request processed" }`
+- Produces event: `UpdatePartyInvolvementRequested` to Kafka topic `involved-party-events` keyed by `involvementId`
+- Test criteria: Verify `UpdatePartyInvolvementRequested` event appears in Kafka with correct data
 
 **Test Criteria**:
-- ⏳ `testUpdatePartyInvolvement_WithValidData_ProducesEvent()` - Verify event contains involvementId and provided fields
-- ⏳ `testUpdatePartyInvolvement_WithNoBody_Returns400()` - Validation error when no fields provided
+- ✅ `testUpdatePartyInvolvement_WithValidData_ProducesEvent()` - Verify event contains involvementId and both provided fields
+- ✅ `testUpdatePartyInvolvement_WithPartyRoleTypeOnly_ProducesEvent()` - Verify event with only partyRoleType
+- ✅ `testUpdatePartyInvolvement_WithDescriptionOnly_ProducesEvent()` - Verify event with only description
+- ✅ `testUpdatePartyInvolvement_WithNoFields_Returns400()` - Validation error when no fields provided
+- ✅ `testUpdatePartyInvolvement_WithBlankDescription_Returns400()` - Validation error when description is blank
 - Event assertions: involvementId used as Kafka key; provided fields optional but non-blank if sent
 
-**Implementation Plan**:
-- Add `UpdatePartyInvolvementRequestDto` allowing optional non-blank partyRoleType/description, enforce at least one field
-- Add command + validator (payload only) and handler producing `UpdatePartyInvolvementRequested` to `involved-party-events` keyed by involvementId
-- Expose controller `PUT /api/v1/involved-parties/{involvementId}` returning 200 with `{ involvementId, message }`
-- Add event model to `common.events.involvedparty`
+**Implementation Details**:
+- Created `UpdatePartyInvolvementRequestDto` with optional `partyRoleType` (PartyRoleType enum) and `description` (String) fields
+- DTO uses `@JsonInclude(JsonInclude.Include.NON_NULL)` and `@AssertTrue` to enforce at least one field provided
+- Created `UpdatePartyInvolvementCommand`, `UpdatePartyInvolvementCommandValidator`, and `UpdatePartyInvolvementCommandHandler` publishing `UpdatePartyInvolvementRequested` to `involved-party-events` keyed by involvementId
+- Created `UpdatePartyInvolvementRequested` event in `common.events.involvedparty` package with involvementId, partyRoleType (as string), and description fields
+- Added `PUT /api/v1/involved-parties/{involvementId}` endpoint to `InvolvedPartyController` returning 200 OK with message "Party involvement update request processed"
+- Validator validates involvementId (from path parameter), ensures at least one of partyRoleType or description is provided, and ensures description is not blank if provided
+- Handler creates event with involvementId, partyRoleType (converted to string via .name()), and description, publishes to Kafka topic "involved-party-events" keyed by involvementId
+- Handler auto-registered in `CommandHandlerRegistry` via `@PostConstruct`
+- All tests passing (14/14 in InvolvedPartyControllerTest, 288/288 total) - all test cases implemented and verified
+- Tests verify Kafka event production with proper event structure, metadata, and validation
 
 **Demo Suggestion**:
-1. Show PUT /api/involved-parties/{involvementId} request
-2. Show UpdatePartyInvolvementRequested event
+1. Show PUT /api/v1/involved-parties/{involvementId} request with both partyRoleType and description
+2. Show 200 OK response
+3. Show UpdatePartyInvolvementRequested event in Kafka topic using kafka-console-consumer
+4. Highlight event structure (involvementId, partyRoleType, description)
+5. Show update with only one field (partyRoleType or description)
+6. Show validation error (empty body or blank description)
 
 ---
 
