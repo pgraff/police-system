@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.activities.ChangeActivityStatusRequested;
 import com.knowit.policesystem.common.events.activities.CompleteActivityRequested;
+import com.knowit.policesystem.common.events.activities.LinkActivityToIncidentRequested;
 import com.knowit.policesystem.common.events.activities.StartActivityRequested;
 import com.knowit.policesystem.common.events.activities.UpdateActivityRequested;
 import com.knowit.policesystem.edge.domain.ActivityStatus;
 import com.knowit.policesystem.edge.domain.ActivityType;
 import com.knowit.policesystem.edge.dto.ChangeActivityStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteActivityRequestDto;
+import com.knowit.policesystem.edge.dto.LinkActivityToIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.StartActivityRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateActivityRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -421,6 +423,82 @@ class ActivityControllerTest {
 
         // When - call REST API
         mockMvc.perform(put("/api/v1/activities/{activityId}", activityId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkActivityToIncident_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String activityId = "ACT-011";
+        String incidentId = "INC-001";
+
+        LinkActivityToIncidentRequestDto request = new LinkActivityToIncidentRequestDto(incidentId);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/activities/{activityId}/incidents", activityId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Activity link request processed"))
+                .andExpect(jsonPath("$.data.activityId").value(activityId))
+                .andExpect(jsonPath("$.data.incidentId").value(incidentId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(activityId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        LinkActivityToIncidentRequested event = eventObjectMapper.readValue(record.value(), LinkActivityToIncidentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(activityId);
+        assertThat(event.getActivityId()).isEqualTo(activityId);
+        assertThat(event.getIncidentId()).isEqualTo(incidentId);
+        assertThat(event.getEventType()).isEqualTo("LinkActivityToIncidentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testLinkActivityToIncident_WithMissingIncidentId_Returns400() throws Exception {
+        // Given
+        String activityId = "ACT-012";
+
+        LinkActivityToIncidentRequestDto request = new LinkActivityToIncidentRequestDto(null);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/activities/{activityId}/incidents", activityId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkActivityToIncident_WithBlankIncidentId_Returns400() throws Exception {
+        // Given
+        String activityId = "ACT-013";
+
+        LinkActivityToIncidentRequestDto request = new LinkActivityToIncidentRequestDto("   ");
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/activities/{activityId}/incidents", activityId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());

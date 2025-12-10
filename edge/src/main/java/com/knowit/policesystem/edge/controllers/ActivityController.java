@@ -3,16 +3,20 @@ package com.knowit.policesystem.edge.controllers;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.activities.ChangeActivityStatusCommand;
 import com.knowit.policesystem.edge.commands.activities.CompleteActivityCommand;
+import com.knowit.policesystem.edge.commands.activities.LinkActivityToIncidentCommand;
 import com.knowit.policesystem.edge.commands.activities.StartActivityCommand;
 import com.knowit.policesystem.edge.commands.activities.UpdateActivityCommand;
 import com.knowit.policesystem.edge.dto.ActivityResponseDto;
 import com.knowit.policesystem.edge.dto.ChangeActivityStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteActivityRequestDto;
+import com.knowit.policesystem.edge.dto.LinkActivityToIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.LinkActivityToIncidentResponseDto;
 import com.knowit.policesystem.edge.dto.StartActivityRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateActivityRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.activities.ChangeActivityStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.activities.CompleteActivityCommandValidator;
+import com.knowit.policesystem.edge.validation.activities.LinkActivityToIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.activities.StartActivityCommandValidator;
 import com.knowit.policesystem.edge.validation.activities.UpdateActivityCommandValidator;
 import jakarta.validation.Valid;
@@ -38,6 +42,7 @@ public class ActivityController extends BaseRestController {
     private final CompleteActivityCommandValidator completeActivityCommandValidator;
     private final ChangeActivityStatusCommandValidator changeActivityStatusCommandValidator;
     private final UpdateActivityCommandValidator updateActivityCommandValidator;
+    private final LinkActivityToIncidentCommandValidator linkActivityToIncidentCommandValidator;
 
     /**
      * Creates a new activity controller.
@@ -46,17 +51,21 @@ public class ActivityController extends BaseRestController {
      * @param commandValidator the start activity command validator
      * @param completeActivityCommandValidator the complete activity command validator
      * @param changeActivityStatusCommandValidator the change activity status command validator
+     * @param updateActivityCommandValidator the update activity command validator
+     * @param linkActivityToIncidentCommandValidator the link activity to incident command validator
      */
     public ActivityController(CommandHandlerRegistry commandHandlerRegistry,
                               StartActivityCommandValidator commandValidator,
                               CompleteActivityCommandValidator completeActivityCommandValidator,
                               ChangeActivityStatusCommandValidator changeActivityStatusCommandValidator,
-                              UpdateActivityCommandValidator updateActivityCommandValidator) {
+                              UpdateActivityCommandValidator updateActivityCommandValidator,
+                              LinkActivityToIncidentCommandValidator linkActivityToIncidentCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.completeActivityCommandValidator = completeActivityCommandValidator;
         this.changeActivityStatusCommandValidator = changeActivityStatusCommandValidator;
         this.updateActivityCommandValidator = updateActivityCommandValidator;
+        this.linkActivityToIncidentCommandValidator = linkActivityToIncidentCommandValidator;
     }
 
     /**
@@ -175,5 +184,36 @@ public class ActivityController extends BaseRestController {
         ActivityResponseDto response = handler.handle(command);
 
         return success(response, "Activity update request processed");
+    }
+
+    /**
+     * Links an activity to an incident.
+     * Accepts incident link data, validates it, and publishes a LinkActivityToIncidentRequested event to Kafka.
+     *
+     * @param activityId the activity ID from the path
+     * @param requestDto the incident link request DTO
+     * @return 200 OK with activityId and incidentId
+     */
+    @PostMapping("/activities/{activityId}/incidents")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<LinkActivityToIncidentResponseDto>> linkActivityToIncident(
+            @PathVariable String activityId,
+            @Valid @RequestBody LinkActivityToIncidentRequestDto requestDto) {
+
+        // Create command from DTO and path parameter
+        LinkActivityToIncidentCommand command = new LinkActivityToIncidentCommand(activityId, activityId, requestDto);
+
+        // Validate command
+        var validationResult = linkActivityToIncidentCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<LinkActivityToIncidentCommand, LinkActivityToIncidentResponseDto> handler =
+                commandHandlerRegistry.findHandler(LinkActivityToIncidentCommand.class);
+        LinkActivityToIncidentResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Activity link request processed");
     }
 }

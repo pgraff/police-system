@@ -2106,30 +2106,34 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 9.5: Link Activity to Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/activities/{activityId}/incidents`
-- Request body: `{ incidentId }`
-- Response: `200 OK`
-- Produces event: `LinkActivityToIncidentRequested` to Kafka topic `activity-events`
+- REST API: `POST /api/v1/activities/{activityId}/incidents`
+- Request body: `{ "incidentId": "INC-001" }` (required, non-blank)
+- Response: `200 OK` with `{ "data": { "activityId": "...", "incidentId": "..." }, "message": "Activity link request processed" }`
+- Produces event: `LinkActivityToIncidentRequested` to Kafka topic `activity-events` (keyed by activityId)
 - Test criteria: Verify `LinkActivityToIncidentRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testLinkActivityToIncident_WithValidData_ProducesEvent()` - Verify event contains activityId and incidentId
-- ⏳ `testLinkActivityToIncident_WithMissingIncidentId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkActivityToIncident_WithValidData_ProducesEvent()` - Verify event contains activityId and incidentId
+- ✅ `testLinkActivityToIncident_WithMissingIncidentId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkActivityToIncident_WithBlankIncidentId_Returns400()` - Validation error for blank incidentId
 - Event assertions: activityId used as Kafka key; incidentId required and non-blank
 
-**Implementation Plan**:
-- Add `LinkActivityToIncidentRequestDto` with required incidentId
-- Add command + validator (payload only) and handler producing `LinkActivityToIncidentRequested` to `activity-events` keyed by activityId
-- Expose controller `POST /api/v1/activities/{activityId}/incidents` returning 200 with activityId + incidentId
-- Add event model to `common.events.activities`
+**Implementation Summary**:
+- Added `LinkActivityToIncidentRequestDto` with required `@NotBlank` incidentId
+- Added `LinkActivityToIncidentCommand`, validator, and handler publishing `LinkActivityToIncidentRequested` to `activity-events` keyed by activityId
+- Added `LinkActivityToIncidentRequested` event in `common.events.activities`
+- Exposed `POST /api/v1/activities/{activityId}/incidents` in `ActivityController` returning 200 with activityId + incidentId
+- All tests passing (13/13 in ActivityControllerTest) and full regression suite passing (230/230)
 
 **Demo Suggestion**:
-1. Show POST `/api/v1/activities/{activityId}/incidents` request
-2. Show `LinkActivityToIncidentRequested` event on `activity-events` (key = activityId) with incidentId
-3. Show validation example missing incidentId returning 400
+1. Show POST `/api/v1/activities/{activityId}/incidents` request with curl or Postman
+2. Show 200 OK response with activityId and incidentId
+3. Show `LinkActivityToIncidentRequested` event in `activity-events` topic (key = activityId) with incidentId
+4. Highlight event structure (activityId, incidentId, metadata)
+5. Show validation example (missing incidentId returns 400)
 
 ---
 
