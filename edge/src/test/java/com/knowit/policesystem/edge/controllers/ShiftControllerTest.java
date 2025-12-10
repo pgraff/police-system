@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.officershifts.CheckInOfficerRequested;
+import com.knowit.policesystem.common.events.officershifts.CheckOutOfficerRequested;
 import com.knowit.policesystem.common.events.shifts.EndShiftRequested;
 import com.knowit.policesystem.common.events.shifts.RecordShiftChangeRequested;
 import com.knowit.policesystem.common.events.shifts.StartShiftRequested;
@@ -11,6 +12,7 @@ import com.knowit.policesystem.edge.domain.ShiftRoleType;
 import com.knowit.policesystem.edge.domain.ShiftStatus;
 import com.knowit.policesystem.edge.domain.ShiftType;
 import com.knowit.policesystem.edge.dto.CheckInOfficerRequestDto;
+import com.knowit.policesystem.edge.dto.CheckOutOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
@@ -514,6 +516,57 @@ class ShiftControllerTest {
         mockMvc.perform(post("/api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-in", shiftId, badgeNumber)
                         .contentType(MediaType.APPLICATION_JSON_VALUE)
                         .content(invalidShiftRoleTypeJson))
+                .andExpect(status().isBadRequest());
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testCheckOutOfficer_WithValidData_ProducesEvent() throws Exception {
+        String shiftId = "SHIFT-050";
+        String badgeNumber = "BADGE-010";
+        Instant checkOutTime = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+        CheckOutOfficerRequestDto request = new CheckOutOfficerRequestDto(checkOutTime);
+        String requestJson = objectMapper.writeValueAsString(request);
+
+        mockMvc.perform(post("/api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-out", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(Objects.requireNonNull(requestJson)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shiftId").value(shiftId))
+                .andExpect(jsonPath("$.data.badgeNumber").value(badgeNumber))
+                .andExpect(jsonPath("$.message").value("Officer check-out request processed"));
+
+        ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(shiftId);
+        assertThat(record.topic()).isEqualTo(OFFICER_SHIFT_TOPIC);
+
+        CheckOutOfficerRequested event = eventObjectMapper.readValue(record.value(), CheckOutOfficerRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(shiftId);
+        assertThat(event.getShiftId()).isEqualTo(shiftId);
+        assertThat(event.getBadgeNumber()).isEqualTo(badgeNumber);
+        assertThat(event.getCheckOutTime()).isEqualTo(checkOutTime);
+        assertThat(event.getEventType()).isEqualTo("CheckOutOfficerRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testCheckOutOfficer_WithMissingCheckOutTime_Returns400() throws Exception {
+        String shiftId = "SHIFT-051";
+        String badgeNumber = "BADGE-011";
+        String missingCheckOutTimeJson = "{}";
+
+        mockMvc.perform(post("/api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-out", shiftId, badgeNumber)
+                        .contentType(MediaType.APPLICATION_JSON_VALUE)
+                        .content(missingCheckOutTimeJson))
                 .andExpect(status().isBadRequest());
 
         ConsumerRecords<String, String> records = officerShiftConsumer.poll(Duration.ofSeconds(2));

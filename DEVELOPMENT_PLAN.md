@@ -2739,25 +2739,25 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 15.2: Check Out Officer Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/shifts/{shiftId}/officers/{badgeNumber}/check-out`
+- REST API: `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-out`
 - Request body: `{ checkOutTime }`
 - Response: `200 OK`
 - Produces event: `CheckOutOfficerRequested` to Kafka topic `officer-shift-events`
 - Test criteria: Verify `CheckOutOfficerRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testCheckOutOfficer_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, checkOutTime
-- ⏳ `testCheckOutOfficer_WithMissingCheckOutTime_Returns400()` - Validation error, no event produced
+- ✅ `testCheckOutOfficer_WithValidData_ProducesEvent()` - Verify event contains shiftId, badgeNumber, checkOutTime
+- ✅ `testCheckOutOfficer_WithMissingCheckOutTime_Returns400()` - Validation error, no event produced
 - Event assertions: shiftId used as Kafka key; checkOutTime ISO-8601 required
 
 **Implementation Plan**:
-- Add `CheckOutOfficerRequestDto` requiring `checkOutTime`
-- Add command + validator (payload only) and handler producing `CheckOutOfficerRequested` to `officer-shift-events` keyed by shiftId
-- Expose controller `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-out` returning 200 with message
-- Add event model to `common.events.officershift`
+- ✅ Add `CheckOutOfficerRequestDto` requiring `checkOutTime`
+- ✅ Add command + validator (payload only) and handler producing `CheckOutOfficerRequested` to `officer-shift-events` keyed by shiftId
+- ✅ Expose controller `POST /api/v1/shifts/{shiftId}/officers/{badgeNumber}/check-out` returning 200 with message
+- ✅ Add event model to `common.events.officershifts.CheckOutOfficerRequested`
 
 **Demo Suggestion**:
 1. Show POST /api/shifts/{shiftId}/officers/{badgeNumber}/check-out request
