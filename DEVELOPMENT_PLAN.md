@@ -2633,28 +2633,32 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 14.2: End Party Involvement Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/involved-parties/{involvementId}/end`
-- Request body: `{ involvementEndTime }`
-- Response: `200 OK`
+- REST API: `POST /api/v1/involved-parties/{involvementId}/end`
+- Request body: `{ involvementEndTime }` (required, ISO-8601 date-time)
+- Response: `200 OK` with `{ involvementId, message }`
 - Produces event: `EndPartyInvolvementRequested` to Kafka topic `involved-party-events`
 - Test criteria: Verify `EndPartyInvolvementRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testEndPartyInvolvement_WithValidData_ProducesEvent()` - Verify event contains involvementId and involvementEndTime
-- ⏳ `testEndPartyInvolvement_WithMissingEndTime_Returns400()` - Validation error, no event produced
+- ✅ `testEndPartyInvolvement_WithValidData_ProducesEvent()` - Verify event contains involvementId and involvementEndTime
+- ✅ `testEndPartyInvolvement_WithMissingEndTime_Returns400()` - Validation error, no event produced
 - Event assertions: involvementId used as Kafka key; involvementEndTime ISO-8601 required
 
-**Implementation Plan**:
-- Add `EndPartyInvolvementRequestDto` requiring `involvementEndTime`
-- Add command + validator (payload only) and handler producing `EndPartyInvolvementRequested` to `involved-party-events` keyed by involvementId
-- Expose controller `POST /api/v1/involved-parties/{involvementId}/end` returning 200 with message
-- Add event model to `common.events.involvedparty`
+**Implementation Details**:
+- Created `EndPartyInvolvementRequestDto` with required `involvementEndTime` field (Instant, @NotNull, @JsonFormat)
+- Created `EndPartyInvolvementCommand`, `EndPartyInvolvementCommandValidator`, and `EndPartyInvolvementCommandHandler` publishing `EndPartyInvolvementRequested` to `involved-party-events` keyed by involvementId
+- Created `EndPartyInvolvementRequested` event in `common.events.involvedparty` package
+- Added `POST /api/v1/involved-parties/{involvementId}/end` endpoint to `InvolvedPartyController` returning 200 OK with message "Party involvement end request processed"
+- Validator validates involvementId (from path parameter) and involvementEndTime (required)
+- Handler creates event with involvementId and involvementEndTime, publishes to Kafka topic "involved-party-events" keyed by involvementId
+- All tests passing (9/9 in InvolvedPartyControllerTest) - all test cases implemented and verified
+- Tests verify Kafka event production with proper event structure, metadata, and validation
 
 **Demo Suggestion**:
-1. Show POST /api/involved-parties/{involvementId}/end request
+1. Show POST /api/v1/involved-parties/{involvementId}/end request
 2. Show EndPartyInvolvementRequested event
 
 ---

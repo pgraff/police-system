@@ -2,8 +2,10 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.involvedparty.EndPartyInvolvementRequested;
 import com.knowit.policesystem.common.events.involvedparty.InvolvePartyRequested;
 import com.knowit.policesystem.edge.domain.PartyRoleType;
+import com.knowit.policesystem.edge.dto.EndPartyInvolvementRequestDto;
 import com.knowit.policesystem.edge.dto.InvolvePartyRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -360,6 +362,63 @@ class InvolvedPartyControllerTest {
 
         // When - call REST API
         mockMvc.perform(post("/api/v1/involved-parties")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event produced
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testEndPartyInvolvement_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String involvementId = "INVOLVEMENT-001";
+        Instant involvementEndTime = Instant.now();
+
+        EndPartyInvolvementRequestDto request = new EndPartyInvolvementRequestDto(involvementEndTime);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        String responseContent = mockMvc.perform(post("/api/v1/involved-parties/{involvementId}/end", involvementId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.involvementId").value(involvementId))
+                .andExpect(jsonPath("$.message").value("Party involvement end request processed"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(involvementId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        EndPartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), EndPartyInvolvementRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(involvementId);
+        assertThat(event.getInvolvementId()).isEqualTo(involvementId);
+        assertThat(event.getInvolvementEndTime()).isEqualTo(involvementEndTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getEventType()).isEqualTo("EndPartyInvolvementRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testEndPartyInvolvement_WithMissingEndTime_Returns400() throws Exception {
+        // Given - missing involvementEndTime (should fail)
+        String involvementId = "INVOLVEMENT-002";
+        String requestJson = "{}";
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/involved-parties/{involvementId}/end", involvementId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
