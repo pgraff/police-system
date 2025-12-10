@@ -553,4 +553,81 @@ class AssignmentControllerTest {
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
     }
+
+    @Test
+    void testLinkAssignmentToDispatch_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-016";
+        String dispatchId = "DISP-001";
+        com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchRequestDto request =
+                new com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchRequestDto(dispatchId);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/dispatches", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Assignment link request processed"))
+                .andExpect(jsonPath("$.data.assignmentId").value(assignmentId))
+                .andExpect(jsonPath("$.data.dispatchId").value(dispatchId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(assignmentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        com.knowit.policesystem.common.events.assignments.LinkAssignmentToDispatchRequested event =
+                eventObjectMapper.readValue(record.value(), com.knowit.policesystem.common.events.assignments.LinkAssignmentToDispatchRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(assignmentId);
+        assertThat(event.getAssignmentId()).isEqualTo(assignmentId);
+        assertThat(event.getDispatchId()).isEqualTo(dispatchId);
+        assertThat(event.getEventType()).isEqualTo("LinkAssignmentToDispatchRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testLinkAssignmentToDispatch_WithMissingDispatchId_Returns400() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-017";
+        com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchRequestDto request =
+                new com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchRequestDto(null);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/dispatches", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testLinkAssignmentToDispatch_WithBlankDispatchId_Returns400() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-018";
+        com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchRequestDto request =
+                new com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchRequestDto("   ");
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/dispatches", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
 }

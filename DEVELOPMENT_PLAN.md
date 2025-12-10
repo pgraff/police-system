@@ -2254,29 +2254,37 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 10.4: Link Assignment to Dispatch Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/assignments/{assignmentId}/dispatches`
-- Request body: `{ dispatchId }`
-- Response: `200 OK`
-- Produces event: `LinkAssignmentToDispatchRequested` to Kafka topic `assignment-events`
+- REST API: `POST /api/v1/assignments/{assignmentId}/dispatches`
+- Request body: `{ "dispatchId": "string" }`
+- Response: `200 OK` with `{ "message": "Assignment link request processed", "data": { "assignmentId": "string", "dispatchId": "string" } }`
+- Produces event: `LinkAssignmentToDispatchRequested` to Kafka topic `assignment-events` (keyed by assignmentId)
 - Test criteria: Verify `LinkAssignmentToDispatchRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testLinkAssignmentToDispatch_WithValidData_ProducesEvent()` - Verify event contains assignmentId and dispatchId
-- ⏳ `testLinkAssignmentToDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkAssignmentToDispatch_WithValidData_ProducesEvent()` - Verify event contains assignmentId and dispatchId
+- ✅ `testLinkAssignmentToDispatch_WithMissingDispatchId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkAssignmentToDispatch_WithBlankDispatchId_Returns400()` - Blank dispatchId validation error, no event produced
 - Event assertions: assignmentId used as Kafka key; dispatchId required and non-blank
 
-**Implementation Plan**:
-- Add `LinkAssignmentToDispatchRequestDto` with required dispatchId
-- Add command + validator (payload only) and handler producing `LinkAssignmentToDispatchRequested` to `assignment-events` keyed by assignmentId
-- Expose controller `POST /api/v1/assignments/{assignmentId}/dispatches` returning 200 with assignmentId + dispatchId
-- Add event model to `common.events.assignments`
+**Implementation Details**:
+- Created `LinkAssignmentToDispatchRequestDto` with required `dispatchId` field using `@NotBlank` validation
+- Created `LinkAssignmentToDispatchResponseDto` with assignmentId and dispatchId fields
+- Created `LinkAssignmentToDispatchCommand`, `LinkAssignmentToDispatchCommandValidator`, and `LinkAssignmentToDispatchCommandHandler` publishing `LinkAssignmentToDispatchRequested` to `assignment-events` keyed by assignmentId
+- Created `LinkAssignmentToDispatchRequested` event in `common.events.assignments` package
+- Added `POST /api/v1/assignments/{assignmentId}/dispatches` endpoint to `AssignmentController` returning 200 OK with assignmentId and dispatchId
+- Validator validates assignmentId (from path) and dispatchId (from request body) are non-null and non-blank
+- All three test methods implemented in `AssignmentControllerTest`
 
 **Demo Suggestion**:
-1. Show POST /api/assignments/{assignmentId}/dispatches request
-2. Show LinkAssignmentToDispatchRequested event
+1. Show `POST /api/v1/assignments/{assignmentId}/dispatches` request with curl/Postman
+2. Show 200 OK response with message and data
+3. Show `LinkAssignmentToDispatchRequested` event in Kafka topic `assignment-events` (keyed by assignmentId)
+4. Show validation error example (missing dispatchId returns 400 Bad Request)
+5. Show blank dispatchId rejection
+6. Explain event-driven architecture pattern: REST API → Command → Event → Kafka
 
 ---
 
