@@ -6,6 +6,7 @@ import com.knowit.policesystem.edge.commands.assignments.CompleteAssignmentComma
 import com.knowit.policesystem.edge.commands.assignments.ChangeAssignmentStatusCommand;
 import com.knowit.policesystem.edge.commands.assignments.LinkAssignmentToDispatchCommand;
 import com.knowit.policesystem.edge.commands.assignments.AssignResourceCommand;
+import com.knowit.policesystem.edge.commands.assignments.UnassignResourceCommand;
 import com.knowit.policesystem.edge.dto.AssignmentResponseDto;
 import com.knowit.policesystem.edge.dto.CreateAssignmentRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteAssignmentRequestDto;
@@ -13,6 +14,7 @@ import com.knowit.policesystem.edge.dto.ChangeAssignmentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchRequestDto;
 import com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchResponseDto;
 import com.knowit.policesystem.edge.dto.AssignResourceRequestDto;
+import com.knowit.policesystem.edge.dto.UnassignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.ResourceAssignmentResponseDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.assignments.CreateAssignmentCommandValidator;
@@ -20,10 +22,12 @@ import com.knowit.policesystem.edge.validation.assignments.CompleteAssignmentCom
 import com.knowit.policesystem.edge.validation.assignments.ChangeAssignmentStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.assignments.LinkAssignmentToDispatchCommandValidator;
 import com.knowit.policesystem.edge.validation.assignments.AssignResourceCommandValidator;
+import com.knowit.policesystem.edge.validation.assignments.UnassignResourceCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,6 +47,7 @@ public class AssignmentController extends BaseRestController {
     private final ChangeAssignmentStatusCommandValidator changeAssignmentStatusCommandValidator;
     private final LinkAssignmentToDispatchCommandValidator linkAssignmentToDispatchCommandValidator;
     private final AssignResourceCommandValidator assignResourceCommandValidator;
+    private final UnassignResourceCommandValidator unassignResourceCommandValidator;
 
     /**
      * Creates a new assignment controller.
@@ -53,19 +58,22 @@ public class AssignmentController extends BaseRestController {
      * @param changeAssignmentStatusCommandValidator the change assignment status command validator
      * @param linkAssignmentToDispatchCommandValidator the link assignment to dispatch command validator
      * @param assignResourceCommandValidator the assign resource command validator
+     * @param unassignResourceCommandValidator the unassign resource command validator
      */
     public AssignmentController(CommandHandlerRegistry commandHandlerRegistry,
                                CreateAssignmentCommandValidator commandValidator,
                                CompleteAssignmentCommandValidator completeAssignmentCommandValidator,
                                ChangeAssignmentStatusCommandValidator changeAssignmentStatusCommandValidator,
                                LinkAssignmentToDispatchCommandValidator linkAssignmentToDispatchCommandValidator,
-                               AssignResourceCommandValidator assignResourceCommandValidator) {
+                               AssignResourceCommandValidator assignResourceCommandValidator,
+                               UnassignResourceCommandValidator unassignResourceCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.completeAssignmentCommandValidator = completeAssignmentCommandValidator;
         this.changeAssignmentStatusCommandValidator = changeAssignmentStatusCommandValidator;
         this.linkAssignmentToDispatchCommandValidator = linkAssignmentToDispatchCommandValidator;
         this.assignResourceCommandValidator = assignResourceCommandValidator;
+        this.unassignResourceCommandValidator = unassignResourceCommandValidator;
     }
 
     /**
@@ -219,5 +227,38 @@ public class AssignmentController extends BaseRestController {
 
         // Return 201 Created response
         return created(response, "Resource assignment request processed");
+    }
+
+    /**
+     * Unassigns a resource from an assignment.
+     * Accepts resource unassignment data, validates it, and publishes an UnassignResourceRequested event to Kafka.
+     *
+     * @param assignmentId the assignment identifier from the path
+     * @param resourceId the resource identifier from the path
+     * @param requestDto the unassign resource request DTO
+     * @return 200 OK with resource assignment ID
+     */
+    @DeleteMapping("/assignments/{assignmentId}/resources/{resourceId}")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<ResourceAssignmentResponseDto>> unassignResource(
+            @PathVariable String assignmentId,
+            @PathVariable String resourceId,
+            @Valid @RequestBody UnassignResourceRequestDto requestDto) {
+
+        // Create command from path variables and DTO
+        UnassignResourceCommand command = new UnassignResourceCommand(assignmentId, assignmentId, resourceId, requestDto);
+
+        // Validate command
+        var validationResult = unassignResourceCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<UnassignResourceCommand, ResourceAssignmentResponseDto> handler =
+                commandHandlerRegistry.findHandler(UnassignResourceCommand.class);
+        ResourceAssignmentResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Resource unassignment request processed");
     }
 }

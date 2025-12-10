@@ -2520,7 +2520,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 13.2: Unassign Resource Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `DELETE /api/assignments/{assignmentId}/resources/{resourceId}`
@@ -2530,8 +2530,8 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UnassignResourceRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testUnassignResource_WithValidData_ProducesEvent()` - Verify event contains assignmentId, resourceId, endTime
-- ⏳ `testUnassignResource_WithMissingEndTime_Returns400()` - Validation error, no event produced
+- ✅ `testUnassignResource_WithValidData_ProducesEvent()` - Verify event contains assignmentId, resourceId, endTime
+- ✅ `testUnassignResource_WithMissingEndTime_Returns400()` - Validation error, no event produced
 - Event assertions: assignmentId used as Kafka key; endTime ISO-8601 required
 
 **Implementation Plan**:
@@ -2539,6 +2539,12 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Add command + validator (payload only) and handler producing `UnassignResourceRequested` to `resource-assignment-events` keyed by assignmentId
 - Expose controller `DELETE /api/v1/assignments/{assignmentId}/resources/{resourceId}` accepting body with endTime, returning 200 with message
 - Add event model to `common.events.resourceassignment`
+
+**Completion Notes**:
+- All tests passing (2/2 in AssignmentControllerTest)
+- Tests verify Kafka event production with proper event structure, metadata, and validation
+- Event published to `resource-assignment-events` topic keyed by assignmentId
+- Validation ensures endTime is required and properly formatted
 
 **Demo Suggestion**:
 1. Show DELETE /api/assignments/{assignmentId}/resources/{resourceId} request
