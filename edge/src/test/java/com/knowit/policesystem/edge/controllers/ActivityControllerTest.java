@@ -5,11 +5,13 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.activities.ChangeActivityStatusRequested;
 import com.knowit.policesystem.common.events.activities.CompleteActivityRequested;
 import com.knowit.policesystem.common.events.activities.StartActivityRequested;
+import com.knowit.policesystem.common.events.activities.UpdateActivityRequested;
 import com.knowit.policesystem.edge.domain.ActivityStatus;
 import com.knowit.policesystem.edge.domain.ActivityType;
 import com.knowit.policesystem.edge.dto.ChangeActivityStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteActivityRequestDto;
 import com.knowit.policesystem.edge.dto.StartActivityRequestDto;
+import com.knowit.policesystem.edge.dto.UpdateActivityRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -41,6 +43,7 @@ import java.util.Properties;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -361,6 +364,63 @@ class ActivityControllerTest {
 
         // When - call REST API
         mockMvc.perform(patch("/api/v1/activities/{activityId}/status", "ACT-008")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateActivity_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String activityId = "ACT-009";
+        String description = "Updated description for activity";
+        UpdateActivityRequestDto request = new UpdateActivityRequestDto(description);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/activities/{activityId}", activityId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.activityId").value(activityId))
+                .andExpect(jsonPath("$.message").value("Activity update request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(activityId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        UpdateActivityRequested event = eventObjectMapper.readValue(record.value(), UpdateActivityRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(activityId);
+        assertThat(event.getActivityId()).isEqualTo(activityId);
+        assertThat(event.getDescription()).isEqualTo(description);
+        assertThat(event.getEventType()).isEqualTo("UpdateActivityRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testUpdateActivity_WithBlankDescription_Returns400() throws Exception {
+        // Given - blank description should be rejected
+        String activityId = "ACT-010";
+        String requestJson = """
+                {
+                    "description": "   "
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(put("/api/v1/activities/{activityId}", activityId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());

@@ -2077,7 +2077,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 9.4: Update Activity Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `PUT /api/activities/{activityId}`
@@ -2087,15 +2087,16 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `UpdateActivityRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testUpdateActivity_WithValidData_ProducesEvent()` - Verify event includes activityId and description
-- ⏳ `testUpdateActivity_WithBlankDescription_Returns400()` - Validation error for blank description
+- ✅ `testUpdateActivity_WithValidData_ProducesEvent()` - Verify event includes activityId and description
+- ✅ `testUpdateActivity_WithBlankDescription_Returns400()` - Validation error for blank description
 - Event assertions: activityId used as Kafka key; description optional but non-blank if provided
 
-**Implementation Plan**:
-- Add `UpdateActivityRequestDto` allowing optional non-blank description
-- Add command + validator (payload only) and handler producing `UpdateActivityRequested` to `activity-events` keyed by activityId
-- Expose controller `PUT /api/v1/activities/{activityId}` returning 200 with `{ activityId, message }`
-- Add event model to `common.events.activities`
+**Implementation Summary**:
+- Added `UpdateActivityRequestDto` with optional description enforcing non-blank when present
+- Added `UpdateActivityCommand`, validator, and handler publishing `UpdateActivityRequested` to `activity-events` keyed by activityId
+- Added `UpdateActivityRequested` event in `common.events.activities`
+- Exposed `PUT /api/v1/activities/{activityId}` in `ActivityController` returning 200 with activityId + message
+- All tests passing (10/10 in ActivityControllerTest) and full regression suite passing
 
 **Demo Suggestion**:
 1. Show PUT `/api/v1/activities/{activityId}` request
