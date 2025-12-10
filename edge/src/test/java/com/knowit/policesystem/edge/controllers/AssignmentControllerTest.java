@@ -3,9 +3,11 @@ package com.knowit.policesystem.edge.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.assignments.CreateAssignmentRequested;
+import com.knowit.policesystem.common.events.assignments.CompleteAssignmentRequested;
 import com.knowit.policesystem.edge.domain.AssignmentStatus;
 import com.knowit.policesystem.edge.domain.AssignmentType;
 import com.knowit.policesystem.edge.dto.CreateAssignmentRequestDto;
+import com.knowit.policesystem.edge.dto.CompleteAssignmentRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -377,5 +379,80 @@ class AssignmentControllerTest {
         ConsumerRecord<String, String> record = records.iterator().next();
         CreateAssignmentRequested event = eventObjectMapper.readValue(record.value(), CreateAssignmentRequested.class);
         assertThat(event.getStatus()).isEqualTo("In-Progress");
+    }
+
+    @Test
+    void testCompleteAssignment_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-010";
+        Instant completedTime = Instant.now();
+        CompleteAssignmentRequestDto request = new CompleteAssignmentRequestDto(completedTime);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/complete", assignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.assignmentId").value(assignmentId))
+                .andExpect(jsonPath("$.message").value("Assignment completion request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(assignmentId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        CompleteAssignmentRequested event = eventObjectMapper.readValue(record.value(), CompleteAssignmentRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(assignmentId);
+        assertThat(event.getAssignmentId()).isEqualTo(assignmentId);
+        assertThat(event.getCompletedTime()).isEqualTo(completedTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getEventType()).isEqualTo("CompleteAssignmentRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void testCompleteAssignment_WithMissingCompletedTime_Returns400() throws Exception {
+        // Given - missing completedTime in request body
+        String requestJson = """
+                {
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/complete", "ASSIGN-011")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testCompleteAssignment_WithNullCompletedTime_Returns400() throws Exception {
+        // Given - null completedTime in request body
+        String requestJson = """
+                {
+                    "completedTime": null
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(post("/api/v1/assignments/{assignmentId}/complete", "ASSIGN-012")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
     }
 }

@@ -2186,29 +2186,35 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 10.2: Complete Assignment Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/assignments/{assignmentId}/complete`
-- Request body: `{ completedTime }`
-- Response: `200 OK`
+- REST API: `POST /api/v1/assignments/{assignmentId}/complete`
+- Request body: `{ completedTime }` (ISO-8601 date-time, required)
+- Response: `200 OK` with `SuccessResponse<AssignmentResponseDto>`
 - Produces event: `CompleteAssignmentRequested` to Kafka topic `assignment-events`
-- Test criteria: Verify `CompleteAssignmentRequested` event appears in Kafka
+- Test criteria: Verify `CompleteAssignmentRequested` event appears in Kafka with correct data
 
 **Test Criteria**:
-- ⏳ `testCompleteAssignment_WithValidData_ProducesEvent()` - Verify event contains assignmentId and completedTime
-- ⏳ `testCompleteAssignment_WithMissingCompletedTime_Returns400()` - Validation error, no event produced
+- ✅ `testCompleteAssignment_WithValidData_ProducesEvent()` - Verify event contains assignmentId and completedTime
+- ✅ `testCompleteAssignment_WithMissingCompletedTime_Returns400()` - Validation error, no event produced
+- ✅ `testCompleteAssignment_WithNullCompletedTime_Returns400()` - Null completedTime validation error, no event produced
 - Event assertions: assignmentId used as Kafka key; completedTime ISO-8601 required
 
-**Implementation Plan**:
-- Add `CompleteAssignmentRequestDto` requiring `completedTime`
-- Add command + validator (payload only) and handler producing `CompleteAssignmentRequested` to `assignment-events` keyed by assignmentId
-- Expose controller `POST /api/v1/assignments/{assignmentId}/complete` returning 200 with message
-- Add event model to `common.events.assignments`
+**Implementation Details**:
+- Created `CompleteAssignmentRequestDto` with required `completedTime` field and `@JsonFormat` annotation for ISO-8601 date-time format
+- Created `CompleteAssignmentCommand`, `CompleteAssignmentCommandValidator`, and `CompleteAssignmentCommandHandler` publishing `CompleteAssignmentRequested` to `assignment-events` keyed by assignmentId
+- Created `CompleteAssignmentRequested` event in `common.events.assignments` package
+- Added `POST /api/v1/assignments/{assignmentId}/complete` endpoint to `AssignmentController` returning 200 OK with message "Assignment completion request processed"
+- Validator validates assignmentId (from path) and completedTime (from request body)
+- All tests passing (10/10 in AssignmentControllerTest) and full regression suite passing (240 tests)
+- Tests verify Kafka event production with proper event structure, metadata, and validation
 
 **Demo Suggestion**:
-1. Show POST /api/assignments/{assignmentId}/complete request
-2. Show CompleteAssignmentRequested event
+1. Show `POST /api/v1/assignments/{assignmentId}/complete` request with curl/Postman
+2. Show 200 OK response
+3. Show `CompleteAssignmentRequested` event in Kafka topic `assignment-events` (keyed by assignmentId)
+4. Show validation error example (missing completedTime)
 
 ---
 
