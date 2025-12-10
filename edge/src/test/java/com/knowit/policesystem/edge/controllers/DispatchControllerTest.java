@@ -2,9 +2,11 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.dispatches.ChangeDispatchStatusRequested;
 import com.knowit.policesystem.common.events.dispatches.CreateDispatchRequested;
 import com.knowit.policesystem.edge.domain.DispatchStatus;
 import com.knowit.policesystem.edge.domain.DispatchType;
+import com.knowit.policesystem.edge.dto.ChangeDispatchStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CreateDispatchRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -35,6 +37,7 @@ import java.util.Collections;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -186,6 +189,101 @@ class DispatchControllerTest {
 
         // When - call REST API
         mockMvc.perform(post("/api/v1/dispatches")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeDispatchStatus_WithValidStatus_ProducesEvent() throws Exception {
+        // Given
+        String dispatchId = "DISP-013";
+        ChangeDispatchStatusRequestDto request = new ChangeDispatchStatusRequestDto(DispatchStatus.Sent);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/dispatches/{dispatchId}/status", dispatchId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dispatchId").value(dispatchId))
+                .andExpect(jsonPath("$.message").value("Dispatch status change request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(dispatchId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        // Deserialize and verify event data
+        ChangeDispatchStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeDispatchStatusRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(dispatchId);
+        assertThat(event.getDispatchId()).isEqualTo(dispatchId);
+        assertThat(event.getStatus()).isEqualTo("Sent");
+        assertThat(event.getEventType()).isEqualTo("ChangeDispatchStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Test other status values
+        testStatusConversion(dispatchId + "-1", DispatchStatus.Created, "Created");
+        testStatusConversion(dispatchId + "-2", DispatchStatus.Acknowledged, "Acknowledged");
+        testStatusConversion(dispatchId + "-3", DispatchStatus.Completed, "Completed");
+        testStatusConversion(dispatchId + "-4", DispatchStatus.Cancelled, "Cancelled");
+    }
+
+    private void testStatusConversion(String dispatchId, DispatchStatus status, String expectedStatusString) throws Exception {
+        ChangeDispatchStatusRequestDto request = new ChangeDispatchStatusRequestDto(status);
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/dispatches/{dispatchId}/status", dispatchId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        ChangeDispatchStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeDispatchStatusRequested.class);
+        assertThat(event.getStatus()).isEqualTo(expectedStatusString);
+    }
+
+    @Test
+    void testChangeDispatchStatus_WithMissingStatus_Returns400() throws Exception {
+        // Given - missing status in request body
+        String requestJson = """
+                {
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/dispatches/{dispatchId}/status", "DISP-014")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeDispatchStatus_WithInvalidStatusEnum_Returns400() throws Exception {
+        // Given - invalid status enum value
+        String requestJson = """
+                {
+                    "status": "InvalidStatus"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/dispatches/{dispatchId}/status", "DISP-015")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());

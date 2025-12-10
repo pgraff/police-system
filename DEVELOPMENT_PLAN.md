@@ -2446,30 +2446,35 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 12.2: Change Dispatch Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `PATCH /api/dispatches/{dispatchId}/status`
+- REST API: `PATCH /api/v1/dispatches/{dispatchId}/status`
 - Request body: `{ status }`
 - Response: `200 OK`
 - Produces event: `ChangeDispatchStatusRequested` to Kafka topic `dispatch-events`
 - Test criteria: Verify `ChangeDispatchStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testChangeDispatchStatus_WithValidStatus_ProducesEvent()` - Verify event contains dispatchId and status
-- ⏳ `testChangeDispatchStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
-- ⏳ `testChangeDispatchStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected
+- ✅ `testChangeDispatchStatus_WithValidStatus_ProducesEvent()` - Verify event contains dispatchId and status (tests all enum values: Created, Sent, Acknowledged, Completed, Cancelled)
+- ✅ `testChangeDispatchStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ✅ `testChangeDispatchStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
 - Event assertions: dispatchId used as Kafka key
 
-**Implementation Plan**:
-- Add `ChangeDispatchStatusRequestDto` requiring status enum
-- Add command + validator (payload only) and handler producing `ChangeDispatchStatusRequested` to `dispatch-events` keyed by dispatchId
-- Expose controller `PATCH /api/v1/dispatches/{dispatchId}/status` returning 200 with status echoed
-- Add event model to `common.events.dispatches`
+**Implementation Details**:
+- Created `ChangeDispatchStatusRequestDto` with required `status` field of type `DispatchStatus` enum
+- Created `ChangeDispatchStatusCommand`, `ChangeDispatchStatusCommandValidator`, and `ChangeDispatchStatusCommandHandler` publishing `ChangeDispatchStatusRequested` to `dispatch-events` keyed by dispatchId
+- Created `ChangeDispatchStatusRequested` event in `common.events.dispatches` package
+- Added `PATCH /api/v1/dispatches/{dispatchId}/status` endpoint to `DispatchController` returning 200 OK with message "Dispatch status change request processed"
+- Validator validates dispatchId (from path) and status (from request body)
+- All tests passing (6/6 in DispatchControllerTest) - 3 existing + 3 new tests
+- Tests verify Kafka event production with proper event structure, metadata, and validation
 
 **Demo Suggestion**:
-1. Show PATCH /api/dispatches/{dispatchId}/status request
-2. Show ChangeDispatchStatusRequested event
+1. Show `PATCH /api/v1/dispatches/{dispatchId}/status` request with curl/Postman
+2. Show 200 OK response
+3. Show `ChangeDispatchStatusRequested` event in Kafka topic `dispatch-events` (keyed by dispatchId)
+4. Show validation error example (missing status or invalid enum)
 
 ---
 
