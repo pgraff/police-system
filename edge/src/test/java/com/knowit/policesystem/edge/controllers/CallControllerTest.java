@@ -2,6 +2,7 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.calls.ArriveAtCallRequested;
 import com.knowit.policesystem.common.events.calls.ClearCallRequested;
 import com.knowit.policesystem.common.events.calls.ChangeCallStatusRequested;
@@ -20,7 +21,11 @@ import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToDispatchRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import com.knowit.policesystem.edge.services.calls.CallExistenceService;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -63,7 +68,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for CallController.
- * Tests the full flow from REST API call to Kafka event production.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
 @AutoConfigureMockMvc
@@ -77,9 +82,14 @@ class CallControllerTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -96,10 +106,11 @@ class CallControllerTest {
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "call-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -128,9 +139,26 @@ class CallControllerTest {
 
         callExistenceService.clear();
 
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            // Stream may already exist, continue
+        }
     }
 
     @AfterEach
+    void tearDown() throws Exception {
+        if (consumer != null) {
+            consumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
+        }
+    }
     void tearDown() {
         if (consumer != null) {
             consumer.close();
@@ -185,6 +213,34 @@ class CallControllerTest {
         assertThat(event.getCallType()).isEqualTo("Emergency");
         assertThat(event.getEventType()).isEqualTo("ReceiveCallRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ReceiveCallRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ReceiveCallRequested msgEvent = eventObjectMapper.readValue(msgJson, ReceiveCallRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ReceiveCallRequested");
     }
 
     @Test
@@ -263,6 +319,35 @@ class CallControllerTest {
 
         DispatchCallRequested event = eventObjectMapper.readValue(record.value(), DispatchCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("DispatchCallRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        DispatchCallRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                DispatchCallRequested msgEvent = eventObjectMapper.readValue(msgJson, DispatchCallRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("DispatchCallRequested");
         assertThat(event.getCallId()).isEqualTo(callId);
         assertThat(event.getDispatchedTime()).isEqualTo(dispatchedTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getAggregateId()).isEqualTo(callId);
@@ -314,6 +399,35 @@ class CallControllerTest {
 
         ArriveAtCallRequested event = eventObjectMapper.readValue(record.value(), ArriveAtCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("ArriveAtCallRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ArriveAtCallRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ArriveAtCallRequested msgEvent = eventObjectMapper.readValue(msgJson, ArriveAtCallRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ArriveAtCallRequested");
         assertThat(event.getCallId()).isEqualTo(callId);
         assertThat(event.getArrivedTime()).isEqualTo(arrivedTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getAggregateId()).isEqualTo(callId);
@@ -365,6 +479,35 @@ class CallControllerTest {
 
         ClearCallRequested event = eventObjectMapper.readValue(record.value(), ClearCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("ClearCallRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ClearCallRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ClearCallRequested msgEvent = eventObjectMapper.readValue(msgJson, ClearCallRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ClearCallRequested");
         assertThat(event.getCallId()).isEqualTo(callId);
         assertThat(event.getClearedTime()).isEqualTo(clearedTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getAggregateId()).isEqualTo(callId);
@@ -415,6 +558,35 @@ class CallControllerTest {
 
         ChangeCallStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeCallStatusRequested.class);
         assertThat(event.getEventType()).isEqualTo("ChangeCallStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ChangeCallStatusRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ChangeCallStatusRequested msgEvent = eventObjectMapper.readValue(msgJson, ChangeCallStatusRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ChangeCallStatusRequested");
         assertThat(event.getCallId()).isEqualTo(callId);
         assertThat(event.getStatus()).isEqualTo(status);
         assertThat(event.getAggregateId()).isEqualTo(callId);
@@ -470,6 +642,35 @@ class CallControllerTest {
 
         UpdateCallRequested event = eventObjectMapper.readValue(record.value(), UpdateCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("UpdateCallRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        UpdateCallRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdateCallRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdateCallRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdateCallRequested");
         assertThat(event.getCallId()).isEqualTo(callId);
         assertThat(event.getPriority()).isEqualTo("High");
         assertThat(event.getDescription()).isEqualTo(description);
@@ -553,6 +754,34 @@ class CallControllerTest {
         assertThat(event.getIncidentId()).isEqualTo(incidentId);
         assertThat(event.getEventType()).isEqualTo("LinkCallToIncidentRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        LinkCallToIncidentRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                LinkCallToIncidentRequested msgEvent = eventObjectMapper.readValue(msgJson, LinkCallToIncidentRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("LinkCallToIncidentRequested");
     }
 
     @Test
@@ -633,6 +862,34 @@ class CallControllerTest {
         assertThat(event.getDispatchId()).isEqualTo(dispatchId);
         assertThat(event.getEventType()).isEqualTo("LinkCallToDispatchRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        LinkCallToDispatchRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                LinkCallToDispatchRequested msgEvent = eventObjectMapper.readValue(msgJson, LinkCallToDispatchRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("LinkCallToDispatchRequested");
     }
 
     @Test

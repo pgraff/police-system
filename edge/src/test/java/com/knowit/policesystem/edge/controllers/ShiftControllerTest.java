@@ -2,9 +2,11 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.officershifts.CheckInOfficerRequested;
 import com.knowit.policesystem.common.events.officershifts.CheckOutOfficerRequested;
 import com.knowit.policesystem.common.events.officershifts.UpdateOfficerShiftRequested;
+import com.knowit.policesystem.common.events.shifts.ChangeShiftStatusRequested;
 import com.knowit.policesystem.common.events.shifts.EndShiftRequested;
 import com.knowit.policesystem.common.events.shifts.RecordShiftChangeRequested;
 import com.knowit.policesystem.common.events.shifts.StartShiftRequested;
@@ -18,6 +20,10 @@ import com.knowit.policesystem.edge.dto.UpdateOfficerShiftRequestDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -55,7 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for ShiftController.
- * Tests the flow from REST API call to Kafka event production.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
 @AutoConfigureMockMvc
@@ -68,9 +74,14 @@ class ShiftControllerTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -82,11 +93,12 @@ class ShiftControllerTest {
     private Consumer<String, String> consumer;
     private Consumer<String, String> officerShiftConsumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "shift-events";
     private static final String OFFICER_SHIFT_TOPIC = "officer-shift-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
         eventObjectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -126,15 +138,28 @@ class ShiftControllerTest {
         do {
             existingOfficerShiftRecords = officerShiftConsumer.poll(Duration.ofMillis(100));
         } while (!existingOfficerShiftRecords.isEmpty());
+
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            // Stream may already exist, continue
+        }
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         if (consumer != null) {
             consumer.close();
         }
         if (officerShiftConsumer != null) {
             officerShiftConsumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
         }
     }
 
@@ -180,6 +205,34 @@ class ShiftControllerTest {
         assertThat(event.getStatus()).isEqualTo("Started");
         assertThat(event.getEventType()).isEqualTo("StartShiftRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        StartShiftRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                StartShiftRequested msgEvent = eventObjectMapper.readValue(msgJson, StartShiftRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("StartShiftRequested");
     }
 
     @Test
@@ -285,6 +338,34 @@ class ShiftControllerTest {
         assertThat(event.getEndTime()).isEqualTo(endTime);
         assertThat(event.getEventType()).isEqualTo("EndShiftRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        EndShiftRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                EndShiftRequested msgEvent = eventObjectMapper.readValue(msgJson, EndShiftRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("EndShiftRequested");
     }
 
     @Test
@@ -334,6 +415,34 @@ class ShiftControllerTest {
         assertThat(event.getStatus()).isEqualTo("In-Progress");
         assertThat(event.getEventType()).isEqualTo("ChangeShiftStatusRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ChangeShiftStatusRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ChangeShiftStatusRequested msgEvent = eventObjectMapper.readValue(msgJson, ChangeShiftStatusRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ChangeShiftStatusRequested");
     }
 
     @Test
@@ -409,6 +518,34 @@ class ShiftControllerTest {
         assertThat(event.getNotes()).isEqualTo(notes);
         assertThat(event.getEventType()).isEqualTo("RecordShiftChangeRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        RecordShiftChangeRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                RecordShiftChangeRequested msgEvent = eventObjectMapper.readValue(msgJson, RecordShiftChangeRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("RecordShiftChangeRequested");
     }
 
     @Test
@@ -484,6 +621,34 @@ class ShiftControllerTest {
         assertThat(event.getShiftRoleType()).isEqualTo("Regular");
         assertThat(event.getEventType()).isEqualTo("CheckInOfficerRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        CheckInOfficerRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                CheckInOfficerRequested msgEvent = eventObjectMapper.readValue(msgJson, CheckInOfficerRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("CheckInOfficerRequested");
     }
 
     @Test
@@ -559,6 +724,34 @@ class ShiftControllerTest {
         assertThat(event.getCheckOutTime()).isEqualTo(checkOutTime);
         assertThat(event.getEventType()).isEqualTo("CheckOutOfficerRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        CheckOutOfficerRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                CheckOutOfficerRequested msgEvent = eventObjectMapper.readValue(msgJson, CheckOutOfficerRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("CheckOutOfficerRequested");
     }
 
     @Test
@@ -610,6 +803,34 @@ class ShiftControllerTest {
         assertThat(event.getShiftRoleType()).isEqualTo("Supervisor");
         assertThat(event.getEventType()).isEqualTo("UpdateOfficerShiftRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        UpdateOfficerShiftRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdateOfficerShiftRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdateOfficerShiftRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdateOfficerShiftRequested");
     }
 
     @Test

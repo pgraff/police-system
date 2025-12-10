@@ -2,6 +2,7 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.activities.ChangeActivityStatusRequested;
 import com.knowit.policesystem.common.events.activities.CompleteActivityRequested;
 import com.knowit.policesystem.common.events.activities.LinkActivityToIncidentRequested;
@@ -14,6 +15,10 @@ import com.knowit.policesystem.edge.dto.CompleteActivityRequestDto;
 import com.knowit.policesystem.edge.dto.LinkActivityToIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.StartActivityRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateActivityRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -50,7 +55,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for ActivityController.
- * Tests the full flow from REST API call to Kafka event production.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
 @AutoConfigureMockMvc
@@ -63,9 +68,14 @@ class ActivityControllerTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -79,10 +89,11 @@ class ActivityControllerTest {
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "activity-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -108,12 +119,25 @@ class ActivityControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            // Stream may already exist, continue
+        }
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         if (consumer != null) {
             consumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
         }
     }
 
@@ -160,6 +184,34 @@ class ActivityControllerTest {
         assertThat(event.getStatus()).isEqualTo("In-Progress");
         assertThat(event.getEventType()).isEqualTo("StartActivityRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        StartActivityRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                StartActivityRequested msgEvent = eventObjectMapper.readValue(msgJson, StartActivityRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("StartActivityRequested");
     }
 
     @Test
@@ -260,6 +312,34 @@ class ActivityControllerTest {
         assertThat(event.getCompletedTime()).isEqualTo(completedTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("CompleteActivityRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        CompleteActivityRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                CompleteActivityRequested msgEvent = eventObjectMapper.readValue(msgJson, CompleteActivityRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("CompleteActivityRequested");
     }
 
     @Test
@@ -314,6 +394,34 @@ class ActivityControllerTest {
         assertThat(event.getStatus()).isEqualTo("In-Progress");
         assertThat(event.getEventType()).isEqualTo("ChangeActivityStatusRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ChangeActivityStatusRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ChangeActivityStatusRequested msgEvent = eventObjectMapper.readValue(msgJson, ChangeActivityStatusRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ChangeActivityStatusRequested");
 
         // Test other status values
         testStatusConversion(activityId + "-1", ActivityStatus.Started, "Started");
@@ -409,6 +517,34 @@ class ActivityControllerTest {
         assertThat(event.getDescription()).isEqualTo(description);
         assertThat(event.getEventType()).isEqualTo("UpdateActivityRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        UpdateActivityRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdateActivityRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdateActivityRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdateActivityRequested");
     }
 
     @Test
@@ -468,6 +604,34 @@ class ActivityControllerTest {
         assertThat(event.getIncidentId()).isEqualTo(incidentId);
         assertThat(event.getEventType()).isEqualTo("LinkActivityToIncidentRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        LinkActivityToIncidentRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                LinkActivityToIncidentRequested msgEvent = eventObjectMapper.readValue(msgJson, LinkActivityToIncidentRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("LinkActivityToIncidentRequested");
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
@@ -26,9 +27,14 @@ class EdgeModuleTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Test

@@ -14,6 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -41,9 +42,14 @@ class RestApiInfrastructureTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired

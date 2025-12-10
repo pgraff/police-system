@@ -2,6 +2,7 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.officers.ChangeOfficerStatusRequested;
 import com.knowit.policesystem.common.events.officers.RegisterOfficerRequested;
 import com.knowit.policesystem.common.events.officers.UpdateOfficerRequested;
@@ -9,6 +10,10 @@ import com.knowit.policesystem.edge.domain.OfficerStatus;
 import com.knowit.policesystem.edge.dto.ChangeOfficerStatusRequestDto;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -30,6 +35,8 @@ import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -44,9 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for OfficerController.
- * Tests the full flow from REST API call to Kafka event production.
- * Note: NATS/JetStream verification is not included as NATS is disabled in test profile.
- * The DualEventPublisher will still attempt to publish to NATS, but it will be disabled.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -59,9 +64,14 @@ class OfficerControllerTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -70,12 +80,15 @@ class OfficerControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    private static final Logger logger = LoggerFactory.getLogger(OfficerControllerTest.class);
+    
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "officer-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -101,12 +114,27 @@ class OfficerControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        // This ensures the stream exists when events are published to any command subject
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            // Log but don't fail - stream may already exist
+            logger.warn("Error pre-creating NATS stream", e);
+        }
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         if (consumer != null) {
             consumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
         }
     }
 
@@ -125,6 +153,13 @@ class OfficerControllerTest {
                 hireDate,
                 OfficerStatus.Active
         );
+
+        // Prepare NATS subscription before API call to ensure we don't miss the message
+        String expectedNatsSubject = "commands.officer.register";
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(expectedNatsSubject);
+        
+        // Request messages from pull subscription
+        natsSubscription.pull(1);
 
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
@@ -160,6 +195,32 @@ class OfficerControllerTest {
         assertThat(event.getStatus()).isEqualTo("Active");
         assertThat(event.getEventType()).isEqualTo("RegisterOfficerRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event) if subscription was prepared
+        if (natsSubscription != null) {
+            String natsSubject = EventClassification.generateNatsSubject(event);
+            assertThat(natsSubject).isEqualTo(expectedNatsSubject);
+            
+            // Wait for async publish to complete and message to be available in stream
+            // The publish happens asynchronously, so we need to wait a bit
+            Thread.sleep(1000);
+            
+            // Request another pull in case the first one didn't get the message
+            natsSubscription.pull(1);
+            
+            // Get message from the prepared subscription
+            Message natsMsg = natsSubscription.nextMessage(Duration.ofSeconds(5));
+            assertThat(natsMsg).isNotNull();
+            
+            // Deserialize and verify NATS event
+            String natsEventJson = new String(natsMsg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+            RegisterOfficerRequested natsEvent = eventObjectMapper.readValue(natsEventJson, RegisterOfficerRequested.class);
+            natsMsg.ack();
+            
+            assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+            assertThat(natsEvent.getBadgeNumber()).isEqualTo(badgeNumber);
+            assertThat(natsEvent.getEventType()).isEqualTo("RegisterOfficerRequested");
+        }
     }
 
     @Test

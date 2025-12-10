@@ -2,6 +2,7 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.units.ChangeUnitStatusRequested;
 import com.knowit.policesystem.common.events.units.CreateUnitRequested;
 import com.knowit.policesystem.common.events.units.UpdateUnitRequested;
@@ -10,6 +11,10 @@ import com.knowit.policesystem.edge.domain.UnitType;
 import com.knowit.policesystem.edge.dto.ChangeUnitStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CreateUnitRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateUnitRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -44,9 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for UnitController.
- * Tests the full flow from REST API call to Kafka event production.
- * Note: NATS/JetStream verification is not included as NATS is disabled in test profile.
- * The DualEventPublisher will still attempt to publish to NATS, but it will be disabled.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -59,9 +62,14 @@ class UnitControllerTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -72,10 +80,11 @@ class UnitControllerTest {
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "unit-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -101,12 +110,25 @@ class UnitControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            // Stream may already exist, continue
+        }
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         if (consumer != null) {
             consumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
         }
     }
 
@@ -148,6 +170,36 @@ class UnitControllerTest {
         assertThat(event.getStatus()).isEqualTo("Available");
         assertThat(event.getEventType()).isEqualTo("CreateUnitRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        // Consume messages until we find the one with matching eventId
+        Message natsMsg = null;
+        CreateUnitRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                CreateUnitRequested msgEvent = eventObjectMapper.readValue(msgJson, CreateUnitRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getUnitId()).isEqualTo(unitId);
+        assertThat(natsEvent.getEventType()).isEqualTo("CreateUnitRequested");
     }
 
     @Test
@@ -273,6 +325,36 @@ class UnitControllerTest {
         assertThat(event.getStatus()).isEqualTo("Assigned");
         assertThat(event.getEventType()).isEqualTo("UpdateUnitRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        // Consume messages until we find the one with matching eventId
+        Message natsMsg = null;
+        UpdateUnitRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdateUnitRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdateUnitRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getUnitId()).isEqualTo(unitId);
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdateUnitRequested");
     }
 
     @Test
@@ -458,6 +540,36 @@ class UnitControllerTest {
         assertThat(event.getStatus()).isEqualTo(status);
         assertThat(event.getEventType()).isEqualTo("ChangeUnitStatusRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        // Consume messages until we find the one with matching eventId
+        Message natsMsg = null;
+        ChangeUnitStatusRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ChangeUnitStatusRequested msgEvent = eventObjectMapper.readValue(msgJson, ChangeUnitStatusRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getUnitId()).isEqualTo(unitId);
+        assertThat(natsEvent.getEventType()).isEqualTo("ChangeUnitStatusRequested");
     }
 
     @Test

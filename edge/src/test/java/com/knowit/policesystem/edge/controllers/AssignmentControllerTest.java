@@ -2,12 +2,14 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.knowit.policesystem.common.events.assignments.CreateAssignmentRequested;
-import com.knowit.policesystem.common.events.assignments.CompleteAssignmentRequested;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.assignments.ChangeAssignmentStatusRequested;
+import com.knowit.policesystem.common.events.assignments.CompleteAssignmentRequested;
+import com.knowit.policesystem.common.events.assignments.CreateAssignmentRequested;
+import com.knowit.policesystem.common.events.assignments.LinkAssignmentToDispatchRequested;
 import com.knowit.policesystem.common.events.resourceassignment.AssignResourceRequested;
-import com.knowit.policesystem.common.events.resourceassignment.UnassignResourceRequested;
 import com.knowit.policesystem.common.events.resourceassignment.ChangeResourceAssignmentStatusRequested;
+import com.knowit.policesystem.common.events.resourceassignment.UnassignResourceRequested;
 import com.knowit.policesystem.edge.domain.AssignmentStatus;
 import com.knowit.policesystem.edge.domain.AssignmentType;
 import com.knowit.policesystem.edge.domain.ResourceType;
@@ -19,6 +21,10 @@ import com.knowit.policesystem.edge.dto.ChangeAssignmentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.AssignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.UnassignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeResourceAssignmentStatusRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -55,7 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for AssignmentController.
- * Tests the full flow from REST API call to Kafka event production.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
 @AutoConfigureMockMvc
@@ -68,9 +74,14 @@ class AssignmentControllerTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -82,11 +93,12 @@ class AssignmentControllerTest {
     private Consumer<String, String> consumer;
     private Consumer<String, String> resourceAssignmentConsumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "assignment-events";
     private static final String RESOURCE_ASSIGNMENT_TOPIC = "resource-assignment-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -132,15 +144,28 @@ class AssignmentControllerTest {
         do {
             existingResourceRecords = resourceAssignmentConsumer.poll(Duration.ofMillis(100));
         } while (!existingResourceRecords.isEmpty());
+
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            // Stream may already exist, continue
+        }
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         if (consumer != null) {
             consumer.close();
         }
         if (resourceAssignmentConsumer != null) {
             resourceAssignmentConsumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
         }
     }
 
@@ -189,6 +214,34 @@ class AssignmentControllerTest {
         assertThat(event.getCallId()).isNull();
         assertThat(event.getEventType()).isEqualTo("CreateAssignmentRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        CreateAssignmentRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                CreateAssignmentRequested msgEvent = eventObjectMapper.readValue(msgJson, CreateAssignmentRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("CreateAssignmentRequested");
     }
 
     @Test
@@ -453,6 +506,34 @@ class AssignmentControllerTest {
         assertThat(event.getCompletedTime()).isEqualTo(completedTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("CompleteAssignmentRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        CompleteAssignmentRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                CompleteAssignmentRequested msgEvent = eventObjectMapper.readValue(msgJson, CompleteAssignmentRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("CompleteAssignmentRequested");
     }
 
     @Test
@@ -527,6 +608,34 @@ class AssignmentControllerTest {
         assertThat(event.getStatus()).isEqualTo("In-Progress");
         assertThat(event.getEventType()).isEqualTo("ChangeAssignmentStatusRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ChangeAssignmentStatusRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ChangeAssignmentStatusRequested msgEvent = eventObjectMapper.readValue(msgJson, ChangeAssignmentStatusRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ChangeAssignmentStatusRequested");
 
         // Test other status values
         testStatusConversion(assignmentId + "-1", AssignmentStatus.Created, "Created");
@@ -626,6 +735,34 @@ class AssignmentControllerTest {
         assertThat(event.getDispatchId()).isEqualTo(dispatchId);
         assertThat(event.getEventType()).isEqualTo("LinkAssignmentToDispatchRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        LinkAssignmentToDispatchRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                LinkAssignmentToDispatchRequested msgEvent = eventObjectMapper.readValue(msgJson, LinkAssignmentToDispatchRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("LinkAssignmentToDispatchRequested");
     }
 
     @Test
@@ -711,6 +848,34 @@ class AssignmentControllerTest {
         assertThat(event.getStartTime()).isEqualTo(startTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("AssignResourceRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        AssignResourceRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                AssignResourceRequested msgEvent = eventObjectMapper.readValue(msgJson, AssignResourceRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("AssignResourceRequested");
     }
 
     @Test
@@ -758,6 +923,34 @@ class AssignmentControllerTest {
         assertThat(event.getStartTime()).isEqualTo(startTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("AssignResourceRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        AssignResourceRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                AssignResourceRequested msgEvent = eventObjectMapper.readValue(msgJson, AssignResourceRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("AssignResourceRequested");
     }
 
     @Test
@@ -805,6 +998,34 @@ class AssignmentControllerTest {
         assertThat(event.getStartTime()).isEqualTo(startTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("AssignResourceRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        AssignResourceRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                AssignResourceRequested msgEvent = eventObjectMapper.readValue(msgJson, AssignResourceRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("AssignResourceRequested");
     }
 
     @Test
@@ -945,6 +1166,34 @@ class AssignmentControllerTest {
         assertThat(event.getEndTime()).isEqualTo(endTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("UnassignResourceRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        UnassignResourceRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UnassignResourceRequested msgEvent = eventObjectMapper.readValue(msgJson, UnassignResourceRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("UnassignResourceRequested");
     }
 
     @Test
@@ -1001,6 +1250,34 @@ class AssignmentControllerTest {
         assertThat(event.getStatus()).isEqualTo("In-Progress");
         assertThat(event.getEventType()).isEqualTo("ChangeResourceAssignmentStatusRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        ChangeResourceAssignmentStatusRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                ChangeResourceAssignmentStatusRequested msgEvent = eventObjectMapper.readValue(msgJson, ChangeResourceAssignmentStatusRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("ChangeResourceAssignmentStatusRequested");
 
         // Test other status values
         testResourceAssignmentStatusConversion(assignmentId + "-1", resourceId + "-1", ResourceAssignmentStatus.Assigned, "Assigned");

@@ -2,12 +2,17 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.persons.RegisterPersonRequested;
 import com.knowit.policesystem.common.events.persons.UpdatePersonRequested;
 import com.knowit.policesystem.edge.domain.Gender;
 import com.knowit.policesystem.edge.domain.Race;
 import com.knowit.policesystem.edge.dto.RegisterPersonRequestDto;
 import com.knowit.policesystem.edge.dto.UpdatePersonRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -17,6 +22,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,9 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for PersonController.
- * Tests the full flow from REST API call to Kafka event production.
- * Note: NATS/JetStream verification is not included as NATS is disabled in test profile.
- * The DualEventPublisher will still attempt to publish to NATS, but it will be disabled.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -52,14 +57,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Testcontainers
 class PersonControllerTest {
 
+    private static final Logger logger = LoggerFactory.getLogger(PersonControllerTest.class);
+
     @Container
     static KafkaContainer kafka = new KafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -70,10 +82,11 @@ class PersonControllerTest {
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "person-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -99,12 +112,25 @@ class PersonControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            logger.warn("Error pre-creating NATS stream", e);
+        }
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         if (consumer != null) {
             consumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
         }
     }
 
@@ -155,6 +181,20 @@ class PersonControllerTest {
         assertThat(event.getPhoneNumber()).isNull();
         assertThat(event.getEventType()).isEqualTo("RegisterPersonRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        natsSubscription.pull(1);
+        Message natsMsg = natsSubscription.nextMessage(Duration.ofSeconds(5));
+        assertThat(natsMsg).isNotNull();
+        String natsEventJson = new String(natsMsg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+        RegisterPersonRequested natsEvent = eventObjectMapper.readValue(natsEventJson, RegisterPersonRequested.class);
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getPersonId()).isEqualTo(personId);
+        assertThat(natsEvent.getEventType()).isEqualTo("RegisterPersonRequested");
     }
 
     @Test
@@ -406,6 +446,10 @@ class PersonControllerTest {
                 "555-0200"
         );
 
+        // Prepare NATS subscription before API call to ensure we don't miss the message
+        String expectedNatsSubject = "commands.person.update";
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(expectedNatsSubject);
+
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(put("/api/v1/persons/{personId}", personId)
@@ -438,6 +482,39 @@ class PersonControllerTest {
         assertThat(event.getPhoneNumber()).isEqualTo("555-0200");
         assertThat(event.getEventType()).isEqualTo("UpdatePersonRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        assertThat(natsSubject).isEqualTo(expectedNatsSubject);
+        
+        // Wait for async publish to complete and message to be available in stream
+        Thread.sleep(1000);
+        
+        // Consume messages until we find the one with matching eventId
+        Message natsMsg = null;
+        UpdatePersonRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdatePersonRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdatePersonRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    // Not our message, ack it and continue
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getPersonId()).isEqualTo(personId);
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdatePersonRequested");
     }
 
     @Test

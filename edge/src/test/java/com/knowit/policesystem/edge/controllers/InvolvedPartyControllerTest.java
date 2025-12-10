@@ -2,12 +2,18 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.involvedparty.EndPartyInvolvementRequested;
 import com.knowit.policesystem.common.events.involvedparty.InvolvePartyRequested;
 import com.knowit.policesystem.common.events.involvedparty.UpdatePartyInvolvementRequested;
 import com.knowit.policesystem.edge.domain.PartyRoleType;
 import com.knowit.policesystem.edge.dto.EndPartyInvolvementRequestDto;
 import com.knowit.policesystem.edge.dto.InvolvePartyRequestDto;
+import com.knowit.policesystem.edge.dto.UpdatePartyInvolvementRequestDto;
+import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
+import io.nats.client.JetStreamSubscription;
+import io.nats.client.Message;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -43,7 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Integration tests for InvolvedPartyController.
- * Tests the full flow from REST API call to Kafka event production.
+ * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
 @SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
 @AutoConfigureMockMvc
@@ -56,9 +62,14 @@ class InvolvedPartyControllerTest {
             DockerImageName.parse("confluentinc/cp-kafka:latest")
     );
 
+    @Container
+    static NatsTestContainer nats = new NatsTestContainer();
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("nats.url", nats::getNatsUrl);
+        registry.add("nats.enabled", () -> "true");
     }
 
     @Autowired
@@ -69,10 +80,11 @@ class InvolvedPartyControllerTest {
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
+    private NatsTestHelper natsHelper;
     private static final String TOPIC = "involved-party-events";
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -98,12 +110,25 @@ class InvolvedPartyControllerTest {
         do {
             existingRecords = consumer.poll(Duration.ofMillis(100));
         } while (!existingRecords.isEmpty());
+
+        // Create NATS test helper
+        natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);
+        
+        // Pre-create a catch-all stream for all command subjects to ensure it exists before publishing
+        try {
+            natsHelper.ensureStreamForSubject("commands.>");
+        } catch (Exception e) {
+            // Stream may already exist, continue
+        }
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         if (consumer != null) {
             consumer.close();
+        }
+        if (natsHelper != null) {
+            natsHelper.close();
         }
     }
 
@@ -165,6 +190,34 @@ class InvolvedPartyControllerTest {
         assertThat(event.getInvolvementStartTime()).isEqualTo(involvementStartTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("InvolvePartyRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        InvolvePartyRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                InvolvePartyRequested msgEvent = eventObjectMapper.readValue(msgJson, InvolvePartyRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("InvolvePartyRequested");
     }
 
     @Test
@@ -225,6 +278,34 @@ class InvolvedPartyControllerTest {
         assertThat(event.getInvolvementStartTime()).isEqualTo(involvementStartTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("InvolvePartyRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        InvolvePartyRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                InvolvePartyRequested msgEvent = eventObjectMapper.readValue(msgJson, InvolvePartyRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("InvolvePartyRequested");
     }
 
     @Test
@@ -411,6 +492,34 @@ class InvolvedPartyControllerTest {
         assertThat(event.getInvolvementEndTime()).isEqualTo(involvementEndTime.truncatedTo(ChronoUnit.MILLIS));
         assertThat(event.getEventType()).isEqualTo("EndPartyInvolvementRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        EndPartyInvolvementRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                EndPartyInvolvementRequested msgEvent = eventObjectMapper.readValue(msgJson, EndPartyInvolvementRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("EndPartyInvolvementRequested");
     }
 
     @Test
@@ -471,6 +580,34 @@ class InvolvedPartyControllerTest {
         assertThat(event.getDescription()).isEqualTo("Updated involvement description");
         assertThat(event.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        UpdatePartyInvolvementRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdatePartyInvolvementRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdatePartyInvolvementRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
     }
 
     @Test
@@ -513,6 +650,34 @@ class InvolvedPartyControllerTest {
         assertThat(event.getDescription()).isNull();
         assertThat(event.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        UpdatePartyInvolvementRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdatePartyInvolvementRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdatePartyInvolvementRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
     }
 
     @Test
@@ -555,6 +720,34 @@ class InvolvedPartyControllerTest {
         assertThat(event.getDescription()).isEqualTo("Updated description only");
         assertThat(event.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
         assertThat(event.getVersion()).isEqualTo(1);
+
+        // Verify event also published to NATS (critical event)
+        String natsSubject = EventClassification.generateNatsSubject(event);
+        JetStreamSubscription natsSubscription = natsHelper.prepareSubscription(natsSubject);
+        Thread.sleep(1000);
+        
+        Message natsMsg = null;
+        UpdatePartyInvolvementRequested natsEvent = null;
+        for (int i = 0; i < 10; i++) {
+            natsSubscription.pull(1);
+            Message msg = natsSubscription.nextMessage(Duration.ofSeconds(2));
+            if (msg != null) {
+                String msgJson = new String(msg.getData(), java.nio.charset.StandardCharsets.UTF_8);
+                UpdatePartyInvolvementRequested msgEvent = eventObjectMapper.readValue(msgJson, UpdatePartyInvolvementRequested.class);
+                if (msgEvent.getEventId().equals(event.getEventId())) {
+                    natsMsg = msg;
+                    natsEvent = msgEvent;
+                    break;
+                } else {
+                    msg.ack();
+                }
+            }
+        }
+        
+        assertThat(natsMsg).isNotNull();
+        natsMsg.ack();
+        assertThat(natsEvent.getEventId()).isEqualTo(event.getEventId());
+        assertThat(natsEvent.getEventType()).isEqualTo("UpdatePartyInvolvementRequested");
     }
 
     @Test
