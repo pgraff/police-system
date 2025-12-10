@@ -1919,7 +1919,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 8.7: Link Call to Incident Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/calls/{callId}/incidents`
@@ -1929,8 +1929,9 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `LinkCallToIncidentRequested` event appears in Kafka with callId and incidentId
 
 **Test Criteria**:
-- ⏳ `testLinkCallToIncident_WithValidData_ProducesEvent()` - Verify event contains callId and incidentId
-- ⏳ `testLinkCallToIncident_WithMissingIncidentId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkCallToIncident_WithValidData_ProducesEvent()` - Verify event contains callId and incidentId
+- ✅ `testLinkCallToIncident_WithMissingIncidentId_Returns400()` - Validation error, no event produced
+- ✅ `testLinkCallToIncident_WithNonExistentCallId_Returns404()` - Non-existent call returns 404
 - Event assertions: callId used as Kafka key; incidentId required and non-blank
 
 **Implementation Plan**:

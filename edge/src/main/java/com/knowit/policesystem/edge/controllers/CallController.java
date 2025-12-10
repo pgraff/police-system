@@ -5,6 +5,7 @@ import com.knowit.policesystem.edge.commands.calls.ArriveAtCallCommand;
 import com.knowit.policesystem.edge.commands.calls.ChangeCallStatusCommand;
 import com.knowit.policesystem.edge.commands.calls.ClearCallCommand;
 import com.knowit.policesystem.edge.commands.calls.DispatchCallCommand;
+import com.knowit.policesystem.edge.commands.calls.LinkCallToIncidentCommand;
 import com.knowit.policesystem.edge.commands.calls.ReceiveCallCommand;
 import com.knowit.policesystem.edge.commands.calls.UpdateCallCommand;
 import com.knowit.policesystem.edge.dto.CallResponseDto;
@@ -12,6 +13,8 @@ import com.knowit.policesystem.edge.dto.ArriveAtCallRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeCallStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ClearCallRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
+import com.knowit.policesystem.edge.dto.LinkCallToIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.LinkCallToIncidentResponseDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateCallRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
@@ -19,6 +22,7 @@ import com.knowit.policesystem.edge.validation.calls.ArriveAtCallCommandValidato
 import com.knowit.policesystem.edge.validation.calls.ChangeCallStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ClearCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.DispatchCallCommandValidator;
+import com.knowit.policesystem.edge.validation.calls.LinkCallToIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ReceiveCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.UpdateCallCommandValidator;
 import jakarta.validation.Valid;
@@ -46,6 +50,7 @@ public class CallController extends BaseRestController {
     private final ClearCallCommandValidator clearCallCommandValidator;
     private final ChangeCallStatusCommandValidator changeCallStatusCommandValidator;
     private final UpdateCallCommandValidator updateCallCommandValidator;
+    private final LinkCallToIncidentCommandValidator linkCallToIncidentCommandValidator;
 
     /**
      * Creates a new call controller.
@@ -59,7 +64,8 @@ public class CallController extends BaseRestController {
                               ArriveAtCallCommandValidator arriveAtCallCommandValidator,
                               ClearCallCommandValidator clearCallCommandValidator,
                               ChangeCallStatusCommandValidator changeCallStatusCommandValidator,
-                              UpdateCallCommandValidator updateCallCommandValidator) {
+                              UpdateCallCommandValidator updateCallCommandValidator,
+                              LinkCallToIncidentCommandValidator linkCallToIncidentCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.dispatchCommandValidator = dispatchCommandValidator;
@@ -67,6 +73,7 @@ public class CallController extends BaseRestController {
         this.clearCallCommandValidator = clearCallCommandValidator;
         this.changeCallStatusCommandValidator = changeCallStatusCommandValidator;
         this.updateCallCommandValidator = updateCallCommandValidator;
+        this.linkCallToIncidentCommandValidator = linkCallToIncidentCommandValidator;
     }
 
     /**
@@ -227,5 +234,36 @@ public class CallController extends BaseRestController {
         CallResponseDto response = handler.handle(command);
 
         return success(response, "Call updated");
+    }
+
+    /**
+     * Links a call to an incident.
+     * Accepts incident link data, validates it, and publishes a LinkCallToIncidentRequested event to Kafka.
+     *
+     * @param callId the call ID from the path
+     * @param requestDto the incident link request DTO
+     * @return 200 OK with callId and incidentId
+     */
+    @PostMapping("/calls/{callId}/incidents")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<LinkCallToIncidentResponseDto>> linkCallToIncident(
+            @PathVariable String callId,
+            @Valid @RequestBody LinkCallToIncidentRequestDto requestDto) {
+
+        // Create command from DTO and path parameter
+        LinkCallToIncidentCommand command = new LinkCallToIncidentCommand(callId, callId, requestDto);
+
+        // Validate command
+        var validationResult = linkCallToIncidentCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        com.knowit.policesystem.edge.commands.CommandHandler<LinkCallToIncidentCommand, LinkCallToIncidentResponseDto> handler =
+                commandHandlerRegistry.findHandler(LinkCallToIncidentCommand.class);
+        LinkCallToIncidentResponseDto response = handler.handle(command);
+
+        // Return 200 OK response
+        return success(response, "Call link request processed");
     }
 }
