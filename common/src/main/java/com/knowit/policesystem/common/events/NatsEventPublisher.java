@@ -34,8 +34,9 @@ public class NatsEventPublisher implements EventPublisher {
 
     /**
      * Creates a new NatsEventPublisher with the given connection options and ObjectMapper.
+     * Supports both single server URL and comma-separated multiple server URLs for high availability.
      *
-     * @param natsUrl NATS server URL (e.g., "nats://localhost:4222")
+     * @param natsUrl NATS server URL(s) (e.g., "nats://localhost:4222" or "nats://localhost:4222,nats://localhost:4223,nats://localhost:4224")
      * @param objectMapper Jackson ObjectMapper for JSON serialization
      * @param enabled whether NATS publishing is enabled
      */
@@ -51,18 +52,33 @@ public class NatsEventPublisher implements EventPublisher {
         }
         
         try {
-            Options options = new Options.Builder()
-                    .server(natsUrl)
+            // Parse comma-separated URLs if multiple servers are specified
+            String[] serverUrls = natsUrl.split(",");
+            Options.Builder optionsBuilder = new Options.Builder()
                     .connectionTimeout(Duration.ofSeconds(5))
                     .reconnectWait(Duration.ofSeconds(1))
-                    .maxReconnects(-1) // Unlimited reconnects
-                    .build();
+                    .maxReconnects(-1); // Unlimited reconnects
             
+            if (serverUrls.length == 1) {
+                // Single server
+                optionsBuilder.server(serverUrls[0].trim());
+                logger.info("Connecting to NATS server at {}", serverUrls[0].trim());
+            } else {
+                // Multiple servers for high availability
+                String[] trimmedUrls = new String[serverUrls.length];
+                for (int i = 0; i < serverUrls.length; i++) {
+                    trimmedUrls[i] = serverUrls[i].trim();
+                }
+                optionsBuilder.servers(trimmedUrls);
+                logger.info("Connecting to NATS cluster with {} servers: {}", trimmedUrls.length, String.join(", ", trimmedUrls));
+            }
+            
+            Options options = optionsBuilder.build();
             this.natsConnection = Nats.connect(options);
             this.jetStream = natsConnection.jetStream();
-            logger.info("Connected to NATS server at {}", natsUrl);
+            logger.info("Successfully connected to NATS cluster");
         } catch (IOException | InterruptedException e) {
-            logger.error("Failed to connect to NATS server at {}", natsUrl, e);
+            logger.error("Failed to connect to NATS server(s) at {}", natsUrl, e);
             throw new RuntimeException("Failed to initialize NATS connection", e);
         }
     }

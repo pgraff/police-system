@@ -17,10 +17,13 @@ Description of the Command Query Responsibility Segregation pattern, including c
 Detailed description of system components: Edge Servers, Event Bus (Kafka), and CQRS Projections.
 
 ### [Event Bus and Messaging](event-bus.md)
-Comprehensive guide to Kafka as the event bus, including topics, partitions, consumption patterns, and Kafka Streams.
+Comprehensive guide to Kafka and NATS/JetStream as event buses, including topics, subjects, consumption patterns, and the double-publish pattern.
 
 ### [Data Flow](data-flow.md)
 Detailed description of how data flows through the system: commands, events, queries, and integration flows.
+
+### [Docker Compose Infrastructure](docker-compose.md)
+Complete guide to the infrastructure services provided by docker-compose, including Kafka cluster, NATS cluster, databases, and admin UIs.
 
 ## Architecture Principles
 
@@ -39,13 +42,16 @@ Detailed description of how data flows through the system: commands, events, que
 ### Technology Stack
 - **Language**: Java 17
 - **Framework**: Spring Framework
-- **Event Bus**: Apache Kafka
+- **Primary Event Bus**: Apache Kafka (event sourcing and long-term storage)
+- **Secondary Event Bus**: NATS/JetStream (critical events for near realtime processing)
 - **Stream Processing**: Kafka Streams
 
 ## Key Components
 
 1. **Edge Servers**: Handle commands and queries, built with Spring
-2. **Event Bus (Kafka)**: Central event store and message broker
+2. **Event Buses**: 
+   - **Kafka**: Primary event store and message broker for all events
+   - **NATS/JetStream**: Secondary event bus for critical events requiring near realtime processing
 3. **CQRS Projections**: Build read models using Kafka Streams and Spring
 
 ## Design Decisions

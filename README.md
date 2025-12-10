@@ -20,14 +20,22 @@ The Police Incident Management System is designed to handle the complete lifecyc
 
 - Java 17 or higher
 - Maven 3.6+
-- Docker and Docker Compose (for Kafka)
+- Docker and Docker Compose (for Kafka and NATS)
 
 ### Running the System
 
-1. **Start Kafka** (using Docker Compose):
+1. **Start Infrastructure Services** (using Docker Compose):
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
+   This starts:
+   - **Kafka** (3 brokers) on ports 9092-9094
+   - **NATS** (3-node cluster) on ports 4222-4224
+   - **PostgreSQL** on port 5432
+   - **MongoDB** on port 27017
+   - **InfluxDB** on port 8086
+   - **Kafka UI** on http://localhost:8080
+   - **NATS Tower** on http://localhost:8099
 
 2. **Build the project**:
    ```bash
@@ -42,6 +50,15 @@ The Police Incident Management System is designed to handle the complete lifecyc
 4. **Access the API**:
    - Base URL: `http://localhost:8080/api/v1`
    - Health check: `http://localhost:8080/api/v1/health`
+   - Swagger UI: `http://localhost:8080/swagger-ui.html`
+
+5. **Access Admin UIs**:
+   - **Kafka UI**: http://localhost:8080 (Kafka management)
+   - **NATS Tower**: http://localhost:8099 (NATS cluster management)
+   - **NATS Monitoring**: 
+     - nats-1: http://localhost:8222
+     - nats-2: http://localhost:8223
+     - nats-3: http://localhost:8224
 
 ## Documentation
 
@@ -60,7 +77,7 @@ System architecture and design patterns:
 - [Event Sourcing](doc/architecture/event-sourcing.md) - Event sourcing pattern and implementation
 - [CQRS Design](doc/architecture/cqrs-design.md) - Command Query Responsibility Segregation
 - [Component Architecture](doc/architecture/components.md) - System components and their interactions
-- [Event Bus](doc/architecture/event-bus.md) - Kafka as the event bus
+- [Event Bus](doc/architecture/event-bus.md) - Kafka and NATS/JetStream event buses
 - [Data Flow](doc/architecture/data-flow.md) - How data flows through the system
 
 ### 📋 [Event Documentation](doc/events/README.md)
@@ -105,10 +122,12 @@ Comprehensive development plan tracking all increments and their status:
 ### Event-Driven Edge Layer
 
 The system follows an event-driven architecture where:
-- **Edge servers** receive HTTP requests (commands) and produce events to Kafka
+- **Edge servers** receive HTTP requests (commands) and produce events using a double-publish pattern
 - **Events represent requests/commands** from the edge, not state changes
-- **No state reconstruction** in the edge layer - events are simply produced to Kafka
-- **All operations are asynchronous** via Kafka events
+- **All events** are published to **Kafka** for event sourcing and long-term storage
+- **Critical events** (ending in "Requested") are also published to **NATS/JetStream** for near realtime processing
+- **No state reconstruction** in the edge layer - events are simply produced to event buses
+- **All operations are asynchronous** via event buses
 
 ### Event Naming Convention
 
@@ -123,7 +142,8 @@ All events follow the "Requested" naming pattern:
 
 - **Language**: Java 17
 - **Framework**: Spring Boot, Spring Framework
-- **Event Bus**: Apache Kafka
+- **Primary Event Bus**: Apache Kafka (event sourcing and long-term storage)
+- **Secondary Event Bus**: NATS/JetStream (critical events for near realtime processing)
 - **Build Tool**: Maven
 - **Testing**: JUnit 5, Kafka Test Containers
 
@@ -187,9 +207,11 @@ The system produces 55 different events to Kafka, organized by domain:
 
 See the [Event Index](doc/events/EVENT_INDEX.md) for the complete list.
 
-## Kafka Topics
+## Event Distribution
 
-Events are published to domain-specific Kafka topics:
+### Kafka Topics
+
+All events are published to domain-specific Kafka topics:
 - `officer-events`
 - `vehicle-events`
 - `unit-events`
@@ -204,6 +226,21 @@ Events are published to domain-specific Kafka topics:
 - `dispatch-events`
 - `resource-assignment-events`
 - `involved-party-events`
+
+### NATS JetStream Subjects
+
+Critical events (all command events ending in "Requested") are also published to NATS JetStream subjects following the pattern `commands.{domain}.{action}`:
+- `commands.officer.register`, `commands.officer.update`, `commands.officer.change-status`
+- `commands.vehicle.register`, `commands.vehicle.update`, `commands.vehicle.change-status`
+- `commands.unit.create`, `commands.unit.update`, `commands.unit.change-status`
+- `commands.person.register`, `commands.person.update`
+- `commands.location.create`, `commands.location.update`
+- `commands.incident.report`, `commands.incident.dispatch`, etc.
+- And all other critical command events...
+
+This double-publish pattern ensures:
+- **Kafka**: Event sourcing, long-term storage, and eventual consistency
+- **NATS/JetStream**: Low-latency delivery for near realtime processing of critical events
 
 ## Development
 

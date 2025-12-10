@@ -16,8 +16,10 @@ spring:
     bootstrap-servers: localhost:9092
 
 # NATS/JetStream configuration
+# Connect to all three NATS servers in the cluster for high availability
+# The client will automatically failover if one server goes down
 nats:
-  url: nats://localhost:4222
+  url: nats://localhost:4222,nats://localhost:4223,nats://localhost:4224
   enabled: true
 
 # SpringDoc OpenAPI configuration

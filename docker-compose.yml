@@ -161,6 +161,107 @@ services:
       timeout: 5s
       retries: 5
 
+  # NATS Server 1 with JetStream (Cluster)
+  nats-1:
+    image: nats:2.10-alpine
+    container_name: nats-1
+    hostname: nats-1
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "-sd"
+      - "/data"
+      - "-server_name"
+      - "nats-1"
+      - "-cluster_name"
+      - "policesystem-nats-cluster"
+      - "-cluster"
+      - "nats://0.0.0.0:6222"
+      - "-routes"
+      - "nats://nats-2:6222,nats://nats-3:6222"
+    ports:
+      - "4222:4222"  # Client connections
+      - "8222:8222"  # HTTP monitoring
+    volumes:
+      - nats-1-data:/data
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NATS Server 2 with JetStream (Cluster)
+  nats-2:
+    image: nats:2.10-alpine
+    container_name: nats-2
+    hostname: nats-2
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "-sd"
+      - "/data"
+      - "-server_name"
+      - "nats-2"
+      - "-cluster_name"
+      - "policesystem-nats-cluster"
+      - "-cluster"
+      - "nats://0.0.0.0:6222"
+      - "-routes"
+      - "nats://nats-1:6222,nats://nats-3:6222"
+    ports:
+      - "4223:4222"  # Client connections (alternative port)
+      - "8223:8222"  # HTTP monitoring
+    volumes:
+      - nats-2-data:/data
+    networks:
+      - policesystem-network
+    depends_on:
+      - nats-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NATS Server 3 with JetStream (Cluster)
+  nats-3:
+    image: nats:2.10-alpine
+    container_name: nats-3
+    hostname: nats-3
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "-sd"
+      - "/data"
+      - "-server_name"
+      - "nats-3"
+      - "-cluster_name"
+      - "policesystem-nats-cluster"
+      - "-cluster"
+      - "nats://0.0.0.0:6222"
+      - "-routes"
+      - "nats://nats-1:6222,nats://nats-2:6222"
+    ports:
+      - "4224:4222"  # Client connections (alternative port)
+      - "8224:8222"  # HTTP monitoring
+    volumes:
+      - nats-3-data:/data
+    networks:
+      - policesystem-network
+    depends_on:
+      - nats-1
+      - nats-2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Kafka UI - Web UI for Kafka management
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -179,6 +280,28 @@ services:
       - policesystem-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NATS Tower - Web UI for NATS management and monitoring
+  nats-tower:
+    image: ghcr.io/nats-tower/nats-tower:latest
+    container_name: nats-tower
+    hostname: nats-tower
+    command: ["serve", "--http", "0.0.0.0:8099"]
+    depends_on:
+      - nats-1
+      - nats-2
+      - nats-3
+    environment:
+      - NATS_URL=nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
+    ports:
+      - "8099:8099"
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8099/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -244,6 +367,9 @@ volumes:
   mongodb-config:
   influxdb-data:
   influxdb-config:
+  nats-1-data:
+  nats-2-data:
+  nats-3-data:
   pgadmin-data:
 
 networks:
