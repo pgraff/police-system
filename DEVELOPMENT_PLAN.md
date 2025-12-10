@@ -2553,30 +2553,38 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 13.3: Change Resource Assignment Status Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `PATCH /api/assignments/{assignmentId}/resources/{resourceId}/status`
-- Request body: `{ status }`
-- Response: `200 OK`
+- REST API: `PATCH /api/v1/assignments/{assignmentId}/resources/{resourceId}/status`
+- Request body: `{ status }` (ResourceAssignmentStatus enum)
+- Response: `200 OK` with `SuccessResponse<ResourceAssignmentResponseDto>`
 - Produces event: `ChangeResourceAssignmentStatusRequested` to Kafka topic `resource-assignment-events`
 - Test criteria: Verify `ChangeResourceAssignmentStatusRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testChangeResourceAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event contains assignmentId, resourceId, status
-- ⏳ `testChangeResourceAssignmentStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
-- ⏳ `testChangeResourceAssignmentStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected
+- ✅ `testChangeResourceAssignmentStatus_WithValidStatus_ProducesEvent()` - Verify event contains assignmentId, resourceId, status (tests all enum values: Assigned, InProgress, Completed, Cancelled)
+- ✅ `testChangeResourceAssignmentStatus_WithMissingStatus_Returns400()` - Validation error, no event produced
+- ✅ `testChangeResourceAssignmentStatus_WithInvalidStatusEnum_Returns400()` - Invalid enum rejected, no event
 - Event assertions: assignmentId used as Kafka key
 
-**Implementation Plan**:
-- Add `ChangeResourceAssignmentStatusRequestDto` requiring status enum
-- Add command + validator (payload only) and handler producing `ChangeResourceAssignmentStatusRequested` to `resource-assignment-events` keyed by assignmentId
-- Expose controller `PATCH /api/v1/assignments/{assignmentId}/resources/{resourceId}/status` returning 200 with status echoed
-- Add event model to `common.events.resourceassignment`
+**Implementation Details**:
+- Created `ResourceAssignmentStatus` enum in `edge.domain` package with values: Assigned, InProgress, Completed, Cancelled
+- Created `ChangeResourceAssignmentStatusRequestDto` with required `status` field of type `ResourceAssignmentStatus` enum
+- Created `ChangeResourceAssignmentStatusCommand`, `ChangeResourceAssignmentStatusCommandValidator`, and `ChangeResourceAssignmentStatusCommandHandler` publishing `ChangeResourceAssignmentStatusRequested` to `resource-assignment-events` keyed by assignmentId
+- Created `ChangeResourceAssignmentStatusRequested` event in `common.events.resourceassignment` package
+- Added `PATCH /api/v1/assignments/{assignmentId}/resources/{resourceId}/status` endpoint to `AssignmentController` returning 200 OK with message "Resource assignment status change request processed"
+- Validator validates assignmentId (from path), resourceId (from path), and status (from request body)
+- Handler converts `InProgress` enum to "In-Progress" string format in events (similar to AssignmentStatus)
+- All tests passing (274/274 in edge module) - 3 new tests added
+- Tests verify Kafka event production with proper event structure, metadata, and validation
 
 **Demo Suggestion**:
-1. Show PATCH /api/assignments/{assignmentId}/resources/{resourceId}/status request
-2. Show ChangeResourceAssignmentStatusRequested event
+1. Show `PATCH /api/v1/assignments/{assignmentId}/resources/{resourceId}/status` request with curl/Postman
+2. Show 200 OK response
+3. Show `ChangeResourceAssignmentStatusRequested` event in Kafka topic `resource-assignment-events` (keyed by assignmentId)
+4. Show validation error example (missing status or invalid enum)
+5. Show different status values (Assigned, InProgress -> "In-Progress", Completed, Cancelled)
 
 ---
 

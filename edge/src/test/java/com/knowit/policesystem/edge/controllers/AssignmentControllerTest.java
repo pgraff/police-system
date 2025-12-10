@@ -7,15 +7,18 @@ import com.knowit.policesystem.common.events.assignments.CompleteAssignmentReque
 import com.knowit.policesystem.common.events.assignments.ChangeAssignmentStatusRequested;
 import com.knowit.policesystem.common.events.resourceassignment.AssignResourceRequested;
 import com.knowit.policesystem.common.events.resourceassignment.UnassignResourceRequested;
+import com.knowit.policesystem.common.events.resourceassignment.ChangeResourceAssignmentStatusRequested;
 import com.knowit.policesystem.edge.domain.AssignmentStatus;
 import com.knowit.policesystem.edge.domain.AssignmentType;
 import com.knowit.policesystem.edge.domain.ResourceType;
 import com.knowit.policesystem.edge.domain.RoleType;
+import com.knowit.policesystem.edge.domain.ResourceAssignmentStatus;
 import com.knowit.policesystem.edge.dto.CreateAssignmentRequestDto;
 import com.knowit.policesystem.edge.dto.CompleteAssignmentRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeAssignmentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.AssignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.UnassignResourceRequestDto;
+import com.knowit.policesystem.edge.dto.ChangeResourceAssignmentStatusRequestDto;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -954,6 +957,102 @@ class AssignmentControllerTest {
 
         // When - call REST API
         mockMvc.perform(delete("/api/v1/assignments/{assignmentId}/resources/{resourceId}", "ASSIGN-028", "12345")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeResourceAssignmentStatus_WithValidStatus_ProducesEvent() throws Exception {
+        // Given
+        String assignmentId = "ASSIGN-029";
+        String resourceId = "12345";
+        ChangeResourceAssignmentStatusRequestDto request = new ChangeResourceAssignmentStatusRequestDto(ResourceAssignmentStatus.InProgress);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/resources/{resourceId}/status", assignmentId, resourceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.resourceAssignmentId").exists())
+                .andExpect(jsonPath("$.message").value("Resource assignment status change request processed"));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        assertThat(records.count()).isEqualTo(1);
+
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(assignmentId);
+        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+
+        // Deserialize and verify event data
+        ChangeResourceAssignmentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeResourceAssignmentStatusRequested.class);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getAggregateId()).isEqualTo(assignmentId);
+        assertThat(event.getAssignmentId()).isEqualTo(assignmentId);
+        assertThat(event.getResourceId()).isEqualTo(resourceId);
+        assertThat(event.getStatus()).isEqualTo("In-Progress");
+        assertThat(event.getEventType()).isEqualTo("ChangeResourceAssignmentStatusRequested");
+        assertThat(event.getVersion()).isEqualTo(1);
+
+        // Test other status values
+        testResourceAssignmentStatusConversion(assignmentId + "-1", resourceId + "-1", ResourceAssignmentStatus.Assigned, "Assigned");
+        testResourceAssignmentStatusConversion(assignmentId + "-2", resourceId + "-2", ResourceAssignmentStatus.Completed, "Completed");
+        testResourceAssignmentStatusConversion(assignmentId + "-3", resourceId + "-3", ResourceAssignmentStatus.Cancelled, "Cancelled");
+    }
+
+    private void testResourceAssignmentStatusConversion(String assignmentId, String resourceId, ResourceAssignmentStatus status, String expectedStatusString) throws Exception {
+        ChangeResourceAssignmentStatusRequestDto request = new ChangeResourceAssignmentStatusRequestDto(status);
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/resources/{resourceId}/status", assignmentId, resourceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk());
+
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        ChangeResourceAssignmentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeResourceAssignmentStatusRequested.class);
+        assertThat(event.getStatus()).isEqualTo(expectedStatusString);
+    }
+
+    @Test
+    void testChangeResourceAssignmentStatus_WithMissingStatus_Returns400() throws Exception {
+        // Given - missing status in request body
+        String requestJson = """
+                {
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/resources/{resourceId}/status", "ASSIGN-030", "12345")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeResourceAssignmentStatus_WithInvalidStatusEnum_Returns400() throws Exception {
+        // Given - invalid status enum value
+        String requestJson = """
+                {
+                    "status": "InvalidStatus"
+                }
+                """;
+
+        // When - call REST API
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/resources/{resourceId}/status", "ASSIGN-031", "12345")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());
