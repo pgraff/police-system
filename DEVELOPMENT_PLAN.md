@@ -2591,29 +2591,38 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ### Phase 14: InvolvedParty Domain
 
 #### Increment 14.1: Involve Party Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
-- REST API: `POST /api/involved-parties`
-- Request body: `{ personId, incidentId, callId, activityId, partyRoleType, description, involvementStartTime }` (exactly one of incidentId, callId, or activityId)
+- REST API: `POST /api/v1/involved-parties`
+- Request body: `{ personId, incidentId?, callId?, activityId?, partyRoleType, description?, involvementStartTime? }` (exactly one of incidentId, callId, or activityId)
 - Response: `201 Created` with `{ involvementId }`
 - Produces event: `InvolvePartyRequested` to Kafka topic `involved-party-events`
 - Validation: personId required, partyRoleType enum, exactly one of incidentId, callId, or activityId
 - Test criteria: Verify `InvolvePartyRequested` event appears in Kafka
 
 **Test Criteria**:
-- ⏳ `testInvolveParty_WithIncident_ProducesEvent()` - Verify event with incidentId
-- ⏳ `testInvolveParty_WithCall_ProducesEvent()` - Verify event with callId
-- ⏳ `testInvolveParty_WithActivity_ProducesEvent()` - Verify event with activityId
-- ⏳ `testInvolveParty_WithMultipleTargets_Returns400()` - Validation error, no event produced
-- ⏳ `testInvolveParty_WithMissingPersonId_Returns400()` - Validation error, no event produced
-- Event contains personId, incidentId/callId/activityId, partyRoleType, description, involvementStartTime (keyed consistently)
+- ✅ `testInvolveParty_WithIncident_ProducesEvent()` - Verify event with incidentId
+- ✅ `testInvolveParty_WithCall_ProducesEvent()` - Verify event with callId
+- ✅ `testInvolveParty_WithActivity_ProducesEvent()` - Verify event with activityId
+- ✅ `testInvolveParty_WithMultipleTargets_Returns400()` - Validation error, no event produced
+- ✅ `testInvolveParty_WithNoTargets_Returns400()` - Validation error, no event produced
+- ✅ `testInvolveParty_WithMissingPersonId_Returns400()` - Validation error, no event produced
+- ✅ `testInvolveParty_WithMissingPartyRoleType_Returns400()` - Validation error, no event produced
+- Event contains personId, incidentId/callId/activityId, partyRoleType, description, involvementStartTime (keyed by involvementId)
 
-**Implementation Plan**:
-- Add `InvolvePartyRequestDto` enforcing required fields, enum, and XOR for incidentId/callId/activityId
-- Add command + validator (payload only) and handler producing `InvolvePartyRequested` to `involved-party-events` keyed consistently (personId or involvementId per domain decision)
-- Expose controller `POST /api/v1/involved-parties` returning 201 with `{ involvementId }`
-- Add event model to `common.events.involvedparty`
+**Implementation Details**:
+- Created `PartyRoleType` enum in `edge.domain` package with values: Victim, Suspect, Witness, Complainant, Other
+- Created `InvolvePartyRequestDto` with required personId and partyRoleType, optional incidentId/callId/activityId (XOR validation), description, and involvementStartTime
+- Created `InvolvementResponseDto` with involvementId field
+- Created `InvolvePartyCommand`, `InvolvePartyCommandValidator`, and `InvolvePartyCommandHandler` publishing `InvolvePartyRequested` to `involved-party-events` keyed by involvementId
+- Created `InvolvePartyRequested` event in `common.events.involvedparty` package
+- Added `POST /api/v1/involved-parties` endpoint to `InvolvedPartyController` returning 201 Created with message "Party involvement request processed"
+- Validator validates involvementId (generated UUID), personId, partyRoleType, and XOR for exactly one of incidentId/callId/activityId
+- Handler converts partyRoleType enum to string using `.name()` in events
+- involvementId is generated as UUID in the controller (not provided in request)
+- All tests passing (7/7 in InvolvedPartyControllerTest) - all test cases implemented and verified
+- Tests verify Kafka event production with proper event structure, metadata, and validation
 
 **Demo Suggestion**:
 1. Show POST /api/involved-parties request with incidentId
