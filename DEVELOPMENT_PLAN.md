@@ -1821,7 +1821,7 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 ---
 
 #### Increment 8.4: Clear Call Endpoint
-**Status**: ⏳ Pending
+**Status**: ✅ Completed
 
 **Step 0: Requirements**
 - REST API: `POST /api/calls/{callId}/clear`
@@ -1831,8 +1831,25 @@ edge/src/test/java/com/knowit/policesystem/edge/controllers/
 - Test criteria: Verify `ClearCallRequested` event appears in Kafka
 
 **Test Criteria**:
-- `testClearCall_WithValidData_ProducesEvent()` - Verify event
-- Event contains callId and clearedTime
+- ✅ `testClearCall_WithValidData_ProducesEvent()` - Verify event contains callId and clearedTime
+- ✅ `testClearCall_WithMissingClearedTime_Returns400()` - Validation error, no event produced
+
+**Implementation Summary**:
+- Added `ClearCallRequestDto` with required ISO-8601 `clearedTime`.
+- Added `ClearCallCommand`, validator, and handler publishing `ClearCallRequested` to `call-events` keyed by callId.
+- Introduced `ClearCallRequested` event in `common.events.calls`.
+- Exposed `POST /api/v1/calls/{callId}/clear` in `CallController`, returning 200 with callId and message "Call cleared".
+
+**Demo Suggestion**:
+1. Show POST `/api/v1/calls/{callId}/clear` request:
+   ```bash
+   curl -X POST http://localhost:8080/api/v1/calls/CALL-300/clear \
+     -H "Content-Type: application/json" \
+     -d '{ "clearedTime": "2025-01-05T10:20:30.000Z" }'
+   ```
+   - Response: 200 OK, message "Call cleared"
+2. Show `ClearCallRequested` event on topic `call-events` (key = callId) with callId and clearedTime
+3. Validation example: missing `clearedTime` returns 400 and no event
 
 **Demo Suggestion**:
 1. Show POST /api/calls/{callId}/clear request

@@ -2,13 +2,15 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
 import com.knowit.policesystem.common.events.calls.ArriveAtCallRequested;
+import com.knowit.policesystem.common.events.calls.ClearCallRequested;
+import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
 import com.knowit.policesystem.common.events.calls.DispatchCallRequested;
 import com.knowit.policesystem.edge.domain.CallStatus;
 import com.knowit.policesystem.edge.domain.CallType;
 import com.knowit.policesystem.edge.domain.Priority;
 import com.knowit.policesystem.edge.dto.ArriveAtCallRequestDto;
+import com.knowit.policesystem.edge.dto.ClearCallRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
 import com.knowit.policesystem.edge.services.calls.CallExistenceService;
@@ -319,6 +321,57 @@ class CallControllerTest {
         // When - call REST API
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(post("/api/v1/calls/{callId}/arrive", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest());
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testClearCall_WithValidData_ProducesEvent() throws Exception {
+        // Given
+        String callId = "CALL-300";
+        Instant clearedTime = Instant.now();
+
+        ClearCallRequestDto request = new ClearCallRequestDto(clearedTime);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/clear", callId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Call cleared"))
+                .andExpect(jsonPath("$.data.callId").value(callId));
+
+        // Then - verify event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
+        assertThat(records).isNotEmpty();
+        ConsumerRecord<String, String> record = records.iterator().next();
+        assertThat(record.key()).isEqualTo(callId);
+        assertThat(record.topic()).isEqualTo(TOPIC);
+
+        ClearCallRequested event = eventObjectMapper.readValue(record.value(), ClearCallRequested.class);
+        assertThat(event.getEventType()).isEqualTo("ClearCallRequested");
+        assertThat(event.getCallId()).isEqualTo(callId);
+        assertThat(event.getClearedTime()).isEqualTo(clearedTime.truncatedTo(ChronoUnit.MILLIS));
+        assertThat(event.getAggregateId()).isEqualTo(callId);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getTimestamp()).isNotNull();
+    }
+
+    @Test
+    void testClearCall_WithMissingClearedTime_Returns400() throws Exception {
+        // Given
+        String callId = "CALL-301";
+        ClearCallRequestDto request = new ClearCallRequestDto(null);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/calls/{callId}/clear", callId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest());

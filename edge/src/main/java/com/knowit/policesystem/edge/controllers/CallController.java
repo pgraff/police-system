@@ -1,16 +1,19 @@
 package com.knowit.policesystem.edge.controllers;
 
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
-import com.knowit.policesystem.edge.commands.calls.DispatchCallCommand;
 import com.knowit.policesystem.edge.commands.calls.ArriveAtCallCommand;
+import com.knowit.policesystem.edge.commands.calls.ClearCallCommand;
+import com.knowit.policesystem.edge.commands.calls.DispatchCallCommand;
 import com.knowit.policesystem.edge.commands.calls.ReceiveCallCommand;
 import com.knowit.policesystem.edge.dto.CallResponseDto;
 import com.knowit.policesystem.edge.dto.ArriveAtCallRequestDto;
+import com.knowit.policesystem.edge.dto.ClearCallRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
-import com.knowit.policesystem.edge.validation.calls.DispatchCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ArriveAtCallCommandValidator;
+import com.knowit.policesystem.edge.validation.calls.ClearCallCommandValidator;
+import com.knowit.policesystem.edge.validation.calls.DispatchCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ReceiveCallCommandValidator;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +35,7 @@ public class CallController extends BaseRestController {
     private final ReceiveCallCommandValidator commandValidator;
     private final DispatchCallCommandValidator dispatchCommandValidator;
     private final ArriveAtCallCommandValidator arriveAtCallCommandValidator;
+    private final ClearCallCommandValidator clearCallCommandValidator;
 
     /**
      * Creates a new call controller.
@@ -42,11 +46,13 @@ public class CallController extends BaseRestController {
     public CallController(CommandHandlerRegistry commandHandlerRegistry,
                           ReceiveCallCommandValidator commandValidator,
                           DispatchCallCommandValidator dispatchCommandValidator,
-                          ArriveAtCallCommandValidator arriveAtCallCommandValidator) {
+                          ArriveAtCallCommandValidator arriveAtCallCommandValidator,
+                          ClearCallCommandValidator clearCallCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.dispatchCommandValidator = dispatchCommandValidator;
         this.arriveAtCallCommandValidator = arriveAtCallCommandValidator;
+        this.clearCallCommandValidator = clearCallCommandValidator;
     }
 
     /**
@@ -129,5 +135,31 @@ public class CallController extends BaseRestController {
         CallResponseDto response = handler.handle(command);
 
         return success(response, "Call arrival recorded");
+    }
+
+    /**
+    * Clears a call.
+    *
+    * @param callId the call identifier
+    * @param requestDto the clear request DTO
+    * @return 200 OK with callId
+    */
+    @PostMapping("/calls/{callId}/clear")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<CallResponseDto>> clearCall(
+            @PathVariable String callId,
+            @Valid @RequestBody ClearCallRequestDto requestDto) {
+
+        ClearCallCommand command = new ClearCallCommand(callId, requestDto);
+
+        var validationResult = clearCallCommandValidator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        com.knowit.policesystem.edge.commands.CommandHandler<ClearCallCommand, CallResponseDto> handler =
+                commandHandlerRegistry.findHandler(ClearCallCommand.class);
+        CallResponseDto response = handler.handle(command);
+
+        return success(response, "Call cleared");
     }
 }
