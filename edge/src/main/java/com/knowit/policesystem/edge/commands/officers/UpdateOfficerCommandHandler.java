@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.officers.UpdateOfficerRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.OfficerResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -17,16 +18,19 @@ public class UpdateOfficerCommandHandler implements CommandHandler<UpdateOfficer
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new update officer command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka and NATS/JetStream
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public UpdateOfficerCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public UpdateOfficerCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -52,9 +56,9 @@ public class UpdateOfficerCommandHandler implements CommandHandler<UpdateOfficer
                 command.getHireDate() != null ? command.getHireDate().toString() : null
         );
 
-        // Publish event to Kafka topic "officer-events"
+        // Publish event to Kafka topic
         // DualEventPublisher will automatically also publish to NATS/JetStream subject "commands.officer.update"
-        eventPublisher.publish("officer-events", command.getBadgeNumber(), event);
+        eventPublisher.publish(topicConfiguration.OFFICER_EVENTS, command.getBadgeNumber(), event);
 
         // Return response DTO
         return new OfficerResponseDto(command.getBadgeNumber());

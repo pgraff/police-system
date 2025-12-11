@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.calls.ArriveAtCallRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.CallResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -16,10 +17,12 @@ public class ArriveAtCallCommandHandler implements CommandHandler<ArriveAtCallCo
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
-    public ArriveAtCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public ArriveAtCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     @PostConstruct
@@ -34,7 +37,7 @@ public class ArriveAtCallCommandHandler implements CommandHandler<ArriveAtCallCo
                 command.getArrivedTime()
         );
 
-        eventPublisher.publish("call-events", command.getCallId(), event);
+        eventPublisher.publish(topicConfiguration.CALL_EVENTS, command.getCallId(), event);
 
         return new CallResponseDto(command.getCallId(), null);
     }

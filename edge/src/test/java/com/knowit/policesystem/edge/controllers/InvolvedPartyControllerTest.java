@@ -10,6 +10,7 @@ import com.knowit.policesystem.edge.domain.PartyRoleType;
 import com.knowit.policesystem.edge.dto.EndPartyInvolvementRequestDto;
 import com.knowit.policesystem.edge.dto.InvolvePartyRequestDto;
 import com.knowit.policesystem.edge.dto.UpdatePartyInvolvementRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -50,10 +51,12 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "involved-party-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -74,7 +77,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.INVOLVED_PARTY_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -141,7 +144,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(involvementId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INVOLVED_PARTY_EVENTS);
 
         // Deserialize and verify event data
         InvolvePartyRequested event = eventObjectMapper.readValue(record.value(), InvolvePartyRequested.class);
@@ -229,7 +232,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(involvementId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INVOLVED_PARTY_EVENTS);
 
         // Deserialize and verify event data
         InvolvePartyRequested event = eventObjectMapper.readValue(record.value(), InvolvePartyRequested.class);
@@ -317,7 +320,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(involvementId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INVOLVED_PARTY_EVENTS);
 
         // Deserialize and verify event data
         InvolvePartyRequested event = eventObjectMapper.readValue(record.value(), InvolvePartyRequested.class);
@@ -449,7 +452,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(involvementId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INVOLVED_PARTY_EVENTS);
 
         // Deserialize and verify event data
         EndPartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), EndPartyInvolvementRequested.class);
@@ -536,7 +539,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(involvementId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INVOLVED_PARTY_EVENTS);
 
         // Deserialize and verify event data
         UpdatePartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), UpdatePartyInvolvementRequested.class);
@@ -606,7 +609,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(involvementId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INVOLVED_PARTY_EVENTS);
 
         // Deserialize and verify event data
         UpdatePartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), UpdatePartyInvolvementRequested.class);
@@ -676,7 +679,7 @@ class InvolvedPartyControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(involvementId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INVOLVED_PARTY_EVENTS);
 
         // Deserialize and verify event data
         UpdatePartyInvolvementRequested event = eventObjectMapper.readValue(record.value(), UpdatePartyInvolvementRequested.class);

@@ -9,6 +9,7 @@ import com.knowit.policesystem.edge.domain.DispatchStatus;
 import com.knowit.policesystem.edge.domain.DispatchType;
 import com.knowit.policesystem.edge.dto.ChangeDispatchStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CreateDispatchRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -52,10 +53,12 @@ class DispatchControllerTest extends BaseIntegrationTest {
     @Autowired
     private DispatchController dispatchController;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "dispatch-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -76,7 +79,7 @@ class DispatchControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.DISPATCH_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -130,7 +133,7 @@ class DispatchControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(dispatchId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.DISPATCH_EVENTS);
 
         // Deserialize and verify event data
         CreateDispatchRequested event = eventObjectMapper.readValue(record.value(), CreateDispatchRequested.class);
@@ -240,7 +243,7 @@ class DispatchControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(dispatchId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.DISPATCH_EVENTS);
 
         // Deserialize and verify event data
         ChangeDispatchStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeDispatchStatusRequested.class);

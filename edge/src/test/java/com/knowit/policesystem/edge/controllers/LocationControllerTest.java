@@ -14,6 +14,7 @@ import com.knowit.policesystem.edge.domain.LocationType;
 import com.knowit.policesystem.edge.dto.CreateLocationRequestDto;
 import com.knowit.policesystem.edge.dto.LinkLocationRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateLocationRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -53,10 +54,12 @@ class LocationControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "location-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -77,7 +80,7 @@ class LocationControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.LOCATION_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -134,7 +137,7 @@ class LocationControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(locationId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.LOCATION_EVENTS);
 
         // Deserialize and verify event data
         CreateLocationRequested event = eventObjectMapper.readValue(record.value(), CreateLocationRequested.class);
@@ -506,7 +509,7 @@ class LocationControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(locationId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.LOCATION_EVENTS);
 
         // Deserialize and verify event data
         UpdateLocationRequested event = eventObjectMapper.readValue(record.value(), UpdateLocationRequested.class);
@@ -784,7 +787,7 @@ class LocationControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(locationId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.LOCATION_EVENTS);
 
         // Deserialize and verify event data
         LinkLocationToIncidentRequested event = eventObjectMapper.readValue(record.value(), LinkLocationToIncidentRequested.class);
@@ -1002,7 +1005,7 @@ class LocationControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(locationId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.LOCATION_EVENTS);
 
         // Deserialize and verify event data
         LinkLocationToCallRequested event = eventObjectMapper.readValue(record.value(), LinkLocationToCallRequested.class);
@@ -1149,7 +1152,7 @@ class LocationControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(locationId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.LOCATION_EVENTS);
 
         // Deserialize and verify event data
         UnlinkLocationFromIncidentRequested event = eventObjectMapper.readValue(record.value(), UnlinkLocationFromIncidentRequested.class);
@@ -1241,7 +1244,7 @@ class LocationControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(locationId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.LOCATION_EVENTS);
 
         // Deserialize and verify event data
         UnlinkLocationFromCallRequested event = eventObjectMapper.readValue(record.value(), UnlinkLocationFromCallRequested.class);

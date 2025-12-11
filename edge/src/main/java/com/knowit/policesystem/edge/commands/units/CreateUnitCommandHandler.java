@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.units.CreateUnitRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.UnitResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class CreateUnitCommandHandler implements CommandHandler<CreateUnitComman
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new create unit command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka and NATS/JetStream
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public CreateUnitCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public CreateUnitCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -43,13 +48,13 @@ public class CreateUnitCommandHandler implements CommandHandler<CreateUnitComman
         // Create event from command
         CreateUnitRequested event = new CreateUnitRequested(
                 command.getUnitId(),
-                command.getUnitType() != null ? command.getUnitType().name() : null,
-                command.getStatus() != null ? command.getStatus().name() : null
+                EnumConverter.convertEnumToString(command.getUnitType()),
+                EnumConverter.convertStatusToString(command.getStatus())
         );
 
-        // Publish event to Kafka topic "unit-events"
+        // Publish event to Kafka topic
         // DualEventPublisher will automatically also publish to NATS/JetStream subject "commands.unit.create"
-        eventPublisher.publish("unit-events", command.getUnitId(), event);
+        eventPublisher.publish(topicConfiguration.UNIT_EVENTS, command.getUnitId(), event);
 
         // Return response DTO
         return new UnitResponseDto(command.getUnitId());

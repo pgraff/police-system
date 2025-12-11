@@ -4,8 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.activities.ChangeActivityStatusRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
-import com.knowit.policesystem.edge.domain.ActivityStatus;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.ActivityResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -18,16 +19,19 @@ public class ChangeActivityStatusCommandHandler implements CommandHandler<Change
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new change activity status command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public ChangeActivityStatusCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public ChangeActivityStatusCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -41,35 +45,17 @@ public class ChangeActivityStatusCommandHandler implements CommandHandler<Change
 
     @Override
     public ActivityResponseDto handle(ChangeActivityStatusCommand command) {
-        // Convert status enum to string, handling InProgress -> "In-Progress"
-        String statusString = command.getStatus() != null ? convertStatusToString(command.getStatus()) : null;
-
         // Create event from command
         ChangeActivityStatusRequested event = new ChangeActivityStatusRequested(
                 command.getActivityId(),
-                statusString
+                EnumConverter.convertStatusToString(command.getStatus())
         );
 
-        // Publish event to Kafka topic "activity-events"
-        eventPublisher.publish("activity-events", command.getActivityId(), event);
+        // Publish event to Kafka topic
+        eventPublisher.publish(topicConfiguration.ACTIVITY_EVENTS, command.getActivityId(), event);
 
         // Return response DTO
         return new ActivityResponseDto(command.getActivityId());
-    }
-
-    /**
-     * Converts ActivityStatus enum to string format used in API/events.
-     * InProgress -> "In-Progress" (with hyphen)
-     * Other values remain as-is.
-     *
-     * @param status the activity status enum
-     * @return the string representation
-     */
-    private String convertStatusToString(ActivityStatus status) {
-        if (status == ActivityStatus.InProgress) {
-            return "In-Progress";
-        }
-        return status.name();
     }
 
     @Override

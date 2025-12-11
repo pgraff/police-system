@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.calls.ReceiveCallRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.CallResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class ReceiveCallCommandHandler implements CommandHandler<ReceiveCallComm
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new receive call command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public ReceiveCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public ReceiveCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -44,15 +49,15 @@ public class ReceiveCallCommandHandler implements CommandHandler<ReceiveCallComm
         ReceiveCallRequested event = new ReceiveCallRequested(
                 command.getCallId(),
                 command.getCallNumber(),
-                command.getPriority() != null ? command.getPriority().name() : null,
-                command.getStatus() != null ? command.getStatus().name() : null,
+                EnumConverter.convertEnumToString(command.getPriority()),
+                EnumConverter.convertEnumToString(command.getStatus()),
                 command.getReceivedTime(),
                 command.getDescription(),
-                command.getCallType() != null ? command.getCallType().name() : null
+                EnumConverter.convertEnumToString(command.getCallType())
         );
 
-        // Publish event to Kafka topic "call-events"
-        eventPublisher.publish("call-events", command.getCallId(), event);
+        // Publish event to Kafka topic
+        eventPublisher.publish(topicConfiguration.CALL_EVENTS, command.getCallId(), event);
 
         // Return response DTO
         return new CallResponseDto(command.getCallId(), command.getCallNumber());

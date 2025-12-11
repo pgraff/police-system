@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.locations.UpdateLocationRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.LocationResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class UpdateLocationCommandHandler implements CommandHandler<UpdateLocati
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new update location command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka and NATS/JetStream
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public UpdateLocationCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public UpdateLocationCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -50,12 +55,12 @@ public class UpdateLocationCommandHandler implements CommandHandler<UpdateLocati
                 command.getZipCode(),
                 command.getLatitude() != null ? command.getLatitude().toString() : null,
                 command.getLongitude() != null ? command.getLongitude().toString() : null,
-                command.getLocationType() != null ? command.getLocationType().name() : null
+                EnumConverter.convertEnumToString(command.getLocationType())
         );
 
-        // Publish event to Kafka topic "location-events"
+        // Publish event to Kafka topic
         // DualEventPublisher will automatically also publish to NATS/JetStream subject "commands.location.update"
-        eventPublisher.publish("location-events", command.getLocationId(), event);
+        eventPublisher.publish(topicConfiguration.LOCATION_EVENTS, command.getLocationId(), event);
 
         // Return response DTO
         return new LocationResponseDto(command.getLocationId());

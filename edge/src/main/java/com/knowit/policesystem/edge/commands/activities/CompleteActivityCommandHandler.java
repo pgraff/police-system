@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.activities.CompleteActivityRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.ActivityResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -17,16 +18,19 @@ public class CompleteActivityCommandHandler implements CommandHandler<CompleteAc
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new complete activity command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public CompleteActivityCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public CompleteActivityCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -45,7 +49,7 @@ public class CompleteActivityCommandHandler implements CommandHandler<CompleteAc
                 command.getCompletedTime()
         );
 
-        eventPublisher.publish("activity-events", command.getActivityId(), event);
+        eventPublisher.publish(topicConfiguration.ACTIVITY_EVENTS, command.getActivityId(), event);
 
         return new ActivityResponseDto(command.getActivityId());
     }

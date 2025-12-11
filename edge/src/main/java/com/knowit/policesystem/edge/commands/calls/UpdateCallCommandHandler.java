@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.calls.UpdateCallRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.CallResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -16,10 +18,12 @@ public class UpdateCallCommandHandler implements CommandHandler<UpdateCallComman
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
-    public UpdateCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public UpdateCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     @PostConstruct
@@ -31,12 +35,12 @@ public class UpdateCallCommandHandler implements CommandHandler<UpdateCallComman
     public CallResponseDto handle(UpdateCallCommand command) {
         UpdateCallRequested event = new UpdateCallRequested(
                 command.getCallId(),
-                command.getPriority() != null ? command.getPriority().name() : null,
+                EnumConverter.convertEnumToString(command.getPriority()),
                 command.getDescription(),
-                command.getCallType() != null ? command.getCallType().name() : null
+                EnumConverter.convertEnumToString(command.getCallType())
         );
 
-        eventPublisher.publish("call-events", command.getCallId(), event);
+        eventPublisher.publish(topicConfiguration.CALL_EVENTS, command.getCallId(), event);
 
         return new CallResponseDto(command.getCallId(), null);
     }

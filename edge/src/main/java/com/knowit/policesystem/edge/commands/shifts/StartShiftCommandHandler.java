@@ -4,8 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.shifts.StartShiftRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
-import com.knowit.policesystem.edge.domain.ShiftStatus;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.ShiftResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -16,20 +17,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class StartShiftCommandHandler implements CommandHandler<StartShiftCommand, ShiftResponseDto> {
 
-    private static final String TOPIC = "shift-events";
-
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new start shift command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public StartShiftCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public StartShiftCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -43,26 +45,17 @@ public class StartShiftCommandHandler implements CommandHandler<StartShiftComman
 
     @Override
     public ShiftResponseDto handle(StartShiftCommand command) {
-        String statusString = command.getStatus() != null ? convertStatusToString(command.getStatus()) : null;
-
         StartShiftRequested event = new StartShiftRequested(
                 command.getShiftId(),
                 command.getStartTime(),
                 command.getEndTime(),
-                command.getShiftType() != null ? command.getShiftType().name() : null,
-                statusString
+                EnumConverter.convertEnumToString(command.getShiftType()),
+                EnumConverter.convertStatusToString(command.getStatus())
         );
 
-        eventPublisher.publish(TOPIC, command.getShiftId(), event);
+        eventPublisher.publish(topicConfiguration.SHIFT_EVENTS, command.getShiftId(), event);
 
         return new ShiftResponseDto(command.getShiftId());
-    }
-
-    private String convertStatusToString(ShiftStatus status) {
-        if (status == ShiftStatus.InProgress) {
-            return "In-Progress";
-        }
-        return status.name();
     }
 
     @Override

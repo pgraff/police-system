@@ -21,6 +21,7 @@ import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToDispatchRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import com.knowit.policesystem.edge.services.calls.CallExistenceService;
@@ -73,10 +74,12 @@ class CallControllerTest extends BaseIntegrationTest {
     @Autowired
     private InMemoryCallExistenceService callExistenceService;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "call-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -97,7 +100,7 @@ class CallControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.CALL_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -158,7 +161,7 @@ class CallControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         // Deserialize and verify event data
         ReceiveCallRequested event = eventObjectMapper.readValue(record.value(), ReceiveCallRequested.class);
@@ -275,7 +278,7 @@ class CallControllerTest extends BaseIntegrationTest {
         assertThat(records).isNotEmpty();
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         DispatchCallRequested event = eventObjectMapper.readValue(record.value(), DispatchCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("DispatchCallRequested");
@@ -355,7 +358,7 @@ class CallControllerTest extends BaseIntegrationTest {
         assertThat(records).isNotEmpty();
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         ArriveAtCallRequested event = eventObjectMapper.readValue(record.value(), ArriveAtCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("ArriveAtCallRequested");
@@ -435,7 +438,7 @@ class CallControllerTest extends BaseIntegrationTest {
         assertThat(records).isNotEmpty();
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         ClearCallRequested event = eventObjectMapper.readValue(record.value(), ClearCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("ClearCallRequested");
@@ -514,7 +517,7 @@ class CallControllerTest extends BaseIntegrationTest {
         assertThat(records).isNotEmpty();
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         ChangeCallStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeCallStatusRequested.class);
         assertThat(event.getEventType()).isEqualTo("ChangeCallStatusRequested");
@@ -598,7 +601,7 @@ class CallControllerTest extends BaseIntegrationTest {
         assertThat(records).isNotEmpty();
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         UpdateCallRequested event = eventObjectMapper.readValue(record.value(), UpdateCallRequested.class);
         assertThat(event.getEventType()).isEqualTo("UpdateCallRequested");
@@ -703,7 +706,7 @@ class CallControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         // Deserialize and verify event data
         LinkCallToIncidentRequested event = eventObjectMapper.readValue(record.value(), LinkCallToIncidentRequested.class);
@@ -811,7 +814,7 @@ class CallControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(callId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.CALL_EVENTS);
 
         // Deserialize and verify event data
         LinkCallToDispatchRequested event = eventObjectMapper.readValue(record.value(), LinkCallToDispatchRequested.class);

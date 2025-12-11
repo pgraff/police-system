@@ -8,11 +8,11 @@ import com.knowit.policesystem.edge.dto.EndPartyInvolvementRequestDto;
 import com.knowit.policesystem.edge.dto.InvolvePartyRequestDto;
 import com.knowit.policesystem.edge.dto.UpdatePartyInvolvementRequestDto;
 import com.knowit.policesystem.edge.dto.InvolvementResponseDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.involvedparties.EndPartyInvolvementCommandValidator;
 import com.knowit.policesystem.edge.validation.involvedparties.InvolvePartyCommandValidator;
 import com.knowit.policesystem.edge.validation.involvedparties.UpdatePartyInvolvementCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,25 +65,10 @@ public class InvolvedPartyController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<InvolvementResponseDto>> involveParty(
             @Valid @RequestBody InvolvePartyRequestDto requestDto) {
 
-        // Generate involvementId
         String involvementId = UUID.randomUUID().toString();
-
-        // Create command from DTO
         InvolvePartyCommand command = new InvolvePartyCommand(involvementId, requestDto);
-
-        // Validate command
-        var validationResult = commandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<InvolvePartyCommand, InvolvementResponseDto> handler =
-                commandHandlerRegistry.findHandler(InvolvePartyCommand.class);
-        InvolvementResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Party involvement request processed");
+        return executeCommand(command, commandValidator, commandHandlerRegistry, InvolvePartyCommand.class,
+                "Party involvement request processed", HttpStatus.CREATED);
     }
 
     /**
@@ -99,22 +84,9 @@ public class InvolvedPartyController extends BaseRestController {
             @PathVariable String involvementId,
             @Valid @RequestBody EndPartyInvolvementRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         EndPartyInvolvementCommand command = new EndPartyInvolvementCommand(involvementId, requestDto);
-
-        // Validate command
-        var validationResult = endPartyInvolvementCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<EndPartyInvolvementCommand, InvolvementResponseDto> handler =
-                commandHandlerRegistry.findHandler(EndPartyInvolvementCommand.class);
-        InvolvementResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Party involvement end request processed");
+        return executeCommand(command, endPartyInvolvementCommandValidator, commandHandlerRegistry, EndPartyInvolvementCommand.class,
+                "Party involvement end request processed", HttpStatus.OK);
     }
 
     /**
@@ -130,21 +102,8 @@ public class InvolvedPartyController extends BaseRestController {
             @PathVariable String involvementId,
             @Valid @RequestBody UpdatePartyInvolvementRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         UpdatePartyInvolvementCommand command = new UpdatePartyInvolvementCommand(involvementId, requestDto);
-
-        // Validate command
-        var validationResult = updatePartyInvolvementCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdatePartyInvolvementCommand, InvolvementResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdatePartyInvolvementCommand.class);
-        InvolvementResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Party involvement update request processed");
+        return executeCommand(command, updatePartyInvolvementCommandValidator, commandHandlerRegistry, UpdatePartyInvolvementCommand.class,
+                "Party involvement update request processed", HttpStatus.OK);
     }
 }

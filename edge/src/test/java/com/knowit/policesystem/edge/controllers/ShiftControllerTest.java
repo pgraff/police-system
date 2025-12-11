@@ -20,6 +20,8 @@ import com.knowit.policesystem.edge.dto.UpdateOfficerShiftRequestDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -62,12 +64,13 @@ class ShiftControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private Consumer<String, String> officerShiftConsumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "shift-events";
-    private static final String OFFICER_SHIFT_TOPIC = "officer-shift-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -84,7 +87,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.SHIFT_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -98,7 +101,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
         officerShiftConsumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         officerShiftConsumer = new KafkaConsumer<>(officerShiftConsumerProps);
-        officerShiftConsumer.subscribe(Collections.singletonList(OFFICER_SHIFT_TOPIC));
+        officerShiftConsumer.subscribe(Collections.singletonList(topicConfiguration.OFFICER_SHIFT_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         officerShiftConsumer.poll(Duration.ofSeconds(1));
@@ -156,7 +159,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(shiftId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.SHIFT_EVENTS);
 
         StartShiftRequested event = eventObjectMapper.readValue(record.value(), StartShiftRequested.class);
         assertThat(event.getEventId()).isNotNull();
@@ -292,7 +295,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(shiftId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.SHIFT_EVENTS);
 
         EndShiftRequested event = eventObjectMapper.readValue(record.value(), EndShiftRequested.class);
         assertThat(event.getEventId()).isNotNull();
@@ -368,7 +371,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(shiftId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.SHIFT_EVENTS);
 
         com.knowit.policesystem.common.events.shifts.ChangeShiftStatusRequested event = 
                 eventObjectMapper.readValue(record.value(), com.knowit.policesystem.common.events.shifts.ChangeShiftStatusRequested.class);
@@ -469,7 +472,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(shiftId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.SHIFT_EVENTS);
 
         RecordShiftChangeRequested event = eventObjectMapper.readValue(record.value(), RecordShiftChangeRequested.class);
         assertThat(event.getEventId()).isNotNull();
@@ -573,7 +576,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(shiftId);
-        assertThat(record.topic()).isEqualTo(OFFICER_SHIFT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.OFFICER_SHIFT_EVENTS);
 
         CheckInOfficerRequested event = eventObjectMapper.readValue(record.value(), CheckInOfficerRequested.class);
         assertThat(event.getEventId()).isNotNull();
@@ -677,7 +680,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(shiftId);
-        assertThat(record.topic()).isEqualTo(OFFICER_SHIFT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.OFFICER_SHIFT_EVENTS);
 
         CheckOutOfficerRequested event = eventObjectMapper.readValue(record.value(), CheckOutOfficerRequested.class);
         assertThat(event.getEventId()).isNotNull();
@@ -756,7 +759,7 @@ class ShiftControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(shiftId);
-        assertThat(record.topic()).isEqualTo(OFFICER_SHIFT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.OFFICER_SHIFT_EVENTS);
 
         UpdateOfficerShiftRequested event = eventObjectMapper.readValue(record.value(), UpdateOfficerShiftRequested.class);
         assertThat(event.getEventId()).isNotNull();

@@ -18,7 +18,6 @@ import com.knowit.policesystem.edge.dto.ShiftResponseDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.OfficerShiftResponseDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.shifts.ChangeShiftStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.CheckInOfficerCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.CheckOutOfficerCommandValidator;
@@ -27,6 +26,7 @@ import com.knowit.policesystem.edge.validation.shifts.UpdateOfficerShiftCommandV
 import com.knowit.policesystem.edge.validation.shifts.RecordShiftChangeCommandValidator;
 import com.knowit.policesystem.edge.validation.shifts.StartShiftCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -95,17 +95,8 @@ public class ShiftController extends BaseRestController {
             @Valid @RequestBody StartShiftRequestDto requestDto) {
 
         StartShiftCommand command = new StartShiftCommand(requestDto.getShiftId(), requestDto);
-
-        var validationResult = commandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<StartShiftCommand, ShiftResponseDto> handler =
-                commandHandlerRegistry.findHandler(StartShiftCommand.class);
-        ShiftResponseDto response = handler.handle(command);
-
-        return created(response, "Shift start request created");
+        return executeCommand(command, commandValidator, commandHandlerRegistry, StartShiftCommand.class,
+                "Shift start request created", HttpStatus.CREATED);
     }
 
     /**
@@ -122,17 +113,8 @@ public class ShiftController extends BaseRestController {
             @Valid @RequestBody EndShiftRequestDto requestDto) {
 
         EndShiftCommand command = new EndShiftCommand(shiftId, requestDto);
-
-        var validationResult = endShiftCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<EndShiftCommand, ShiftResponseDto> handler =
-                commandHandlerRegistry.findHandler(EndShiftCommand.class);
-        ShiftResponseDto response = handler.handle(command);
-
-        return success(response, "Shift end request processed");
+        return executeCommand(command, endShiftCommandValidator, commandHandlerRegistry, EndShiftCommand.class,
+                "Shift end request processed", HttpStatus.OK);
     }
 
     /**
@@ -149,17 +131,8 @@ public class ShiftController extends BaseRestController {
             @Valid @RequestBody ChangeShiftStatusRequestDto requestDto) {
 
         ChangeShiftStatusCommand command = new ChangeShiftStatusCommand(shiftId, requestDto);
-
-        var validationResult = changeShiftStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeShiftStatusCommand, ShiftResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeShiftStatusCommand.class);
-        ShiftResponseDto response = handler.handle(command);
-
-        return success(response, "Shift status change request processed");
+        return executeCommand(command, changeShiftStatusCommandValidator, commandHandlerRegistry, ChangeShiftStatusCommand.class,
+                "Shift status change request processed", HttpStatus.OK);
     }
 
     /**
@@ -176,17 +149,8 @@ public class ShiftController extends BaseRestController {
             @Valid @RequestBody RecordShiftChangeRequestDto requestDto) {
 
         RecordShiftChangeCommand command = new RecordShiftChangeCommand(shiftId, requestDto);
-
-        var validationResult = recordShiftChangeCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<RecordShiftChangeCommand, ShiftChangeResponseDto> handler =
-                commandHandlerRegistry.findHandler(RecordShiftChangeCommand.class);
-        ShiftChangeResponseDto response = handler.handle(command);
-
-        return created(response, "Shift change record request processed");
+        return executeCommand(command, recordShiftChangeCommandValidator, commandHandlerRegistry, RecordShiftChangeCommand.class,
+                "Shift change record request processed", HttpStatus.CREATED);
     }
 
     /**
@@ -205,17 +169,8 @@ public class ShiftController extends BaseRestController {
             @Valid @RequestBody CheckInOfficerRequestDto requestDto) {
 
         CheckInOfficerCommand command = new CheckInOfficerCommand(shiftId, badgeNumber, requestDto);
-
-        var validationResult = checkInOfficerCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<CheckInOfficerCommand, OfficerShiftResponseDto> handler =
-                commandHandlerRegistry.findHandler(CheckInOfficerCommand.class);
-        OfficerShiftResponseDto response = handler.handle(command);
-
-        return success(response, "Officer check-in request processed");
+        return executeCommand(command, checkInOfficerCommandValidator, commandHandlerRegistry, CheckInOfficerCommand.class,
+                "Officer check-in request processed", HttpStatus.OK);
     }
 
     /**
@@ -234,17 +189,8 @@ public class ShiftController extends BaseRestController {
             @Valid @RequestBody CheckOutOfficerRequestDto requestDto) {
 
         CheckOutOfficerCommand command = new CheckOutOfficerCommand(shiftId, badgeNumber, requestDto);
-
-        var validationResult = checkOutOfficerCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<CheckOutOfficerCommand, OfficerShiftResponseDto> handler =
-                commandHandlerRegistry.findHandler(CheckOutOfficerCommand.class);
-        OfficerShiftResponseDto response = handler.handle(command);
-
-        return success(response, "Officer check-out request processed");
+        return executeCommand(command, checkOutOfficerCommandValidator, commandHandlerRegistry, CheckOutOfficerCommand.class,
+                "Officer check-out request processed", HttpStatus.OK);
     }
 
     /**
@@ -263,16 +209,7 @@ public class ShiftController extends BaseRestController {
             @Valid @RequestBody UpdateOfficerShiftRequestDto requestDto) {
 
         UpdateOfficerShiftCommand command = new UpdateOfficerShiftCommand(shiftId, badgeNumber, requestDto);
-
-        var validationResult = updateOfficerShiftCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateOfficerShiftCommand, OfficerShiftResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateOfficerShiftCommand.class);
-        OfficerShiftResponseDto response = handler.handle(command);
-
-        return success(response, "Officer shift update request processed");
+        return executeCommand(command, updateOfficerShiftCommandValidator, commandHandlerRegistry, UpdateOfficerShiftCommand.class,
+                "Officer shift update request processed", HttpStatus.OK);
     }
 }

@@ -18,7 +18,6 @@ import com.knowit.policesystem.edge.dto.AssignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.UnassignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeResourceAssignmentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ResourceAssignmentResponseDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.assignments.CreateAssignmentCommandValidator;
 import com.knowit.policesystem.edge.validation.assignments.CompleteAssignmentCommandValidator;
 import com.knowit.policesystem.edge.validation.assignments.ChangeAssignmentStatusCommandValidator;
@@ -27,6 +26,7 @@ import com.knowit.policesystem.edge.validation.assignments.AssignResourceCommand
 import com.knowit.policesystem.edge.validation.assignments.UnassignResourceCommandValidator;
 import com.knowit.policesystem.edge.validation.assignments.ChangeResourceAssignmentStatusCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -94,22 +94,9 @@ public class AssignmentController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<AssignmentResponseDto>> createAssignment(
             @Valid @RequestBody CreateAssignmentRequestDto requestDto) {
 
-        // Create command from DTO
         CreateAssignmentCommand command = new CreateAssignmentCommand(requestDto.getAssignmentId(), requestDto);
-
-        // Validate command
-        var validationResult = commandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<CreateAssignmentCommand, AssignmentResponseDto> handler =
-                commandHandlerRegistry.findHandler(CreateAssignmentCommand.class);
-        AssignmentResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Assignment creation request processed");
+        return executeCommand(command, commandValidator, commandHandlerRegistry, CreateAssignmentCommand.class,
+                "Assignment creation request processed", HttpStatus.CREATED);
     }
 
     /**
@@ -125,22 +112,9 @@ public class AssignmentController extends BaseRestController {
             @PathVariable String assignmentId,
             @Valid @RequestBody CompleteAssignmentRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         CompleteAssignmentCommand command = new CompleteAssignmentCommand(assignmentId, requestDto);
-
-        // Validate command
-        var validationResult = completeAssignmentCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<CompleteAssignmentCommand, AssignmentResponseDto> handler =
-                commandHandlerRegistry.findHandler(CompleteAssignmentCommand.class);
-        AssignmentResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Assignment completion request processed");
+        return executeCommand(command, completeAssignmentCommandValidator, commandHandlerRegistry, CompleteAssignmentCommand.class,
+                "Assignment completion request processed", HttpStatus.OK);
     }
 
     /**
@@ -156,22 +130,9 @@ public class AssignmentController extends BaseRestController {
             @PathVariable String assignmentId,
             @Valid @RequestBody ChangeAssignmentStatusRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         ChangeAssignmentStatusCommand command = new ChangeAssignmentStatusCommand(assignmentId, requestDto);
-
-        // Validate command
-        var validationResult = changeAssignmentStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeAssignmentStatusCommand, AssignmentResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeAssignmentStatusCommand.class);
-        AssignmentResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Assignment status change request processed");
+        return executeCommand(command, changeAssignmentStatusCommandValidator, commandHandlerRegistry, ChangeAssignmentStatusCommand.class,
+                "Assignment status change request processed", HttpStatus.OK);
     }
 
     /**
@@ -187,22 +148,9 @@ public class AssignmentController extends BaseRestController {
             @PathVariable String assignmentId,
             @Valid @RequestBody LinkAssignmentToDispatchRequestDto requestDto) {
 
-        // Create command from DTO and path parameter
         LinkAssignmentToDispatchCommand command = new LinkAssignmentToDispatchCommand(assignmentId, assignmentId, requestDto);
-
-        // Validate command
-        var validationResult = linkAssignmentToDispatchCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<LinkAssignmentToDispatchCommand, LinkAssignmentToDispatchResponseDto> handler =
-                commandHandlerRegistry.findHandler(LinkAssignmentToDispatchCommand.class);
-        LinkAssignmentToDispatchResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Assignment link request processed");
+        return executeCommand(command, linkAssignmentToDispatchCommandValidator, commandHandlerRegistry, LinkAssignmentToDispatchCommand.class,
+                "Assignment link request processed", HttpStatus.OK);
     }
 
     /**
@@ -218,22 +166,9 @@ public class AssignmentController extends BaseRestController {
             @PathVariable String assignmentId,
             @Valid @RequestBody AssignResourceRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         AssignResourceCommand command = new AssignResourceCommand(assignmentId, assignmentId, requestDto);
-
-        // Validate command
-        var validationResult = assignResourceCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<AssignResourceCommand, ResourceAssignmentResponseDto> handler =
-                commandHandlerRegistry.findHandler(AssignResourceCommand.class);
-        ResourceAssignmentResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Resource assignment request processed");
+        return executeCommand(command, assignResourceCommandValidator, commandHandlerRegistry, AssignResourceCommand.class,
+                "Resource assignment request processed", HttpStatus.CREATED);
     }
 
     /**
@@ -251,22 +186,9 @@ public class AssignmentController extends BaseRestController {
             @PathVariable String resourceId,
             @Valid @RequestBody UnassignResourceRequestDto requestDto) {
 
-        // Create command from path variables and DTO
         UnassignResourceCommand command = new UnassignResourceCommand(assignmentId, assignmentId, resourceId, requestDto);
-
-        // Validate command
-        var validationResult = unassignResourceCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UnassignResourceCommand, ResourceAssignmentResponseDto> handler =
-                commandHandlerRegistry.findHandler(UnassignResourceCommand.class);
-        ResourceAssignmentResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Resource unassignment request processed");
+        return executeCommand(command, unassignResourceCommandValidator, commandHandlerRegistry, UnassignResourceCommand.class,
+                "Resource unassignment request processed", HttpStatus.OK);
     }
 
     /**
@@ -284,21 +206,8 @@ public class AssignmentController extends BaseRestController {
             @PathVariable String resourceId,
             @Valid @RequestBody ChangeResourceAssignmentStatusRequestDto requestDto) {
 
-        // Create command from path variables and DTO
         ChangeResourceAssignmentStatusCommand command = new ChangeResourceAssignmentStatusCommand(assignmentId, assignmentId, resourceId, requestDto);
-
-        // Validate command
-        var validationResult = changeResourceAssignmentStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeResourceAssignmentStatusCommand, ResourceAssignmentResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeResourceAssignmentStatusCommand.class);
-        ResourceAssignmentResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Resource assignment status change request processed");
+        return executeCommand(command, changeResourceAssignmentStatusCommandValidator, commandHandlerRegistry, ChangeResourceAssignmentStatusCommand.class,
+                "Resource assignment status change request processed", HttpStatus.OK);
     }
 }

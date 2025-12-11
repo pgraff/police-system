@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.calls.DispatchCallRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.CallResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -16,10 +17,12 @@ public class DispatchCallCommandHandler implements CommandHandler<DispatchCallCo
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
-    public DispatchCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public DispatchCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     @PostConstruct
@@ -34,7 +37,7 @@ public class DispatchCallCommandHandler implements CommandHandler<DispatchCallCo
                 command.getDispatchedTime()
         );
 
-        eventPublisher.publish("call-events", command.getCallId(), event);
+        eventPublisher.publish(topicConfiguration.CALL_EVENTS, command.getCallId(), event);
 
         return new CallResponseDto(command.getCallId(), null);
     }

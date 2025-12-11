@@ -14,7 +14,6 @@ import com.knowit.policesystem.edge.dto.DispatchIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.IncidentResponseDto;
 import com.knowit.policesystem.edge.dto.ReportIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateIncidentRequestDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.incidents.ArriveAtIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.ChangeIncidentStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.ClearIncidentCommandValidator;
@@ -22,6 +21,7 @@ import com.knowit.policesystem.edge.validation.incidents.DispatchIncidentCommand
 import com.knowit.policesystem.edge.validation.incidents.ReportIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.UpdateIncidentCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -85,22 +85,9 @@ public class IncidentController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<IncidentResponseDto>> reportIncident(
             @Valid @RequestBody ReportIncidentRequestDto requestDto) {
 
-        // Create command from DTO
         ReportIncidentCommand command = new ReportIncidentCommand(requestDto.getIncidentId(), requestDto);
-
-        // Validate command
-        var validationResult = commandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ReportIncidentCommand, IncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(ReportIncidentCommand.class);
-        IncidentResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Incident report request created");
+        return executeCommand(command, commandValidator, commandHandlerRegistry, ReportIncidentCommand.class,
+                "Incident report request created", HttpStatus.CREATED);
     }
 
     /**
@@ -117,17 +104,8 @@ public class IncidentController extends BaseRestController {
             @Valid @RequestBody DispatchIncidentRequestDto requestDto) {
 
         DispatchIncidentCommand command = new DispatchIncidentCommand(incidentId, requestDto);
-
-        var validationResult = dispatchCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<DispatchIncidentCommand, IncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(DispatchIncidentCommand.class);
-        IncidentResponseDto response = handler.handle(command);
-
-        return success(response, "Incident dispatch request created");
+        return executeCommand(command, dispatchCommandValidator, commandHandlerRegistry, DispatchIncidentCommand.class,
+                "Incident dispatch request created", HttpStatus.OK);
     }
 
     /**
@@ -144,17 +122,8 @@ public class IncidentController extends BaseRestController {
             @Valid @RequestBody ArriveAtIncidentRequestDto requestDto) {
 
         ArriveAtIncidentCommand command = new ArriveAtIncidentCommand(incidentId, requestDto);
-
-        var validationResult = arriveCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<ArriveAtIncidentCommand, IncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(ArriveAtIncidentCommand.class);
-        IncidentResponseDto response = handler.handle(command);
-
-        return success(response, "Incident arrival request created");
+        return executeCommand(command, arriveCommandValidator, commandHandlerRegistry, ArriveAtIncidentCommand.class,
+                "Incident arrival request created", HttpStatus.OK);
     }
 
     /**
@@ -171,17 +140,8 @@ public class IncidentController extends BaseRestController {
             @Valid @RequestBody ClearIncidentRequestDto requestDto) {
 
         ClearIncidentCommand command = new ClearIncidentCommand(incidentId, requestDto);
-
-        var validationResult = clearCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<ClearIncidentCommand, IncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(ClearIncidentCommand.class);
-        IncidentResponseDto response = handler.handle(command);
-
-        return success(response, "Incident clear request created");
+        return executeCommand(command, clearCommandValidator, commandHandlerRegistry, ClearIncidentCommand.class,
+                "Incident clear request created", HttpStatus.OK);
     }
 
     /**
@@ -198,17 +158,8 @@ public class IncidentController extends BaseRestController {
             @Valid @RequestBody ChangeIncidentStatusRequestDto requestDto) {
 
         ChangeIncidentStatusCommand command = new ChangeIncidentStatusCommand(incidentId, requestDto);
-
-        var validationResult = changeStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeIncidentStatusCommand, IncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeIncidentStatusCommand.class);
-        IncidentResponseDto response = handler.handle(command);
-
-        return success(response, "Incident status change request created");
+        return executeCommand(command, changeStatusCommandValidator, commandHandlerRegistry, ChangeIncidentStatusCommand.class,
+                "Incident status change request created", HttpStatus.OK);
     }
 
     /**
@@ -225,16 +176,7 @@ public class IncidentController extends BaseRestController {
             @Valid @RequestBody UpdateIncidentRequestDto requestDto) {
 
         UpdateIncidentCommand command = new UpdateIncidentCommand(incidentId, requestDto);
-
-        var validationResult = updateIncidentCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateIncidentCommand, IncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateIncidentCommand.class);
-        IncidentResponseDto response = handler.handle(command);
-
-        return success(response, "Incident update request created");
+        return executeCommand(command, updateIncidentCommandValidator, commandHandlerRegistry, UpdateIncidentCommand.class,
+                "Incident update request created", HttpStatus.OK);
     }
 }

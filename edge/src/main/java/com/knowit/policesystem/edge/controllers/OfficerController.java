@@ -9,11 +9,11 @@ import com.knowit.policesystem.edge.dto.OfficerResponseDto;
 import com.knowit.policesystem.edge.dto.OfficerStatusResponseDto;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.officers.ChangeOfficerStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.officers.RegisterOfficerCommandValidator;
 import com.knowit.policesystem.edge.validation.officers.UpdateOfficerCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -65,22 +65,9 @@ public class OfficerController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<OfficerResponseDto>> registerOfficer(
             @Valid @RequestBody RegisterOfficerRequestDto requestDto) {
 
-        // Create command from DTO
         RegisterOfficerCommand command = new RegisterOfficerCommand(requestDto.getBadgeNumber(), requestDto);
-
-        // Validate command
-        var validationResult = registerCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<RegisterOfficerCommand, OfficerResponseDto> handler =
-                commandHandlerRegistry.findHandler(RegisterOfficerCommand.class);
-        OfficerResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Officer registration request created");
+        return executeCommand(command, registerCommandValidator, commandHandlerRegistry, RegisterOfficerCommand.class,
+                "Officer registration request created", HttpStatus.CREATED);
     }
 
     /**
@@ -96,22 +83,9 @@ public class OfficerController extends BaseRestController {
             @PathVariable String badgeNumber,
             @Valid @RequestBody UpdateOfficerRequestDto requestDto) {
 
-        // Create command from DTO
         UpdateOfficerCommand command = new UpdateOfficerCommand(badgeNumber, requestDto);
-
-        // Validate command
-        var validationResult = updateCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateOfficerCommand, OfficerResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateOfficerCommand.class);
-        OfficerResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Officer update request processed");
+        return executeCommand(command, updateCommandValidator, commandHandlerRegistry, UpdateOfficerCommand.class,
+                "Officer update request processed", HttpStatus.OK);
     }
 
     /**
@@ -127,21 +101,8 @@ public class OfficerController extends BaseRestController {
             @PathVariable String badgeNumber,
             @Valid @RequestBody ChangeOfficerStatusRequestDto requestDto) {
 
-        // Create command from DTO
         ChangeOfficerStatusCommand command = new ChangeOfficerStatusCommand(badgeNumber, requestDto);
-
-        // Validate command
-        var validationResult = changeStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeOfficerStatusCommand, OfficerStatusResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeOfficerStatusCommand.class);
-        OfficerStatusResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Officer status change request processed");
+        return executeCommand(command, changeStatusCommandValidator, commandHandlerRegistry, ChangeOfficerStatusCommand.class,
+                "Officer status change request processed", HttpStatus.OK);
     }
 }

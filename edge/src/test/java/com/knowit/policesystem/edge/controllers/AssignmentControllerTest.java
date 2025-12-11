@@ -21,6 +21,7 @@ import com.knowit.policesystem.edge.dto.ChangeAssignmentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.AssignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.UnassignResourceRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeResourceAssignmentStatusRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -62,12 +63,13 @@ class AssignmentControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private Consumer<String, String> resourceAssignmentConsumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "assignment-events";
-    private static final String RESOURCE_ASSIGNMENT_TOPIC = "resource-assignment-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -88,7 +90,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.ASSIGNMENT_EVENTS));
         
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -102,7 +104,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
         resourceConsumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         resourceAssignmentConsumer = new KafkaConsumer<>(resourceConsumerProps);
-        resourceAssignmentConsumer.subscribe(Collections.singletonList(RESOURCE_ASSIGNMENT_TOPIC));
+        resourceAssignmentConsumer.subscribe(Collections.singletonList(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS));
         
         // Wait for partition assignment - consumer will start at latest offset automatically
         resourceAssignmentConsumer.poll(Duration.ofSeconds(1));
@@ -161,7 +163,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         CreateAssignmentRequested event = eventObjectMapper.readValue(record.value(), CreateAssignmentRequested.class);
@@ -236,7 +238,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         CreateAssignmentRequested event = eventObjectMapper.readValue(record.value(), CreateAssignmentRequested.class);
@@ -457,7 +459,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         CompleteAssignmentRequested event = eventObjectMapper.readValue(record.value(), CompleteAssignmentRequested.class);
@@ -559,7 +561,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         ChangeAssignmentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeAssignmentStatusRequested.class);
@@ -685,7 +687,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         com.knowit.policesystem.common.events.assignments.LinkAssignmentToDispatchRequested event =
@@ -795,7 +797,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         AssignResourceRequested event = eventObjectMapper.readValue(record.value(), AssignResourceRequested.class);
@@ -870,7 +872,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         AssignResourceRequested event = eventObjectMapper.readValue(record.value(), AssignResourceRequested.class);
@@ -945,7 +947,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         AssignResourceRequested event = eventObjectMapper.readValue(record.value(), AssignResourceRequested.class);
@@ -1116,7 +1118,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         UnassignResourceRequested event = eventObjectMapper.readValue(record.value(), UnassignResourceRequested.class);
@@ -1200,7 +1202,7 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(assignmentId);
-        assertThat(record.topic()).isEqualTo(RESOURCE_ASSIGNMENT_TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS);
 
         // Deserialize and verify event data
         ChangeResourceAssignmentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeResourceAssignmentStatusRequested.class);

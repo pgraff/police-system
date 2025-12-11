@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.resourceassignment.UnassignResourceRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.ResourceAssignmentResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -17,16 +18,19 @@ public class UnassignResourceCommandHandler implements CommandHandler<UnassignRe
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new unassign resource command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public UnassignResourceCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public UnassignResourceCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -48,8 +52,8 @@ public class UnassignResourceCommandHandler implements CommandHandler<UnassignRe
                 command.getEndTime()
         );
 
-        // Publish event to Kafka topic "resource-assignment-events"
-        eventPublisher.publish("resource-assignment-events", command.getAssignmentId(), event);
+        // Publish event to Kafka topic
+        eventPublisher.publish(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS, command.getAssignmentId(), event);
 
         // Return response DTO (using assignmentId as resourceAssignmentId for consistency)
         return new ResourceAssignmentResponseDto(command.getAssignmentId());

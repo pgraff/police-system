@@ -9,11 +9,11 @@ import com.knowit.policesystem.edge.dto.RegisterVehicleRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateVehicleRequestDto;
 import com.knowit.policesystem.edge.dto.VehicleResponseDto;
 import com.knowit.policesystem.edge.dto.VehicleStatusResponseDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.vehicles.ChangeVehicleStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.vehicles.RegisterVehicleCommandValidator;
 import com.knowit.policesystem.edge.validation.vehicles.UpdateVehicleCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -65,22 +65,9 @@ public class VehicleController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<VehicleResponseDto>> registerVehicle(
             @Valid @RequestBody RegisterVehicleRequestDto requestDto) {
 
-        // Create command from DTO
         RegisterVehicleCommand command = new RegisterVehicleCommand(requestDto.getUnitId(), requestDto);
-
-        // Validate command
-        var validationResult = registerCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<RegisterVehicleCommand, VehicleResponseDto> handler =
-                commandHandlerRegistry.findHandler(RegisterVehicleCommand.class);
-        VehicleResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Vehicle registration request created");
+        return executeCommand(command, registerCommandValidator, commandHandlerRegistry, RegisterVehicleCommand.class,
+                "Vehicle registration request created", HttpStatus.CREATED);
     }
 
     /**
@@ -96,22 +83,9 @@ public class VehicleController extends BaseRestController {
             @PathVariable String unitId,
             @Valid @RequestBody UpdateVehicleRequestDto requestDto) {
 
-        // Create command from DTO
         UpdateVehicleCommand command = new UpdateVehicleCommand(unitId, requestDto);
-
-        // Validate command
-        var validationResult = updateCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateVehicleCommand, VehicleResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateVehicleCommand.class);
-        VehicleResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Vehicle update request processed");
+        return executeCommand(command, updateCommandValidator, commandHandlerRegistry, UpdateVehicleCommand.class,
+                "Vehicle update request processed", HttpStatus.OK);
     }
 
     /**
@@ -127,21 +101,8 @@ public class VehicleController extends BaseRestController {
             @PathVariable String unitId,
             @Valid @RequestBody ChangeVehicleStatusRequestDto requestDto) {
 
-        // Create command from DTO
         ChangeVehicleStatusCommand command = new ChangeVehicleStatusCommand(unitId, requestDto);
-
-        // Validate command
-        var validationResult = changeStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeVehicleStatusCommand, VehicleStatusResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeVehicleStatusCommand.class);
-        VehicleStatusResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Vehicle status change request processed");
+        return executeCommand(command, changeStatusCommandValidator, commandHandlerRegistry, ChangeVehicleStatusCommand.class,
+                "Vehicle status change request processed", HttpStatus.OK);
     }
 }

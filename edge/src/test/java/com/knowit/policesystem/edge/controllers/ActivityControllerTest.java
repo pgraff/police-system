@@ -15,6 +15,7 @@ import com.knowit.policesystem.edge.dto.CompleteActivityRequestDto;
 import com.knowit.policesystem.edge.dto.LinkActivityToIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.StartActivityRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateActivityRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -59,10 +60,12 @@ class ActivityControllerTest extends BaseIntegrationTest {
     @Autowired
     private ActivityController activityController;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "activity-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -83,7 +86,7 @@ class ActivityControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.ACTIVITY_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -138,7 +141,7 @@ class ActivityControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(activityId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ACTIVITY_EVENTS);
 
         // Deserialize and verify event data
         StartActivityRequested event = eventObjectMapper.readValue(record.value(), StartActivityRequested.class);
@@ -269,7 +272,7 @@ class ActivityControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(activityId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ACTIVITY_EVENTS);
 
         // Deserialize and verify event data
         CompleteActivityRequested event = eventObjectMapper.readValue(record.value(), CompleteActivityRequested.class);
@@ -351,7 +354,7 @@ class ActivityControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(activityId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ACTIVITY_EVENTS);
 
         // Deserialize and verify event data
         ChangeActivityStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeActivityStatusRequested.class);
@@ -474,7 +477,7 @@ class ActivityControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(activityId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ACTIVITY_EVENTS);
 
         // Deserialize and verify event data
         UpdateActivityRequested event = eventObjectMapper.readValue(record.value(), UpdateActivityRequested.class);
@@ -561,7 +564,7 @@ class ActivityControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(activityId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.ACTIVITY_EVENTS);
 
         // Deserialize and verify event data
         LinkActivityToIncidentRequested event = eventObjectMapper.readValue(record.value(), LinkActivityToIncidentRequested.class);

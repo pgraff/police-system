@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.units.ChangeUnitStatusRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.UnitStatusResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -17,16 +18,19 @@ public class ChangeUnitStatusCommandHandler implements CommandHandler<ChangeUnit
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new change unit status command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka and NATS/JetStream
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public ChangeUnitStatusCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public ChangeUnitStatusCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -46,9 +50,9 @@ public class ChangeUnitStatusCommandHandler implements CommandHandler<ChangeUnit
                 command.getStatus()
         );
 
-        // Publish event to Kafka topic "unit-events"
+        // Publish event to Kafka topic
         // DualEventPublisher will automatically also publish to NATS/JetStream subject "commands.unit.change-status"
-        eventPublisher.publish("unit-events", command.getUnitId(), event);
+        eventPublisher.publish(topicConfiguration.UNIT_EVENTS, command.getUnitId(), event);
 
         // Return response DTO
         return new UnitStatusResponseDto(command.getUnitId(), command.getStatus());

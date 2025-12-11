@@ -10,11 +10,11 @@ import com.knowit.policesystem.edge.dto.SuccessResponse;
 import com.knowit.policesystem.edge.dto.UpdateUnitRequestDto;
 import com.knowit.policesystem.edge.dto.UnitResponseDto;
 import com.knowit.policesystem.edge.dto.UnitStatusResponseDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.units.ChangeUnitStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.units.CreateUnitCommandValidator;
 import com.knowit.policesystem.edge.validation.units.UpdateUnitCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -66,22 +66,9 @@ public class UnitController extends BaseRestController {
     public ResponseEntity<SuccessResponse<UnitResponseDto>> createUnit(
             @Valid @RequestBody CreateUnitRequestDto requestDto) {
 
-        // Create command from DTO
         CreateUnitCommand command = new CreateUnitCommand(requestDto.getUnitId(), requestDto);
-
-        // Validate command
-        var validationResult = createCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<CreateUnitCommand, UnitResponseDto> handler =
-                commandHandlerRegistry.findHandler(CreateUnitCommand.class);
-        UnitResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Unit creation request processed");
+        return executeCommand(command, createCommandValidator, commandHandlerRegistry, CreateUnitCommand.class,
+                "Unit creation request processed", HttpStatus.CREATED);
     }
 
     /**
@@ -97,22 +84,9 @@ public class UnitController extends BaseRestController {
             @PathVariable String unitId,
             @Valid @RequestBody UpdateUnitRequestDto requestDto) {
 
-        // Create command from DTO
         UpdateUnitCommand command = new UpdateUnitCommand(unitId, requestDto);
-
-        // Validate command
-        var validationResult = updateCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateUnitCommand, UnitResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateUnitCommand.class);
-        UnitResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Unit update request processed");
+        return executeCommand(command, updateCommandValidator, commandHandlerRegistry, UpdateUnitCommand.class,
+                "Unit update request processed", HttpStatus.OK);
     }
 
     /**
@@ -128,21 +102,8 @@ public class UnitController extends BaseRestController {
             @PathVariable String unitId,
             @Valid @RequestBody ChangeUnitStatusRequestDto requestDto) {
 
-        // Create command from DTO
         ChangeUnitStatusCommand command = new ChangeUnitStatusCommand(unitId, requestDto);
-
-        // Validate command
-        var validationResult = changeStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeUnitStatusCommand, UnitStatusResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeUnitStatusCommand.class);
-        UnitStatusResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Unit status change request processed");
+        return executeCommand(command, changeStatusCommandValidator, commandHandlerRegistry, ChangeUnitStatusCommand.class,
+                "Unit status change request processed", HttpStatus.OK);
     }
 }

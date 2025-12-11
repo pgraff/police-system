@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.incidents.ChangeIncidentStatusRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.IncidentResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,10 +19,12 @@ public class ChangeIncidentStatusCommandHandler implements CommandHandler<Change
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
-    public ChangeIncidentStatusCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public ChangeIncidentStatusCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /** Registers this handler in the command handler registry. */
@@ -33,11 +37,11 @@ public class ChangeIncidentStatusCommandHandler implements CommandHandler<Change
     public IncidentResponseDto handle(ChangeIncidentStatusCommand command) {
         ChangeIncidentStatusRequested event = new ChangeIncidentStatusRequested(
                 command.getIncidentId(),
-                command.getStatus() != null ? command.getStatus().name() : null
+                EnumConverter.convertEnumToString(command.getStatus())
         );
 
-        // Publish to incident-events; DualEventPublisher will also publish to NATS for critical events.
-        eventPublisher.publish("incident-events", command.getIncidentId(), event);
+        // Publish to Kafka topic; DualEventPublisher will also publish to NATS for critical events.
+        eventPublisher.publish(topicConfiguration.INCIDENT_EVENTS, command.getIncidentId(), event);
 
         return new IncidentResponseDto(command.getIncidentId(), null);
     }

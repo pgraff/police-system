@@ -11,6 +11,7 @@ import com.knowit.policesystem.edge.domain.VehicleType;
 import com.knowit.policesystem.edge.dto.ChangeVehicleStatusRequestDto;
 import com.knowit.policesystem.edge.dto.RegisterVehicleRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateVehicleRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -53,12 +54,14 @@ class VehicleControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private static final Logger logger = LoggerFactory.getLogger(VehicleControllerTest.class);
     
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "vehicle-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -79,7 +82,7 @@ class VehicleControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.VEHICLE_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -136,7 +139,7 @@ class VehicleControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(unitId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.VEHICLE_EVENTS);
 
         // Deserialize and verify event data
         RegisterVehicleRequested event = eventObjectMapper.readValue(record.value(), RegisterVehicleRequested.class);
@@ -382,7 +385,7 @@ class VehicleControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(unitId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.VEHICLE_EVENTS);
 
         // Deserialize and verify event data
         UpdateVehicleRequested event = eventObjectMapper.readValue(record.value(), UpdateVehicleRequested.class);
@@ -568,7 +571,7 @@ class VehicleControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(unitId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.VEHICLE_EVENTS);
 
         // Deserialize and verify event data
         ChangeVehicleStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeVehicleStatusRequested.class);

@@ -1,6 +1,11 @@
 package com.knowit.policesystem.edge.controllers;
 
+import com.knowit.policesystem.edge.commands.Command;
+import com.knowit.policesystem.edge.commands.CommandHandler;
+import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.dto.SuccessResponse;
+import com.knowit.policesystem.edge.exceptions.ValidationException;
+import com.knowit.policesystem.edge.validation.Validator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -46,6 +51,45 @@ public abstract class BaseRestController {
      */
     protected <T> ResponseEntity<SuccessResponse<T>> success(T data) {
         return success(data, "Request processed successfully");
+    }
+
+    /**
+     * Executes a command using the standard pattern: validate, find handler, execute, return response.
+     * This method abstracts the common boilerplate found in all controller methods.
+     *
+     * @param command the command to execute
+     * @param validator the validator to use for command validation
+     * @param commandHandlerRegistry the command handler registry
+     * @param commandClass the command class (for type-safe handler lookup)
+     * @param successMessage the success message to include in the response
+     * @param httpStatus the HTTP status code to return (CREATED for POST, OK for PUT/PATCH)
+     * @param <C> the command type
+     * @param <R> the response type
+     * @return ResponseEntity with SuccessResponse containing the handler result
+     * @throws ValidationException if command validation fails
+     */
+    @SuppressWarnings("unchecked")
+    protected <C extends Command, R> ResponseEntity<SuccessResponse<R>> executeCommand(
+            C command,
+            Validator<? super C> validator,
+            CommandHandlerRegistry commandHandlerRegistry,
+            Class<? extends C> commandClass,
+            String successMessage,
+            HttpStatus httpStatus) {
+
+        // Validate command
+        var validationResult = validator.validate(command);
+        if (!validationResult.isValid()) {
+            throw new ValidationException(validationResult);
+        }
+
+        // Get handler and execute
+        CommandHandler<C, R> handler = (CommandHandler<C, R>) commandHandlerRegistry.findHandler((Class<C>) commandClass);
+        R response = handler.handle(command);
+
+        // Return response with appropriate HTTP status
+        SuccessResponse<R> successResponse = new SuccessResponse<>(successMessage, response);
+        return ResponseEntity.status(httpStatus).body(successResponse);
     }
 }
 

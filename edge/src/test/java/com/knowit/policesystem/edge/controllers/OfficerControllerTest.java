@@ -10,6 +10,7 @@ import com.knowit.policesystem.edge.domain.OfficerStatus;
 import com.knowit.policesystem.edge.dto.ChangeOfficerStatusRequestDto;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -52,12 +53,14 @@ class OfficerControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private static final Logger logger = LoggerFactory.getLogger(OfficerControllerTest.class);
     
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "officer-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -78,7 +81,7 @@ class OfficerControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.OFFICER_EVENTS));
         
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -146,7 +149,7 @@ class OfficerControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(badgeNumber);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.OFFICER_EVENTS);
 
         // Deserialize and verify event data
         RegisterOfficerRequested event = eventObjectMapper.readValue(record.value(), RegisterOfficerRequested.class);
@@ -323,7 +326,7 @@ class OfficerControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(badgeNumber);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.OFFICER_EVENTS);
 
         // Deserialize and verify event data
         UpdateOfficerRequested event = eventObjectMapper.readValue(record.value(), UpdateOfficerRequested.class);
@@ -484,7 +487,7 @@ class OfficerControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(badgeNumber);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.OFFICER_EVENTS);
 
         // Deserialize and verify event data
         ChangeOfficerStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeOfficerStatusRequested.class);

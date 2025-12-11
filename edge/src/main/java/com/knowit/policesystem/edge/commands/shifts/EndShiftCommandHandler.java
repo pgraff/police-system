@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.shifts.EndShiftRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.ShiftResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -15,14 +16,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class EndShiftCommandHandler implements CommandHandler<EndShiftCommand, ShiftResponseDto> {
 
-    private static final String TOPIC = "shift-events";
-
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
-    public EndShiftCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public EndShiftCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     @PostConstruct
@@ -37,7 +38,7 @@ public class EndShiftCommandHandler implements CommandHandler<EndShiftCommand, S
                 command.getEndTime()
         );
 
-        eventPublisher.publish(TOPIC, command.getShiftId(), event);
+        eventPublisher.publish(topicConfiguration.SHIFT_EVENTS, command.getShiftId(), event);
 
         return new ShiftResponseDto(command.getShiftId());
     }

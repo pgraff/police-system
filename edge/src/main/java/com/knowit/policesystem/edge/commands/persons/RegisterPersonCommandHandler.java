@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.persons.RegisterPersonRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.PersonResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class RegisterPersonCommandHandler implements CommandHandler<RegisterPers
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new register person command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka and NATS/JetStream
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public RegisterPersonCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public RegisterPersonCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -47,14 +52,14 @@ public class RegisterPersonCommandHandler implements CommandHandler<RegisterPers
                 command.getFirstName(),
                 command.getLastName(),
                 command.getDateOfBirth() != null ? command.getDateOfBirth().toString() : null,
-                command.getGender() != null ? command.getGender().name() : null,
-                command.getRace() != null ? command.getRace().name() : null,
+                EnumConverter.convertEnumToString(command.getGender()),
+                EnumConverter.convertEnumToString(command.getRace()),
                 command.getPhoneNumber()
         );
 
-        // Publish event to Kafka topic "person-events"
+        // Publish event to Kafka topic
         // DualEventPublisher will automatically also publish to NATS/JetStream subject "commands.person.register"
-        eventPublisher.publish("person-events", command.getPersonId(), event);
+        eventPublisher.publish(topicConfiguration.PERSON_EVENTS, command.getPersonId(), event);
 
         // Return response DTO
         return new PersonResponseDto(command.getPersonId());

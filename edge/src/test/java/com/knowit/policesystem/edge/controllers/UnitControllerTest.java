@@ -11,6 +11,7 @@ import com.knowit.policesystem.edge.domain.UnitType;
 import com.knowit.policesystem.edge.dto.ChangeUnitStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CreateUnitRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateUnitRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -50,10 +51,12 @@ class UnitControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "unit-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -74,7 +77,7 @@ class UnitControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.UNIT_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -126,7 +129,7 @@ class UnitControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(unitId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.UNIT_EVENTS);
 
         // Deserialize and verify event data
         CreateUnitRequested event = eventObjectMapper.readValue(record.value(), CreateUnitRequested.class);
@@ -281,7 +284,7 @@ class UnitControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(unitId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.UNIT_EVENTS);
 
         // Deserialize and verify event data
         UpdateUnitRequested event = eventObjectMapper.readValue(record.value(), UpdateUnitRequested.class);
@@ -497,7 +500,7 @@ class UnitControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(unitId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.UNIT_EVENTS);
 
         // Deserialize and verify event data
         ChangeUnitStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeUnitStatusRequested.class);

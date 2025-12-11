@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.incidents.DispatchIncidentRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.IncidentResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -17,10 +18,12 @@ public class DispatchIncidentCommandHandler implements CommandHandler<DispatchIn
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
-    public DispatchIncidentCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public DispatchIncidentCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -38,8 +41,8 @@ public class DispatchIncidentCommandHandler implements CommandHandler<DispatchIn
                 command.getDispatchedTime()
         );
 
-        // Publish event to Kafka topic "incident-events" (DualEventPublisher will also publish to NATS for critical events)
-        eventPublisher.publish("incident-events", command.getIncidentId(), event);
+        // Publish event to Kafka topic (DualEventPublisher will also publish to NATS for critical events)
+        eventPublisher.publish(topicConfiguration.INCIDENT_EVENTS, command.getIncidentId(), event);
 
         return new IncidentResponseDto(command.getIncidentId(), null);
     }

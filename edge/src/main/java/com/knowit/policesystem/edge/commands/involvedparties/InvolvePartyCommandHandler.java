@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.involvedparty.InvolvePartyRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.InvolvementResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class InvolvePartyCommandHandler implements CommandHandler<InvolvePartyCo
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new involve party command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public InvolvePartyCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public InvolvePartyCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -48,13 +53,13 @@ public class InvolvePartyCommandHandler implements CommandHandler<InvolvePartyCo
                 command.getIncidentId(),
                 command.getCallId(),
                 command.getActivityId(),
-                command.getPartyRoleType() != null ? command.getPartyRoleType().name() : null,
+                EnumConverter.convertEnumToString(command.getPartyRoleType()),
                 command.getDescription(),
                 command.getInvolvementStartTime()
         );
 
-        // Publish event to Kafka topic "involved-party-events"
-        eventPublisher.publish("involved-party-events", command.getInvolvementId(), event);
+        // Publish event to Kafka topic
+        eventPublisher.publish(topicConfiguration.INVOLVED_PARTY_EVENTS, command.getInvolvementId(), event);
 
         // Return response DTO
         return new InvolvementResponseDto(command.getInvolvementId());

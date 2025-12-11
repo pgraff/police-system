@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.assignments.LinkAssignmentToDispatchRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.LinkAssignmentToDispatchResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -17,16 +18,19 @@ public class LinkAssignmentToDispatchCommandHandler implements CommandHandler<Li
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new link assignment to dispatch command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public LinkAssignmentToDispatchCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public LinkAssignmentToDispatchCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -47,9 +51,9 @@ public class LinkAssignmentToDispatchCommandHandler implements CommandHandler<Li
                 command.getDispatchId()
         );
 
-        // Publish event to Kafka topic "assignment-events"
+        // Publish event to Kafka topic
         // Note: This is NOT a critical event, so it only goes to Kafka (not NATS/JetStream)
-        eventPublisher.publish("assignment-events", command.getAssignmentId(), event);
+        eventPublisher.publish(topicConfiguration.ASSIGNMENT_EVENTS, command.getAssignmentId(), event);
 
         // Return response DTO
         return new LinkAssignmentToDispatchResponseDto(command.getAssignmentId(), command.getDispatchId());

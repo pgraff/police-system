@@ -11,7 +11,6 @@ import com.knowit.policesystem.edge.dto.CreateLocationRequestDto;
 import com.knowit.policesystem.edge.dto.LinkLocationRequestDto;
 import com.knowit.policesystem.edge.dto.LocationResponseDto;
 import com.knowit.policesystem.edge.dto.UpdateLocationRequestDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.locations.CreateLocationCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.LinkLocationToIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.LinkLocationToCallCommandValidator;
@@ -19,6 +18,7 @@ import com.knowit.policesystem.edge.validation.locations.UnlinkLocationFromIncid
 import com.knowit.policesystem.edge.validation.locations.UnlinkLocationFromCallCommandValidator;
 import com.knowit.policesystem.edge.validation.locations.UpdateLocationCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -80,22 +80,9 @@ public class LocationController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<LocationResponseDto>> createLocation(
             @Valid @RequestBody CreateLocationRequestDto requestDto) {
 
-        // Create command from DTO
         CreateLocationCommand command = new CreateLocationCommand(requestDto.getLocationId(), requestDto);
-
-        // Validate command
-        var validationResult = createCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<CreateLocationCommand, LocationResponseDto> handler =
-                commandHandlerRegistry.findHandler(CreateLocationCommand.class);
-        LocationResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Location creation request created");
+        return executeCommand(command, createCommandValidator, commandHandlerRegistry, CreateLocationCommand.class,
+                "Location creation request created", HttpStatus.CREATED);
     }
 
     /**
@@ -111,22 +98,9 @@ public class LocationController extends BaseRestController {
             @PathVariable String locationId,
             @Valid @RequestBody UpdateLocationRequestDto requestDto) {
 
-        // Create command from DTO
         UpdateLocationCommand command = new UpdateLocationCommand(locationId, requestDto);
-
-        // Validate command
-        var validationResult = updateCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateLocationCommand, LocationResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateLocationCommand.class);
-        LocationResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Location update request processed");
+        return executeCommand(command, updateCommandValidator, commandHandlerRegistry, UpdateLocationCommand.class,
+                "Location update request processed", HttpStatus.OK);
     }
 
     /**
@@ -142,22 +116,9 @@ public class LocationController extends BaseRestController {
             @PathVariable String incidentId,
             @Valid @RequestBody LinkLocationRequestDto requestDto) {
 
-        // Create command from DTO
         LinkLocationToIncidentCommand command = new LinkLocationToIncidentCommand(requestDto.getLocationId(), incidentId, requestDto);
-
-        // Validate command
-        var validationResult = linkLocationToIncidentCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<LinkLocationToIncidentCommand, LocationResponseDto> handler =
-                commandHandlerRegistry.findHandler(LinkLocationToIncidentCommand.class);
-        LocationResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Location link request processed");
+        return executeCommand(command, linkLocationToIncidentCommandValidator, commandHandlerRegistry, LinkLocationToIncidentCommand.class,
+                "Location link request processed", HttpStatus.OK);
     }
 
     /**
@@ -173,22 +134,9 @@ public class LocationController extends BaseRestController {
             @PathVariable String callId,
             @Valid @RequestBody LinkLocationRequestDto requestDto) {
 
-        // Create command from DTO
         LinkLocationToCallCommand command = new LinkLocationToCallCommand(requestDto.getLocationId(), callId, requestDto);
-
-        // Validate command
-        var validationResult = linkLocationToCallCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<LinkLocationToCallCommand, LocationResponseDto> handler =
-                commandHandlerRegistry.findHandler(LinkLocationToCallCommand.class);
-        LocationResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Location link request processed");
+        return executeCommand(command, linkLocationToCallCommandValidator, commandHandlerRegistry, LinkLocationToCallCommand.class,
+                "Location link request processed", HttpStatus.OK);
     }
 
     /**
@@ -204,22 +152,9 @@ public class LocationController extends BaseRestController {
             @PathVariable String incidentId,
             @PathVariable String locationId) {
 
-        // Create command from path parameters
         UnlinkLocationFromIncidentCommand command = new UnlinkLocationFromIncidentCommand(locationId, incidentId, locationId);
-
-        // Validate command
-        var validationResult = unlinkLocationFromIncidentCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UnlinkLocationFromIncidentCommand, LocationResponseDto> handler =
-                commandHandlerRegistry.findHandler(UnlinkLocationFromIncidentCommand.class);
-        LocationResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Location unlink request processed");
+        return executeCommand(command, unlinkLocationFromIncidentCommandValidator, commandHandlerRegistry, UnlinkLocationFromIncidentCommand.class,
+                "Location unlink request processed", HttpStatus.OK);
     }
 
     /**
@@ -235,21 +170,8 @@ public class LocationController extends BaseRestController {
             @PathVariable String callId,
             @PathVariable String locationId) {
 
-        // Create command from path parameters
         UnlinkLocationFromCallCommand command = new UnlinkLocationFromCallCommand(locationId, callId, locationId);
-
-        // Validate command
-        var validationResult = unlinkLocationFromCallCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<UnlinkLocationFromCallCommand, LocationResponseDto> handler =
-                commandHandlerRegistry.findHandler(UnlinkLocationFromCallCommand.class);
-        LocationResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Location unlink request processed");
+        return executeCommand(command, unlinkLocationFromCallCommandValidator, commandHandlerRegistry, UnlinkLocationFromCallCommand.class,
+                "Location unlink request processed", HttpStatus.OK);
     }
 }

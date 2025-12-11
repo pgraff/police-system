@@ -18,6 +18,7 @@ import com.knowit.policesystem.edge.dto.ClearIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.ReportIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateIncidentRequestDto;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
@@ -58,10 +59,12 @@ class IncidentControllerTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private TopicConfiguration topicConfiguration;
+
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
     private NatsTestHelper natsHelper;
-    private static final String TOPIC = "incident-events";
 
     @BeforeEach
     void setUp() throws Exception {
@@ -82,7 +85,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList(TOPIC));
+        consumer.subscribe(Collections.singletonList(topicConfiguration.INCIDENT_EVENTS));
 
         // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
@@ -141,7 +144,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         // Deserialize and verify event data
         ReportIncidentRequested event = eventObjectMapper.readValue(record.value(), ReportIncidentRequested.class);
@@ -332,7 +335,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         // Deserialize and verify event data
         DispatchIncidentRequested event = eventObjectMapper.readValue(record.value(), DispatchIncidentRequested.class);
@@ -433,7 +436,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         // Deserialize and verify event data
         ArriveAtIncidentRequested event = eventObjectMapper.readValue(record.value(), ArriveAtIncidentRequested.class);
@@ -534,7 +537,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         ClearIncidentRequested event = eventObjectMapper.readValue(record.value(), ClearIncidentRequested.class);
         assertThat(event.getEventId()).isNotNull();
@@ -633,7 +636,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         ChangeIncidentStatusRequested event = eventObjectMapper.readValue(record.value(), ChangeIncidentStatusRequested.class);
         assertThat(event.getEventId()).isNotNull();
@@ -735,7 +738,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         // Deserialize and verify event data
         UpdateIncidentRequested event = eventObjectMapper.readValue(record.value(), UpdateIncidentRequested.class);
@@ -776,7 +779,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         // Deserialize and verify event data
         UpdateIncidentRequested event = eventObjectMapper.readValue(record.value(), UpdateIncidentRequested.class);
@@ -812,7 +815,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
         ConsumerRecord<String, String> record = records.iterator().next();
         assertThat(record.key()).isEqualTo(incidentId);
-        assertThat(record.topic()).isEqualTo(TOPIC);
+        assertThat(record.topic()).isEqualTo(topicConfiguration.INCIDENT_EVENTS);
 
         // Deserialize and verify event data
         UpdateIncidentRequested event = eventObjectMapper.readValue(record.value(), UpdateIncidentRequested.class);

@@ -7,10 +7,10 @@ import com.knowit.policesystem.edge.commands.dispatches.CreateDispatchCommand;
 import com.knowit.policesystem.edge.dto.ChangeDispatchStatusRequestDto;
 import com.knowit.policesystem.edge.dto.CreateDispatchRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchResponseDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.dispatches.ChangeDispatchStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.dispatches.CreateDispatchCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -57,22 +57,9 @@ public class DispatchController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<DispatchResponseDto>> createDispatch(
             @Valid @RequestBody CreateDispatchRequestDto requestDto) {
 
-        // Create command from DTO
         CreateDispatchCommand command = new CreateDispatchCommand(requestDto.getDispatchId(), requestDto);
-
-        // Validate command
-        var validationResult = commandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<CreateDispatchCommand, DispatchResponseDto> handler =
-                commandHandlerRegistry.findHandler(CreateDispatchCommand.class);
-        DispatchResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Dispatch create request created");
+        return executeCommand(command, commandValidator, commandHandlerRegistry, CreateDispatchCommand.class,
+                "Dispatch create request created", HttpStatus.CREATED);
     }
 
     /**
@@ -88,21 +75,8 @@ public class DispatchController extends BaseRestController {
             @PathVariable String dispatchId,
             @Valid @RequestBody ChangeDispatchStatusRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         ChangeDispatchStatusCommand command = new ChangeDispatchStatusCommand(dispatchId, requestDto);
-
-        // Validate command
-        var validationResult = changeDispatchStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        CommandHandler<ChangeDispatchStatusCommand, DispatchResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeDispatchStatusCommand.class);
-        DispatchResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Dispatch status change request processed");
+        return executeCommand(command, changeDispatchStatusCommandValidator, commandHandlerRegistry, ChangeDispatchStatusCommand.class,
+                "Dispatch status change request processed", HttpStatus.OK);
     }
 }

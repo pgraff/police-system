@@ -4,6 +4,7 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.locations.UnlinkLocationFromCallRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.LocationResponseDto;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
@@ -17,16 +18,19 @@ public class UnlinkLocationFromCallCommandHandler implements CommandHandler<Unli
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new unlink location from call command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public UnlinkLocationFromCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public UnlinkLocationFromCallCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /** Registers this handler in the command handler registry. */
@@ -44,8 +48,8 @@ public class UnlinkLocationFromCallCommandHandler implements CommandHandler<Unli
                 command.getLocationId()
         );
 
-        // Publish event to Kafka topic "location-events"
-        eventPublisher.publish("location-events", command.getLocationId(), event);
+        // Publish event to Kafka topic
+        eventPublisher.publish(topicConfiguration.LOCATION_EVENTS, command.getLocationId(), event);
 
         // Return response DTO
         return new LocationResponseDto(command.getLocationId());

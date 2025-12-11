@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.officers.RegisterOfficerRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.OfficerResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class RegisterOfficerCommandHandler implements CommandHandler<RegisterOff
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new register officer command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka and NATS/JetStream
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public RegisterOfficerCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public RegisterOfficerCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -49,12 +54,12 @@ public class RegisterOfficerCommandHandler implements CommandHandler<RegisterOff
                 command.getEmail(),
                 command.getPhoneNumber(),
                 command.getHireDate() != null ? command.getHireDate().toString() : null,
-                command.getStatus() != null ? command.getStatus().name() : null
+                EnumConverter.convertEnumToString(command.getStatus())
         );
 
-        // Publish event to Kafka topic "officer-events"
+        // Publish event to Kafka topic
         // DualEventPublisher will automatically also publish to NATS/JetStream subject "commands.officer.register"
-        eventPublisher.publish("officer-events", command.getBadgeNumber(), event);
+        eventPublisher.publish(topicConfiguration.OFFICER_EVENTS, command.getBadgeNumber(), event);
 
         // Return response DTO
         return new OfficerResponseDto(command.getBadgeNumber());

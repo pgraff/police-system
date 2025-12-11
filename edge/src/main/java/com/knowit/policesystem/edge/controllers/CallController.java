@@ -20,7 +20,6 @@ import com.knowit.policesystem.edge.dto.LinkCallToDispatchRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToDispatchResponseDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateCallRequestDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.calls.ArriveAtCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ChangeCallStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.ClearCallCommandValidator;
@@ -30,6 +29,7 @@ import com.knowit.policesystem.edge.validation.calls.LinkCallToDispatchCommandVa
 import com.knowit.policesystem.edge.validation.calls.ReceiveCallCommandValidator;
 import com.knowit.policesystem.edge.validation.calls.UpdateCallCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -94,22 +94,9 @@ public class CallController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<CallResponseDto>> receiveCall(
             @Valid @RequestBody ReceiveCallRequestDto requestDto) {
 
-        // Create command from DTO
         ReceiveCallCommand command = new ReceiveCallCommand(requestDto.getCallId(), requestDto);
-
-        // Validate command
-        var validationResult = commandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ReceiveCallCommand, CallResponseDto> handler =
-                commandHandlerRegistry.findHandler(ReceiveCallCommand.class);
-        CallResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Call receive request created");
+        return executeCommand(command, commandValidator, commandHandlerRegistry, ReceiveCallCommand.class,
+                "Call receive request created", HttpStatus.CREATED);
     }
 
     /**
@@ -126,17 +113,8 @@ public class CallController extends BaseRestController {
             @Valid @RequestBody DispatchCallRequestDto requestDto) {
 
         DispatchCallCommand command = new DispatchCallCommand(callId, requestDto);
-
-        var validationResult = dispatchCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<DispatchCallCommand, CallResponseDto> handler =
-                commandHandlerRegistry.findHandler(DispatchCallCommand.class);
-        CallResponseDto response = handler.handle(command);
-
-        return success(response, "Call dispatch recorded");
+        return executeCommand(command, dispatchCommandValidator, commandHandlerRegistry, DispatchCallCommand.class,
+                "Call dispatch recorded", HttpStatus.OK);
     }
 
     /**
@@ -152,17 +130,8 @@ public class CallController extends BaseRestController {
             @Valid @RequestBody ArriveAtCallRequestDto requestDto) {
 
         ArriveAtCallCommand command = new ArriveAtCallCommand(callId, requestDto);
-
-        var validationResult = arriveAtCallCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<ArriveAtCallCommand, CallResponseDto> handler =
-                commandHandlerRegistry.findHandler(ArriveAtCallCommand.class);
-        CallResponseDto response = handler.handle(command);
-
-        return success(response, "Call arrival recorded");
+        return executeCommand(command, arriveAtCallCommandValidator, commandHandlerRegistry, ArriveAtCallCommand.class,
+                "Call arrival recorded", HttpStatus.OK);
     }
 
     /**
@@ -178,17 +147,8 @@ public class CallController extends BaseRestController {
             @Valid @RequestBody ClearCallRequestDto requestDto) {
 
         ClearCallCommand command = new ClearCallCommand(callId, requestDto);
-
-        var validationResult = clearCallCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<ClearCallCommand, CallResponseDto> handler =
-                commandHandlerRegistry.findHandler(ClearCallCommand.class);
-        CallResponseDto response = handler.handle(command);
-
-        return success(response, "Call cleared");
+        return executeCommand(command, clearCallCommandValidator, commandHandlerRegistry, ClearCallCommand.class,
+                "Call cleared", HttpStatus.OK);
     }
 
     /**
@@ -204,17 +164,8 @@ public class CallController extends BaseRestController {
             @Valid @RequestBody ChangeCallStatusRequestDto requestDto) {
 
         ChangeCallStatusCommand command = new ChangeCallStatusCommand(callId, requestDto);
-
-        var validationResult = changeCallStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeCallStatusCommand, CallResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeCallStatusCommand.class);
-        CallResponseDto response = handler.handle(command);
-
-        return success(response, "Call status updated");
+        return executeCommand(command, changeCallStatusCommandValidator, commandHandlerRegistry, ChangeCallStatusCommand.class,
+                "Call status updated", HttpStatus.OK);
     }
 
     /**
@@ -230,17 +181,8 @@ public class CallController extends BaseRestController {
             @Valid @RequestBody UpdateCallRequestDto requestDto) {
 
         UpdateCallCommand command = new UpdateCallCommand(callId, requestDto);
-
-        var validationResult = updateCallCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateCallCommand, CallResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateCallCommand.class);
-        CallResponseDto response = handler.handle(command);
-
-        return success(response, "Call updated");
+        return executeCommand(command, updateCallCommandValidator, commandHandlerRegistry, UpdateCallCommand.class,
+                "Call updated", HttpStatus.OK);
     }
 
     /**
@@ -256,22 +198,9 @@ public class CallController extends BaseRestController {
             @PathVariable String callId,
             @Valid @RequestBody LinkCallToIncidentRequestDto requestDto) {
 
-        // Create command from DTO and path parameter
         LinkCallToIncidentCommand command = new LinkCallToIncidentCommand(callId, callId, requestDto);
-
-        // Validate command
-        var validationResult = linkCallToIncidentCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<LinkCallToIncidentCommand, LinkCallToIncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(LinkCallToIncidentCommand.class);
-        LinkCallToIncidentResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Call link request processed");
+        return executeCommand(command, linkCallToIncidentCommandValidator, commandHandlerRegistry, LinkCallToIncidentCommand.class,
+                "Call link request processed", HttpStatus.OK);
     }
 
     /**
@@ -287,21 +216,8 @@ public class CallController extends BaseRestController {
             @PathVariable String callId,
             @Valid @RequestBody LinkCallToDispatchRequestDto requestDto) {
 
-        // Create command from DTO and path parameter
         LinkCallToDispatchCommand command = new LinkCallToDispatchCommand(callId, callId, requestDto);
-
-        // Validate command
-        var validationResult = linkCallToDispatchCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<LinkCallToDispatchCommand, LinkCallToDispatchResponseDto> handler =
-                commandHandlerRegistry.findHandler(LinkCallToDispatchCommand.class);
-        LinkCallToDispatchResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Call link request processed");
+        return executeCommand(command, linkCallToDispatchCommandValidator, commandHandlerRegistry, LinkCallToDispatchCommand.class,
+                "Call link request processed", HttpStatus.OK);
     }
 }

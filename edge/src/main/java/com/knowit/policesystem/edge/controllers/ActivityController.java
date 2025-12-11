@@ -13,13 +13,13 @@ import com.knowit.policesystem.edge.dto.LinkActivityToIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.LinkActivityToIncidentResponseDto;
 import com.knowit.policesystem.edge.dto.StartActivityRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateActivityRequestDto;
-import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.activities.ChangeActivityStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.activities.CompleteActivityCommandValidator;
 import com.knowit.policesystem.edge.validation.activities.LinkActivityToIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.activities.StartActivityCommandValidator;
 import com.knowit.policesystem.edge.validation.activities.UpdateActivityCommandValidator;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -79,22 +79,9 @@ public class ActivityController extends BaseRestController {
     public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<ActivityResponseDto>> startActivity(
             @Valid @RequestBody StartActivityRequestDto requestDto) {
 
-        // Create command from DTO
         StartActivityCommand command = new StartActivityCommand(requestDto.getActivityId(), requestDto);
-
-        // Validate command
-        var validationResult = commandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<StartActivityCommand, ActivityResponseDto> handler =
-                commandHandlerRegistry.findHandler(StartActivityCommand.class);
-        ActivityResponseDto response = handler.handle(command);
-
-        // Return 201 Created response
-        return created(response, "Activity start request created");
+        return executeCommand(command, commandValidator, commandHandlerRegistry, StartActivityCommand.class,
+                "Activity start request created", HttpStatus.CREATED);
     }
 
     /**
@@ -110,22 +97,9 @@ public class ActivityController extends BaseRestController {
             @PathVariable String activityId,
             @Valid @RequestBody CompleteActivityRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         CompleteActivityCommand command = new CompleteActivityCommand(activityId, requestDto);
-
-        // Validate command
-        var validationResult = completeActivityCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<CompleteActivityCommand, ActivityResponseDto> handler =
-                commandHandlerRegistry.findHandler(CompleteActivityCommand.class);
-        ActivityResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Activity completion request processed");
+        return executeCommand(command, completeActivityCommandValidator, commandHandlerRegistry, CompleteActivityCommand.class,
+                "Activity completion request processed", HttpStatus.OK);
     }
 
     /**
@@ -141,22 +115,9 @@ public class ActivityController extends BaseRestController {
             @PathVariable String activityId,
             @Valid @RequestBody ChangeActivityStatusRequestDto requestDto) {
 
-        // Create command from path variable and DTO
         ChangeActivityStatusCommand command = new ChangeActivityStatusCommand(activityId, requestDto);
-
-        // Validate command
-        var validationResult = changeActivityStatusCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<ChangeActivityStatusCommand, ActivityResponseDto> handler =
-                commandHandlerRegistry.findHandler(ChangeActivityStatusCommand.class);
-        ActivityResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Activity status change request processed");
+        return executeCommand(command, changeActivityStatusCommandValidator, commandHandlerRegistry, ChangeActivityStatusCommand.class,
+                "Activity status change request processed", HttpStatus.OK);
     }
 
     /**
@@ -173,17 +134,8 @@ public class ActivityController extends BaseRestController {
             @Valid @RequestBody UpdateActivityRequestDto requestDto) {
 
         UpdateActivityCommand command = new UpdateActivityCommand(activityId, requestDto);
-
-        var validationResult = updateActivityCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        com.knowit.policesystem.edge.commands.CommandHandler<UpdateActivityCommand, ActivityResponseDto> handler =
-                commandHandlerRegistry.findHandler(UpdateActivityCommand.class);
-        ActivityResponseDto response = handler.handle(command);
-
-        return success(response, "Activity update request processed");
+        return executeCommand(command, updateActivityCommandValidator, commandHandlerRegistry, UpdateActivityCommand.class,
+                "Activity update request processed", HttpStatus.OK);
     }
 
     /**
@@ -199,21 +151,8 @@ public class ActivityController extends BaseRestController {
             @PathVariable String activityId,
             @Valid @RequestBody LinkActivityToIncidentRequestDto requestDto) {
 
-        // Create command from DTO and path parameter
         LinkActivityToIncidentCommand command = new LinkActivityToIncidentCommand(activityId, activityId, requestDto);
-
-        // Validate command
-        var validationResult = linkActivityToIncidentCommandValidator.validate(command);
-        if (!validationResult.isValid()) {
-            throw new ValidationException(validationResult);
-        }
-
-        // Get handler and execute
-        com.knowit.policesystem.edge.commands.CommandHandler<LinkActivityToIncidentCommand, LinkActivityToIncidentResponseDto> handler =
-                commandHandlerRegistry.findHandler(LinkActivityToIncidentCommand.class);
-        LinkActivityToIncidentResponseDto response = handler.handle(command);
-
-        // Return 200 OK response
-        return success(response, "Activity link request processed");
+        return executeCommand(command, linkActivityToIncidentCommandValidator, commandHandlerRegistry, LinkActivityToIncidentCommand.class,
+                "Activity link request processed", HttpStatus.OK);
     }
 }

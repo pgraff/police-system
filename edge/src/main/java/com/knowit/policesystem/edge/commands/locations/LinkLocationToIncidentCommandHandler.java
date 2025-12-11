@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.locations.LinkLocationToIncidentRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.LocationResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class LinkLocationToIncidentCommandHandler implements CommandHandler<Link
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new link location to incident command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public LinkLocationToIncidentCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public LinkLocationToIncidentCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -45,13 +50,13 @@ public class LinkLocationToIncidentCommandHandler implements CommandHandler<Link
                 command.getLocationId(),
                 command.getIncidentId(),
                 command.getLocationId(),
-                command.getLocationRoleType() != null ? command.getLocationRoleType().name() : null,
+                EnumConverter.convertEnumToString(command.getLocationRoleType()),
                 command.getDescription()
         );
 
-        // Publish event to Kafka topic "location-events"
+        // Publish event to Kafka topic
         // Note: This is NOT a critical event, so it only goes to Kafka (not NATS/JetStream)
-        eventPublisher.publish("location-events", command.getLocationId(), event);
+        eventPublisher.publish(topicConfiguration.LOCATION_EVENTS, command.getLocationId(), event);
 
         // Return response DTO
         return new LocationResponseDto(command.getLocationId());

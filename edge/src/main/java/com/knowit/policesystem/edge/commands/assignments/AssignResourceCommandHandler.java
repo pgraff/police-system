@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.resourceassignment.AssignResourceRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.ResourceAssignmentResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -19,16 +21,19 @@ public class AssignResourceCommandHandler implements CommandHandler<AssignResour
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new assign resource command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public AssignResourceCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public AssignResourceCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -50,14 +55,14 @@ public class AssignResourceCommandHandler implements CommandHandler<AssignResour
                 command.getAssignmentId(),
                 command.getAssignmentId(),
                 command.getResourceId(),
-                command.getResourceType() != null ? command.getResourceType().name() : null,
-                command.getRoleType() != null ? command.getRoleType().name() : null,
+                EnumConverter.convertEnumToString(command.getResourceType()),
+                EnumConverter.convertEnumToString(command.getRoleType()),
                 command.getStatus(),
                 command.getStartTime()
         );
 
-        // Publish event to Kafka topic "resource-assignment-events"
-        eventPublisher.publish("resource-assignment-events", command.getAssignmentId(), event);
+        // Publish event to Kafka topic
+        eventPublisher.publish(topicConfiguration.RESOURCE_ASSIGNMENT_EVENTS, command.getAssignmentId(), event);
 
         // Return response DTO
         return new ResourceAssignmentResponseDto(resourceAssignmentId);

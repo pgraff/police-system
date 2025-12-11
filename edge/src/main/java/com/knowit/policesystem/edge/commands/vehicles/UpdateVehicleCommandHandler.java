@@ -4,7 +4,9 @@ import com.knowit.policesystem.common.events.EventPublisher;
 import com.knowit.policesystem.common.events.vehicles.UpdateVehicleRequested;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.config.TopicConfiguration;
 import com.knowit.policesystem.edge.dto.VehicleResponseDto;
+import com.knowit.policesystem.edge.util.EnumConverter;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
@@ -17,16 +19,19 @@ public class UpdateVehicleCommandHandler implements CommandHandler<UpdateVehicle
 
     private final EventPublisher eventPublisher;
     private final CommandHandlerRegistry registry;
+    private final TopicConfiguration topicConfiguration;
 
     /**
      * Creates a new update vehicle command handler.
      *
      * @param eventPublisher the event publisher for publishing events to Kafka and NATS/JetStream
      * @param registry the command handler registry for auto-registration
+     * @param topicConfiguration the topic configuration for Kafka topics
      */
-    public UpdateVehicleCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry) {
+    public UpdateVehicleCommandHandler(EventPublisher eventPublisher, CommandHandlerRegistry registry, TopicConfiguration topicConfiguration) {
         this.eventPublisher = eventPublisher;
         this.registry = registry;
+        this.topicConfiguration = topicConfiguration;
     }
 
     /**
@@ -44,16 +49,16 @@ public class UpdateVehicleCommandHandler implements CommandHandler<UpdateVehicle
         // Only include fields that were provided (nulls for omitted fields support partial updates)
         UpdateVehicleRequested event = new UpdateVehicleRequested(
                 command.getUnitId(),
-                command.getVehicleType() != null ? command.getVehicleType().name() : null,
+                EnumConverter.convertEnumToString(command.getVehicleType()),
                 command.getLicensePlate(),
                 command.getVin(),
-                command.getStatus() != null ? command.getStatus().name() : null,
+                EnumConverter.convertStatusToString(command.getStatus()),
                 command.getLastMaintenanceDate() != null ? command.getLastMaintenanceDate().toString() : null
         );
 
-        // Publish event to Kafka topic "vehicle-events"
+        // Publish event to Kafka topic
         // DualEventPublisher will automatically also publish to NATS/JetStream subject "commands.vehicle.update"
-        eventPublisher.publish("vehicle-events", command.getUnitId(), event);
+        eventPublisher.publish(topicConfiguration.VEHICLE_EVENTS, command.getUnitId(), event);
 
         // Return response DTO
         return new VehicleResponseDto(command.getUnitId());
