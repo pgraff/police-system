@@ -23,6 +23,7 @@
     <modules>
         <module>common</module>
         <module>edge</module>
+        <module>officer-projection</module>
     </modules>
 
     <properties>

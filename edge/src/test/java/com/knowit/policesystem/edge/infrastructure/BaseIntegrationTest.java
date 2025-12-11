@@ -19,7 +19,9 @@ import org.testcontainers.utility.DockerImageName;
  * Note: We do NOT use @Testcontainers and @Container annotations here, as they manage
  * container lifecycle per test class. Instead, we manually start containers in a static block.
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
+})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public abstract class BaseIntegrationTest {

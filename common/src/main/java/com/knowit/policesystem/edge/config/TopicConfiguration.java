@@ -4,8 +4,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Centralized configuration for Kafka topic names.
- * Provides a single source of truth for all topic names used throughout the system.
- * This ensures consistency and makes it easier to change topic names in the future.
+ * Provided from the common module so all services share the same constants.
  */
 @Component
 public class TopicConfiguration {
