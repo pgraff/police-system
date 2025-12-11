@@ -2,43 +2,31 @@
 
 ## Introduction
 
-This document provides an abstract overview of the Police System architecture, which is built using Event Sourcing and CQRS (Command Query Responsibility Segregation) patterns. The system is designed to handle high-throughput, scalable operations with strong consistency guarantees and the ability to replay and audit all system events.
+This overview reflects the adopted CQRS approach from `CQRS_ARCHITECTURE_DISCUSSION.md`: the edge is thin and event-first (REST in → `*Requested` events out to Kafka), with business logic and projections behind the edge. We support two command interaction modes—Kafka-only polling and NATS request/response plus Kafka—without exposing CQRS internals to clients.
 
 ## Core Architectural Patterns
 
 ### Event Sourcing
 
-Event Sourcing is a pattern where changes to application state are stored as a sequence of events. Instead of storing the current state, the system stores all events that have occurred, and the current state can be reconstructed by replaying these events.
-
-**Key Benefits:**
-- Complete audit trail of all changes
-- Ability to reconstruct state at any point in time
-- Natural support for temporal queries
-- Decoupling of write and read models
+We record changes as events in Kafka. State can be replayed from events, supporting auditability and rebuilds of projections/read models.
 
 ### CQRS (Command Query Responsibility Segregation)
 
-CQRS separates the read and write operations of a data store. Commands (writes) and queries (reads) use different models and potentially different data stores.
-
-**Key Benefits:**
-- Independent scaling of read and write operations
-- Optimized data models for specific use cases
-- Reduced complexity in domain models
-- Better performance through specialized read models
+Commands and queries are split. Commands enter via the edge and are expressed as `*Requested` events; queries read from projections fed by Kafka. Acceptance feedback can be provided over NATS (Option B) while Kafka remains authoritative.
 
 ## System Components
 
-The architecture consists of the following main components:
-
-1. **Edge Servers**: Handle incoming requests, process commands, and serve queries
-2. **Event Bus (Kafka)**: Central message broker for all events
-3. **CQRS Projections**: Build and maintain read models from events
+1. **Edge Servers**: Authenticate/authorize requests, publish `*Requested` events, optionally request/response over NATS for immediate acceptance, and serve queries from read models.
+2. **Event Bus (Kafka)**: Source of truth for command events, supporting replay and DLQ.
+3. **NATS (request/response)**: Optional fast-path validation/ack channel paired with Kafka publish.
+4. **CQRS Projections**: Consume Kafka to build read models; start lightweight (Kafka Streams or consumer + in-memory) and move to durable stores as needed.
 
 ## Technology Stack
 
 - **Language**: Java 17
 - **Framework**: Spring Framework
 - **Event Bus**: Apache Kafka
+- **Request/Response**: NATS
 - **Stream Processing**: Kafka Streams (for projections)
 
 ## Document Structure
