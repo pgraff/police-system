@@ -21,7 +21,7 @@ import com.knowit.policesystem.edge.dto.DispatchCallRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.LinkCallToDispatchRequestDto;
 import com.knowit.policesystem.edge.dto.ReceiveCallRequestDto;
-import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import com.knowit.policesystem.edge.services.calls.CallExistenceService;
 import io.nats.client.JetStreamSubscription;
@@ -36,21 +36,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -70,36 +61,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for CallController.
  * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
-@SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Testcontainers
 @Import(CallControllerTest.TestCallExistenceConfig.class)
-class CallControllerTest {
-
-    @Container
-    static KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:latest")
-    );
-
-    @Container
-    static NatsTestContainer nats = new NatsTestContainer();
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("nats.url", nats::getNatsUrl);
-        registry.add("nats.enabled", () -> "true");
-    }
+class CallControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
-
-    @Autowired
-    private CallController callController;
 
     @Autowired
     private InMemoryCallExistenceService callExistenceService;
@@ -118,24 +87,20 @@ class CallControllerTest {
         eventObjectMapper.configure(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 
         // Create Kafka consumer for verification
+        // Use "latest" offset to only receive new messages published after subscription
+        // This avoids conflicts with shared containers and is much faster
         Properties consumerProps = new Properties();
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group-" + System.currentTimeMillis());
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
         consumer.subscribe(Collections.singletonList(TOPIC));
-        
-        // Wait for partition assignment and consume any existing events
+
+        // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
-        
-        // Consume and discard all existing events to start fresh
-        ConsumerRecords<String, String> existingRecords;
-        do {
-            existingRecords = consumer.poll(Duration.ofMillis(100));
-        } while (!existingRecords.isEmpty());
 
         callExistenceService.clear();
 
@@ -157,11 +122,6 @@ class CallControllerTest {
         }
         if (natsHelper != null) {
             natsHelper.close();
-        }
-    }
-    void tearDown() {
-        if (consumer != null) {
-            consumer.close();
         }
     }
 
@@ -955,8 +915,10 @@ class CallControllerTest {
 
     /**
      * Test configuration to override CallExistenceService with in-memory implementation.
+     * Note: We use @TestConfiguration instead of @Configuration to ensure it doesn't interfere
+     * with the main application context and component scanning.
      */
-    @Configuration
+    @org.springframework.boot.test.context.TestConfiguration
     static class TestCallExistenceConfig {
         @Bean
         @Primary

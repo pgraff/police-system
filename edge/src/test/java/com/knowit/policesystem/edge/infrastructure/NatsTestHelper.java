@@ -230,7 +230,7 @@ public class NatsTestHelper implements AutoCloseable {
             String streamName = findOrCreateStreamForSubject(subject);
             StreamInfo streamInfo = jetStreamManagement.getStreamInfo(streamName);
             // Check if stream has any messages
-            return streamInfo.getState().getMessages() > 0;
+            return streamInfo.getStreamState().getMsgCount() > 0;
         } catch (Exception e) {
             logger.warn("Error verifying message in stream for subject {}", subject, e);
             return false;

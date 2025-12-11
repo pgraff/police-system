@@ -20,7 +20,7 @@ import com.knowit.policesystem.edge.dto.UpdateOfficerShiftRequestDto;
 import com.knowit.policesystem.edge.dto.EndShiftRequestDto;
 import com.knowit.policesystem.edge.dto.RecordShiftChangeRequestDto;
 import com.knowit.policesystem.edge.dto.StartShiftRequestDto;
-import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
@@ -34,17 +34,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -63,26 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for ShiftController.
  * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
-@SpringBootTest(classes = com.knowit.policesystem.edge.EdgeApplication.class)
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Testcontainers
-class ShiftControllerTest {
-
-    @Container
-    static KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:latest")
-    );
-
-    @Container
-    static NatsTestContainer nats = new NatsTestContainer();
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("nats.url", nats::getNatsUrl);
-        registry.add("nats.enabled", () -> "true");
-    }
+class ShiftControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -107,37 +79,29 @@ class ShiftControllerTest {
         Properties consumerProps = new Properties();
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group-" + System.currentTimeMillis());
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
         consumer.subscribe(Collections.singletonList(TOPIC));
 
+        // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
-
-        ConsumerRecords<String, String> existingRecords;
-        do {
-            existingRecords = consumer.poll(Duration.ofMillis(100));
-        } while (!existingRecords.isEmpty());
 
         // Set up consumer for officer-shift-events topic
         Properties officerShiftConsumerProps = new Properties();
         officerShiftConsumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         officerShiftConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-officer-shift-consumer-group-" + System.currentTimeMillis());
-        officerShiftConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        officerShiftConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         officerShiftConsumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         officerShiftConsumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         officerShiftConsumer = new KafkaConsumer<>(officerShiftConsumerProps);
         officerShiftConsumer.subscribe(Collections.singletonList(OFFICER_SHIFT_TOPIC));
 
+        // Wait for partition assignment - consumer will start at latest offset automatically
         officerShiftConsumer.poll(Duration.ofSeconds(1));
-
-        ConsumerRecords<String, String> existingOfficerShiftRecords;
-        do {
-            existingOfficerShiftRecords = officerShiftConsumer.poll(Duration.ofMillis(100));
-        } while (!existingOfficerShiftRecords.isEmpty());
 
         // Create NATS test helper
         natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);

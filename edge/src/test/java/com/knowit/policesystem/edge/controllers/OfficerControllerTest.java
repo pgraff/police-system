@@ -10,7 +10,7 @@ import com.knowit.policesystem.edge.domain.OfficerStatus;
 import com.knowit.policesystem.edge.dto.ChangeOfficerStatusRequestDto;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
-import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
+import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import com.knowit.policesystem.edge.infrastructure.NatsTestHelper;
 import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
@@ -24,17 +24,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,26 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for OfficerController.
  * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Testcontainers
-class OfficerControllerTest {
-
-    @Container
-    static KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:latest")
-    );
-
-    @Container
-    static NatsTestContainer nats = new NatsTestContainer();
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("nats.url", nats::getNatsUrl);
-        registry.add("nats.enabled", () -> "true");
-    }
+class OfficerControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -96,24 +68,20 @@ class OfficerControllerTest {
         eventObjectMapper.configure(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 
         // Create Kafka consumer for verification
+        // Use "latest" offset to only receive new messages published after subscription
+        // This avoids conflicts with shared containers and is much faster
         Properties consumerProps = new Properties();
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-group-" + System.currentTimeMillis());
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(consumerProps);
         consumer.subscribe(Collections.singletonList(TOPIC));
         
-        // Wait for partition assignment and consume any existing events
+        // Wait for partition assignment - consumer will start at latest offset automatically
         consumer.poll(Duration.ofSeconds(1));
-        
-        // Consume and discard all existing events to start fresh
-        ConsumerRecords<String, String> existingRecords;
-        do {
-            existingRecords = consumer.poll(Duration.ofMillis(100));
-        } while (!existingRecords.isEmpty());
 
         // Create NATS test helper
         natsHelper = new NatsTestHelper(nats.getNatsUrl(), eventObjectMapper);

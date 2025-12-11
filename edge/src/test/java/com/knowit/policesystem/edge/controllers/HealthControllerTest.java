@@ -1,19 +1,10 @@
 package com.knowit.policesystem.edge.controllers;
 
 import org.junit.jupiter.api.Test;
+import com.knowit.policesystem.edge.infrastructure.BaseIntegrationTest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,26 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests for HealthController.
  * Verifies health endpoint functionality and response format.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Testcontainers
-class HealthControllerTest {
-
-    @Container
-    static KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:latest")
-    );
-
-    @Container
-    static NatsTestContainer nats = new NatsTestContainer();
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("nats.url", nats::getNatsUrl);
-        registry.add("nats.enabled", () -> "true");
-    }
+class HealthControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

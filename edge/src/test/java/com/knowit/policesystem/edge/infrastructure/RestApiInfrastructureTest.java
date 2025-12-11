@@ -7,18 +7,8 @@ import com.knowit.policesystem.edge.dto.TestRequestDto;
 import com.knowit.policesystem.edge.dto.ValidationErrorResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import com.knowit.policesystem.edge.infrastructure.NatsTestContainer;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.nio.charset.StandardCharsets;
 
@@ -31,26 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Comprehensive tests for REST API infrastructure.
  * Tests Swagger UI, API documentation, validation, error handling, content negotiation, and API versioning.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Testcontainers
-class RestApiInfrastructureTest {
-
-    @Container
-    static KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:latest")
-    );
-
-    @Container
-    static NatsTestContainer nats = new NatsTestContainer();
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("nats.url", nats::getNatsUrl);
-        registry.add("nats.enabled", () -> "true");
-    }
+class RestApiInfrastructureTest extends BaseIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
