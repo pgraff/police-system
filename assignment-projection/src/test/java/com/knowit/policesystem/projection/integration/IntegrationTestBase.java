@@ -39,7 +39,7 @@ public abstract class IntegrationTestBase {
         startContainers();
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("spring.kafka.consumer.auto-offset-reset", () -> "earliest");
-        registry.add("spring.kafka.consumer.group-id", () -> "activity-projection-test-group");
+        registry.add("spring.kafka.consumer.group-id", () -> "assignment-projection-test-group");
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
@@ -62,4 +62,3 @@ public abstract class IntegrationTestBase {
         }
     }
 }
-

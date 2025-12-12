@@ -3,10 +3,11 @@ package com.knowit.policesystem.projection.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.knowit.policesystem.common.events.EventClassification;
-import com.knowit.policesystem.common.events.activities.ChangeActivityStatusRequested;
-import com.knowit.policesystem.common.events.activities.CompleteActivityRequested;
-import com.knowit.policesystem.common.events.activities.StartActivityRequested;
-import com.knowit.policesystem.common.events.activities.UpdateActivityRequested;
+import com.knowit.policesystem.common.events.assignments.ChangeAssignmentStatusRequested;
+import com.knowit.policesystem.common.events.assignments.CompleteAssignmentRequested;
+import com.knowit.policesystem.common.events.assignments.CreateAssignmentRequested;
+import com.knowit.policesystem.common.events.assignments.LinkAssignmentToDispatchRequested;
+import com.knowit.policesystem.common.events.resourceassignment.AssignResourceRequested;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class ActivityProjectionIntegrationTest extends IntegrationTestBase {
+class AssignmentProjectionIntegrationTest extends IntegrationTestBase {
 
     @Autowired
     private TestRestTemplate restTemplate;
@@ -56,9 +57,8 @@ class ActivityProjectionIntegrationTest extends IntegrationTestBase {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producer = new KafkaProducer<>(producerProps);
 
-        // Clean tables between tests (schema will be created by SQL init)
         try {
-            jdbcTemplate.execute("TRUNCATE activity_status_history, activity_projection RESTART IDENTITY CASCADE");
+            jdbcTemplate.execute("TRUNCATE assignment_status_history, assignment_resource, assignment_projection RESTART IDENTITY CASCADE");
         } catch (Exception ignored) {
             // Tables may not exist before implementation
         }
@@ -72,69 +72,45 @@ class ActivityProjectionIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void startActivity_shouldPersistProjectionAndExposeQuery() throws Exception {
-        String activityId = "ACT-" + UUID.randomUUID();
-        Instant activityTime = Instant.now();
-        StartActivityRequested event = new StartActivityRequested(
-                activityId, activityTime, "Investigation", "Test activity", "Started"
+    void createAssignment_shouldPersistProjectionAndExposeQuery() throws Exception {
+        String assignmentId = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
+        CreateAssignmentRequested event = new CreateAssignmentRequested(
+                assignmentId, assignmentId, assignedTime, "Patrol", "Created", "INC-1", null
         );
 
-        publishToKafka(activityId, event);
+        publishToKafka(assignmentId, event);
 
-        ResponseEntity<Map> response = awaitActivity(activityId);
+        ResponseEntity<Map> response = awaitAssignment(assignmentId);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         Map<String, Object> body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat(body.get("activityId")).isEqualTo(activityId);
-        assertThat(body.get("activityType")).isEqualTo("Investigation");
-        assertThat(body.get("status")).isEqualTo("Started");
-        assertThat(body.get("description")).isEqualTo("Test activity");
-        assertThat(body.get("activityTime")).isNotNull();
-    }
-
-    @Test
-    void updateActivity_shouldApplyPartialUpdatesAndRetainExistingFields() throws Exception {
-        String activityId = "ACT-" + UUID.randomUUID();
-        Instant activityTime = Instant.now();
-        publishToKafka(activityId, new StartActivityRequested(
-                activityId, activityTime, "Investigation", "Initial description", "Started"
-        ));
-
-        UpdateActivityRequested update = new UpdateActivityRequested(
-                activityId, "Updated description"
-        );
-        publishToKafka(activityId, update);
-
-        ResponseEntity<Map> response = awaitActivity(activityId);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-
-        Map<String, Object> body = response.getBody();
-        assertThat(body).isNotNull();
-        assertThat(body.get("activityId")).isEqualTo(activityId);
-        assertThat(body.get("activityType")).isEqualTo("Investigation"); // unchanged
-        assertThat(body.get("status")).isEqualTo("Started"); // unchanged
-        assertThat(body.get("description")).isEqualTo("Updated description"); // updated
+        assertThat(body.get("assignmentId")).isEqualTo(assignmentId);
+        assertThat(body.get("assignmentType")).isEqualTo("Patrol");
+        assertThat(body.get("status")).isEqualTo("Created");
+        assertThat(body.get("incidentId")).isEqualTo("INC-1");
+        assertThat(body.get("callId")).isNull();
     }
 
     @Test
     void changeStatus_shouldUpdateStatusAndAppendHistoryWithoutDuplicates() throws Exception {
-        String activityId = "ACT-" + UUID.randomUUID();
-        Instant activityTime = Instant.now();
-        publishToKafka(activityId, new StartActivityRequested(
-                activityId, activityTime, "Investigation", "Test activity", "Started"
+        String assignmentId = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
+        publishToKafka(assignmentId, new CreateAssignmentRequested(
+                assignmentId, assignmentId, assignedTime, "Patrol", "Created", "INC-1", null
         ));
 
-        publishToKafka(activityId, new ChangeActivityStatusRequested(activityId, "InProgress"));
-        publishToKafka(activityId, new ChangeActivityStatusRequested(activityId, "InProgress")); // duplicate
-        publishToKafka(activityId, new ChangeActivityStatusRequested(activityId, "Completed"));
+        publishToKafka(assignmentId, new ChangeAssignmentStatusRequested(assignmentId, "InProgress"));
+        publishToKafka(assignmentId, new ChangeAssignmentStatusRequested(assignmentId, "InProgress")); // duplicate
+        publishToKafka(assignmentId, new ChangeAssignmentStatusRequested(assignmentId, "Completed"));
 
-        ResponseEntity<Map> activityResponse = awaitActivity(activityId);
-        assertThat(activityResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(activityResponse.getBody()).isNotNull();
-        assertThat(activityResponse.getBody().get("status")).isEqualTo("Completed");
+        ResponseEntity<Map> assignmentResponse = awaitAssignment(assignmentId);
+        assertThat(assignmentResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(assignmentResponse.getBody()).isNotNull();
+        assertThat(assignmentResponse.getBody().get("status")).isEqualTo("Completed");
 
-        ResponseEntity<List> historyResponse = awaitHistory(activityId);
+        ResponseEntity<List> historyResponse = awaitHistory(assignmentId);
         assertThat(historyResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         List<Map<String, Object>> history = historyResponse.getBody();
         assertThat(history).isNotNull();
@@ -144,17 +120,17 @@ class ActivityProjectionIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void completeActivity_shouldUpdateCompletedTime() throws Exception {
-        String activityId = "ACT-" + UUID.randomUUID();
-        Instant activityTime = Instant.now();
-        publishToKafka(activityId, new StartActivityRequested(
-                activityId, activityTime, "Investigation", "Test activity", "Started"
+    void completeAssignment_shouldUpdateCompletedTime() throws Exception {
+        String assignmentId = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
+        publishToKafka(assignmentId, new CreateAssignmentRequested(
+                assignmentId, assignmentId, assignedTime, "Patrol", "Created", "INC-1", null
         ));
 
         Instant completedTime = Instant.now().plusSeconds(300);
-        publishToKafka(activityId, new CompleteActivityRequested(activityId, completedTime));
+        publishToKafka(assignmentId, new CompleteAssignmentRequested(assignmentId, completedTime));
 
-        ResponseEntity<Map> response = awaitActivity(activityId);
+        ResponseEntity<Map> response = awaitAssignment(assignmentId);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<String, Object> body = response.getBody();
         assertThat(body).isNotNull();
@@ -162,112 +138,151 @@ class ActivityProjectionIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void linkDispatch_shouldUpdateDispatchId() throws Exception {
+        String assignmentId = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
+        publishToKafka(assignmentId, new CreateAssignmentRequested(
+                assignmentId, assignmentId, assignedTime, "Patrol", "Created", null, "CALL-1"
+        ));
+
+        publishToKafka(assignmentId, new LinkAssignmentToDispatchRequested(assignmentId, assignmentId, "DISP-1"));
+
+        ResponseEntity<Map> response = awaitAssignment(assignmentId);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.get("dispatchId")).isEqualTo("DISP-1");
+    }
+
+    @Test
+    void assignResource_shouldUpsertResourceRows() throws Exception {
+        String assignmentId = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
+        publishToKafka(assignmentId, new CreateAssignmentRequested(
+                assignmentId, assignmentId, assignedTime, "Patrol", "Created", "INC-1", null
+        ));
+
+        publishToKafka(assignmentId, new AssignResourceRequested(
+                assignmentId, assignmentId, "OFF-1", "OFFICER", "PRIMARY", "Assigned", assignedTime
+        ));
+        // update same resource status
+        publishToKafka(assignmentId, new AssignResourceRequested(
+                assignmentId, assignmentId, "OFF-1", "OFFICER", "PRIMARY", "OnScene", assignedTime.plusSeconds(60)
+        ));
+
+        ResponseEntity<List> resources = awaitResources(assignmentId);
+        assertThat(resources.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<Map<String, Object>> body = resources.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body).hasSize(1);
+        assertThat(body.get(0).get("resourceId")).isEqualTo("OFF-1");
+        assertThat(body.get(0).get("status")).isEqualTo("OnScene");
+    }
+
+    @Test
     void idempotency_duplicateEventsShouldNotCorruptData() throws Exception {
-        String activityId = "ACT-" + UUID.randomUUID();
-        Instant activityTime = Instant.now();
-        StartActivityRequested event = new StartActivityRequested(
-                activityId, activityTime, "Investigation", "Test activity", "Started"
+        String assignmentId = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
+        CreateAssignmentRequested event = new CreateAssignmentRequested(
+                assignmentId, assignmentId, assignedTime, "Patrol", "Created", "INC-1", null
         );
 
-        // Publish same event twice
-        publishToKafka(activityId, event);
-        publishToKafka(activityId, event);
+        publishToKafka(assignmentId, event);
+        publishToKafka(assignmentId, event);
 
-        ResponseEntity<Map> response = awaitActivity(activityId);
+        ResponseEntity<Map> response = awaitAssignment(assignmentId);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        // Ensure only one projection row exists
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM activity_projection WHERE activity_id = ?", Integer.class, activityId);
+                "SELECT COUNT(*) FROM assignment_projection WHERE assignment_id = ?", Integer.class, assignmentId);
         assertThat(count).isEqualTo(1);
     }
 
     @Test
     void natsEvent_shouldNotDoubleProcessWhenKafkaAlsoDelivers() throws Exception {
-        String activityId = "ACT-" + UUID.randomUUID();
-        Instant activityTime = Instant.now();
-        StartActivityRequested event = new StartActivityRequested(
-                activityId, activityTime, "Investigation", "Test activity", "Started"
+        String assignmentId = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
+        CreateAssignmentRequested event = new CreateAssignmentRequested(
+                assignmentId, assignmentId, assignedTime, "Patrol", "Created", "INC-1", null
         );
 
-        // Publish to Kafka
-        publishToKafka(activityId, event);
+        publishToKafka(assignmentId, event);
 
-        // Publish same event to NATS subject
         String subject = EventClassification.generateNatsSubject(event);
         try (Connection connection = Nats.connect(nats.getNatsUrl())) {
             connection.publish(subject, objectMapper.writeValueAsBytes(event));
         }
 
-        ResponseEntity<Map> response = awaitActivity(activityId);
+        ResponseEntity<Map> response = awaitAssignment(assignmentId);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("activityId")).isEqualTo(activityId);
+        assertThat(response.getBody().get("assignmentId")).isEqualTo(assignmentId);
 
-        // Ensure only one projection row exists
         Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM activity_projection WHERE activity_id = ?", Integer.class, activityId);
+                "SELECT COUNT(*) FROM assignment_projection WHERE assignment_id = ?", Integer.class, assignmentId);
         assertThat(count).isEqualTo(1);
     }
 
     @Test
-    void listActivities_shouldFilterAndPaginate() throws Exception {
-        String activityId1 = "ACT-" + UUID.randomUUID();
-        String activityId2 = "ACT-" + UUID.randomUUID();
-        Instant activityTime = Instant.now();
+    void listAssignments_shouldFilterAndPaginate() throws Exception {
+        String id1 = "ASN-" + UUID.randomUUID();
+        String id2 = "ASN-" + UUID.randomUUID();
+        Instant assignedTime = Instant.now();
 
-        publishToKafka(activityId1, new StartActivityRequested(
-                activityId1, activityTime, "Investigation", "High priority activity", "Started"
+        publishToKafka(id1, new CreateAssignmentRequested(
+                id1, id1, assignedTime, "Patrol", "Created", "INC-1", null
         ));
-        publishToKafka(activityId2, new StartActivityRequested(
-                activityId2, activityTime, "Patrol", "Low priority activity", "Started"
+        publishToKafka(id2, new CreateAssignmentRequested(
+                id2, id2, assignedTime, "Rescue", "Created", null, "CALL-1"
         ));
 
-        // Wait for both to be processed
-        awaitActivity(activityId1);
-        awaitActivity(activityId2);
+        // Filter by incidentId
+        ResponseEntity<Map> listByIncident = restTemplate.getForEntity(
+                "/api/projections/assignments?incidentId={incidentId}&page=0&size=10",
+                Map.class,
+                "INC-1");
+        assertThat(listByIncident.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body1 = listByIncident.getBody();
+        assertThat(body1).isNotNull();
+        assertThat(body1.get("total")).isEqualTo(1);
 
-        // Test filtering by status
-        ResponseEntity<Map> response = restTemplate.getForEntity(
-                "/api/projections/activities?status=Started&page=0&size=10", Map.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<String, Object> body = response.getBody();
-        assertThat(body).isNotNull();
-        List<Map<String, Object>> content = (List<Map<String, Object>>) body.get("content");
-        assertThat(content).isNotNull();
-        assertThat(content.size()).isGreaterThanOrEqualTo(2);
-
-        // Test filtering by activityType
-        ResponseEntity<Map> typeResponse = restTemplate.getForEntity(
-                "/api/projections/activities?activityType=Investigation&page=0&size=10", Map.class);
-        assertThat(typeResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
-        Map<String, Object> typeBody = typeResponse.getBody();
-        assertThat(typeBody).isNotNull();
-        List<Map<String, Object>> typeContent = (List<Map<String, Object>>) typeBody.get("content");
-        assertThat(typeContent).isNotNull();
-        assertThat(typeContent.stream()
-                .anyMatch(item -> activityId1.equals(item.get("activityId")))).isTrue();
+        // Filter by callId
+        ResponseEntity<Map> listByCall = restTemplate.getForEntity(
+                "/api/projections/assignments?callId={callId}&page=0&size=10",
+                Map.class,
+                "CALL-1");
+        assertThat(listByCall.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body2 = listByCall.getBody();
+        assertThat(body2).isNotNull();
+        assertThat(body2.get("total")).isEqualTo(1);
     }
 
     private void publishToKafka(String key, Object event) throws Exception {
         String payload = objectMapper.writeValueAsString(event);
-        producer.send(new ProducerRecord<>("activity-events", key, payload)).get(10, TimeUnit.SECONDS);
+        producer.send(new ProducerRecord<>("assignment-events", key, payload)).get(10, TimeUnit.SECONDS);
     }
 
-    private ResponseEntity<Map> awaitActivity(String activityId) {
+    private ResponseEntity<Map> awaitAssignment(String assignmentId) {
         return Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofSeconds(1))
-                .until(() -> restTemplate.getForEntity("/api/projections/activities/{activityId}", Map.class, activityId),
+                .until(() -> restTemplate.getForEntity("/api/projections/assignments/{id}", Map.class, assignmentId),
                         response -> response.getStatusCode().is2xxSuccessful());
     }
 
-    private ResponseEntity<List> awaitHistory(String activityId) {
+    private ResponseEntity<List> awaitHistory(String assignmentId) {
         return Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofSeconds(1))
-                .until(() -> restTemplate.getForEntity("/api/projections/activities/{activityId}/history", List.class, activityId),
+                .until(() -> restTemplate.getForEntity("/api/projections/assignments/{id}/history", List.class, assignmentId),
+                        response -> response.getStatusCode().is2xxSuccessful());
+    }
+
+    private ResponseEntity<List> awaitResources(String assignmentId) {
+        return Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofSeconds(1))
+                .until(() -> restTemplate.getForEntity("/api/projections/assignments/{id}/resources", List.class, assignmentId),
                         response -> response.getStatusCode().is2xxSuccessful());
     }
 }
-

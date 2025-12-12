@@ -12,10 +12,11 @@ Phased plan to transition to full CQRS with projections. Each increment has scop
 - ✅ Phase 4.10: Observability & readiness (health endpoints, metrics, tests)
 
 **⏳ Remaining:**
-- ⏳ Phase 5: Expand to other domains (assignment, etc.)
+- Phase 5: Expand to other domains (assignment, etc.) — ✅ completed for current scope
   - ✅ Call Projection (complete)
   - ✅ Dispatch Projection (complete)
   - ✅ Activity Projection (complete)
+  - ✅ Assignment Projection (complete)
 
 **Reference Implementation:**
 The officer projection (`officer-projection` module) serves as the complete reference implementation. See `/doc/architecture/projection-pattern.md` for the implementation pattern guide.
@@ -75,12 +76,12 @@ Each projection is a separate deployable service (future K8s pod). The `officer-
    - Test: HealthEndpointTest verifies all actuator endpoints return UP status.
 
 ## Phase 5 – Expand to Other Domains (Follow-on)
-11) Add next domain projections (incident, dispatch, etc.) (IN PROGRESS)  
+11) Add next domain projections (incident, dispatch, etc.) (✅ COMPLETE for current backlog)  
    - ✅ `incident-projection` - Complete (all event handlers, E2E tests, query APIs)
    - ✅ `call-projection` - Complete (all event handlers, E2E tests, query APIs)
    - ✅ `dispatch-projection` - Complete (all event handlers, E2E tests, query APIs)
    - ✅ `activity-projection` - Complete (all event handlers, E2E tests, query APIs)
-   - ⏳ `assignment-projection` - TODO
+   - ✅ `assignment-projection` - Complete (all event handlers, E2E tests, query APIs)
    - Each is a standalone deployable service (future K8s pod).  
    - Repeat pattern: schema, consumers, queries, tests per domain.  
    - Test: domain-specific smokes + query tests.

@@ -29,6 +29,7 @@ public class AssignmentProjectionRepository {
     }
 
     public void upsert(CreateAssignmentRequested event, Instant now) {
+        String eventId = event.getEventId() != null ? event.getEventId().toString() : null;
         jdbcTemplate.update("""
                         INSERT INTO assignment_projection (assignment_id, assigned_time, assignment_type, status, incident_id, call_id, dispatch_id, completed_time, created_at, updated_at, event_id)
                         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, COALESCE(?, NOW()), ?, ?)
@@ -51,12 +52,18 @@ public class AssignmentProjectionRepository {
                 null,
                 ts(now),
                 ts(now),
-                event.getEventId());
+                eventId);
 
-        insertHistoryIfNew(event.getAssignmentId(), event.getStatus(), now, event.getEventId());
     }
 
     public void changeStatus(ChangeAssignmentStatusRequested event, Instant now) {
+        String eventId = event.getEventId() != null ? event.getEventId().toString() : null;
+        String currentStatus = findByAssignmentId(event.getAssignmentId())
+                .map(AssignmentProjectionEntity::status)
+                .orElse(null);
+
+        boolean statusChanged = event.getStatus() != null && !event.getStatus().equals(currentStatus);
+
         jdbcTemplate.update("""
                         UPDATE assignment_projection
                         SET status = ?, updated_at = ?, event_id = ?
@@ -64,13 +71,16 @@ public class AssignmentProjectionRepository {
                         """,
                 event.getStatus(),
                 ts(now),
-                event.getEventId(),
+                eventId,
                 event.getAssignmentId());
 
-        insertHistoryIfNew(event.getAssignmentId(), event.getStatus(), now, event.getEventId());
+        if (statusChanged) {
+            insertHistoryIfNew(event.getAssignmentId(), event.getStatus(), now, eventId);
+        }
     }
 
     public void complete(CompleteAssignmentRequested event, Instant now) {
+        String eventId = event.getEventId() != null ? event.getEventId().toString() : null;
         jdbcTemplate.update("""
                         UPDATE assignment_projection
                         SET status = ?, completed_time = ?, updated_at = ?, event_id = ?
@@ -79,13 +89,14 @@ public class AssignmentProjectionRepository {
                 "Completed",
                 ts(event.getCompletedTime()),
                 ts(now),
-                event.getEventId(),
+                eventId,
                 event.getAssignmentId());
 
-        insertHistoryIfNew(event.getAssignmentId(), "Completed", now, event.getEventId());
+        insertHistoryIfNew(event.getAssignmentId(), "Completed", now, eventId);
     }
 
     public void linkDispatch(LinkAssignmentToDispatchRequested event, Instant now) {
+        String eventId = event.getEventId() != null ? event.getEventId().toString() : null;
         jdbcTemplate.update("""
                         UPDATE assignment_projection
                         SET dispatch_id = ?, updated_at = ?, event_id = ?
@@ -93,11 +104,12 @@ public class AssignmentProjectionRepository {
                         """,
                 event.getDispatchId(),
                 ts(now),
-                event.getEventId(),
+                eventId,
                 event.getAssignmentId());
     }
 
     public void upsertResource(AssignResourceRequested event, Instant now) {
+        String eventId = event.getEventId() != null ? event.getEventId().toString() : null;
         jdbcTemplate.update("""
                         INSERT INTO assignment_resource (assignment_id, resource_id, resource_type, role_type, status, start_time, updated_at, event_id)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -115,7 +127,7 @@ public class AssignmentProjectionRepository {
                 event.getStatus(),
                 ts(event.getStartTime()),
                 ts(now),
-                event.getEventId());
+                eventId);
     }
 
     public Optional<AssignmentProjectionEntity> findByAssignmentId(String assignmentId) {
@@ -179,7 +191,7 @@ public class AssignmentProjectionRepository {
     }
 
     private RowMapper<AssignmentProjectionEntity> projectionMapper() {
-        return this::mapProjection;
+        return (rs, rowNum) -> mapProjection(rs);
     }
 
     private AssignmentProjectionEntity mapProjection(ResultSet rs) throws SQLException {
@@ -198,7 +210,7 @@ public class AssignmentProjectionRepository {
     }
 
     private RowMapper<AssignmentStatusHistoryEntry> historyMapper() {
-        return this::mapHistory;
+        return (rs, rowNum) -> mapHistory(rs);
     }
 
     private AssignmentStatusHistoryEntry mapHistory(ResultSet rs) throws SQLException {
@@ -211,7 +223,7 @@ public class AssignmentProjectionRepository {
     }
 
     private RowMapper<AssignmentResourceEntry> resourceMapper() {
-        return this::mapResource;
+        return (rs, rowNum) -> mapResource(rs);
     }
 
     private AssignmentResourceEntry mapResource(ResultSet rs) throws SQLException {

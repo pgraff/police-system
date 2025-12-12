@@ -1,9 +1,9 @@
 spring:
   application:
-    name: activity-projection-test
+    name: assignment-projection-test
   kafka:
     consumer:
-      group-id: activity-projection-test-group
+      group-id: assignment-projection-test-group
       auto-offset-reset: earliest
   sql:
     init:
@@ -13,4 +13,3 @@ spring:
 projection:
   nats:
     enabled: true
-

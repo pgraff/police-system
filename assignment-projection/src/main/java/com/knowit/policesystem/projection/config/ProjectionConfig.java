@@ -27,7 +27,7 @@ public class ProjectionConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, String> activityConsumerFactory(KafkaProperties kafkaProperties) {
+    public ConsumerFactory<String, String> assignmentConsumerFactory(KafkaProperties kafkaProperties) {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties());
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -35,11 +35,11 @@ public class ProjectionConfig {
     }
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, String> activityKafkaListenerContainerFactory(
-            ConsumerFactory<String, String> activityConsumerFactory) {
+    public ConcurrentKafkaListenerContainerFactory<String, String> assignmentKafkaListenerContainerFactory(
+            ConsumerFactory<String, String> assignmentConsumerFactory) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(activityConsumerFactory);
+        factory.setConsumerFactory(assignmentConsumerFactory);
         factory.getContainerProperties().setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.MANUAL);
         return factory;
     }
@@ -49,4 +49,3 @@ public class ProjectionConfig {
         return java.time.Clock.systemUTC();
     }
 }
-

@@ -1,35 +1,35 @@
-package com.knowit.policesystem.projection.nats;
+package com.knowit.policesystem.projection;
 
 import com.knowit.policesystem.projection.config.NatsProperties;
-import com.knowit.policesystem.projection.consumer.ActivityEventParser;
-import com.knowit.policesystem.projection.service.ActivityProjectionService;
+import com.knowit.policesystem.projection.consumer.AssignmentEventParser;
+import com.knowit.policesystem.projection.service.AssignmentProjectionService;
 import io.nats.client.Connection;
 import io.nats.client.Dispatcher;
 import io.nats.client.Nats;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
 
 @Component
-public class ActivityNatsListener {
+public class AssignmentNatsListener {
 
-    private static final Logger log = LoggerFactory.getLogger(ActivityNatsListener.class);
+    private static final Logger log = LoggerFactory.getLogger(AssignmentNatsListener.class);
 
     private final NatsProperties properties;
-    private final ActivityEventParser parser;
-    private final ActivityProjectionService projectionService;
+    private final AssignmentEventParser parser;
+    private final AssignmentProjectionService projectionService;
 
     private Connection connection;
     private Dispatcher dispatcher;
     private String subject;
 
-    public ActivityNatsListener(NatsProperties properties,
-                               ActivityEventParser parser,
-                               ActivityProjectionService projectionService) {
+    public AssignmentNatsListener(NatsProperties properties,
+                                  AssignmentEventParser parser,
+                                  AssignmentProjectionService projectionService) {
         this.properties = properties;
         this.parser = parser;
         this.projectionService = projectionService;
@@ -49,12 +49,12 @@ public class ActivityNatsListener {
                     Object event = parser.parse(payload, message.getSubject());
                     projectionService.handle(event);
                 } catch (Exception e) {
-                    log.error("Failed to process NATS activity event", e);
+                    log.error("Failed to process NATS assignment event", e);
                 }
             });
             subject = properties.getSubjectPrefix().isBlank()
-                    ? "commands.activity.>"
-                    : properties.getSubjectPrefix() + ".activity.>";
+                    ? "commands.assignment.>"
+                    : properties.getSubjectPrefix() + ".assignment.>";
             dispatcher.subscribe(subject);
             log.info("Subscribed to NATS subject {}", subject);
         } catch (Exception e) {
@@ -76,4 +76,3 @@ public class ActivityNatsListener {
         }
     }
 }
-
