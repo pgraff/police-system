@@ -44,18 +44,20 @@ Comprehensive guide to testing approach, principles, and patterns used throughou
 
 ### Technology Stack
 - **Language**: Java 17
-- **Framework**: Spring Framework
+- **Framework**: Spring Framework / Spring Boot
 - **Primary Event Bus**: Apache Kafka (event sourcing and long-term storage)
 - **Secondary Event Bus**: NATS/JetStream (critical events for near realtime processing)
-- **Stream Processing**: Kafka Streams
+- **Projections**: Spring Kafka consumers (6 standalone services)
+- **Read Model Storage**: PostgreSQL
 
 ## Key Components
 
-1. **Edge Servers**: Handle commands and queries, built with Spring
+1. **Edge Servers**: Handle commands, built with Spring Boot
 2. **Event Buses**: 
    - **Kafka**: Primary event store and message broker for all events
    - **NATS/JetStream**: Secondary event bus for critical events requiring near realtime processing
-3. **CQRS Projections**: Build read models using Kafka Streams and Spring
+3. **CQRS Projections**: ✅ **6 standalone projection services** build read models using Spring Kafka consumers and PostgreSQL
+   - `officer-projection`, `incident-projection`, `call-projection`, `dispatch-projection`, `activity-projection`, `assignment-projection`
 
 ## Design Decisions
 

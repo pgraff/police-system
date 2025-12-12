@@ -175,34 +175,35 @@ Different consumer groups serve different purposes:
 - **Offset Management**: Consumer offsets track processing progress
 - **Idempotency**: Consumers handle duplicate events
 
-## Kafka Streams for Projections
+## Spring Kafka Consumers for Projections
 
-### Stream Processing
+### Event Processing
 
-Kafka Streams is used for building CQRS projections:
+✅ **Implemented**: Spring Kafka consumers are used for building CQRS projections (not Kafka Streams):
 
-- **Event Processing**: Processes events in real-time
-- **State Management**: Maintains state for aggregations
-- **Windowing**: Supports time-based windows for aggregations
-- **Joining**: Can join events from multiple topics
+- **Event Processing**: Processes events in real-time using `@KafkaListener`
+- **Manual Acknowledgment**: Events acknowledged after successful processing
+- **Idempotency**: Event ID tracking prevents duplicate processing
+- **Error Handling**: Acknowledge on error (relies on idempotency for safety)
 
-### Stream Topology
+### Projection Architecture
 
-Projections are built using stream topologies:
+Projections are built using Spring Kafka consumers:
 
-1. **Source**: Consume events from Kafka topics
-2. **Transformation**: Transform events into projection format
-3. **Aggregation**: Aggregate events into read model structures
-4. **Sink**: Store projections in read model storage
+1. **Consumer**: `@KafkaListener` subscribes to domain-specific Kafka topics
+2. **Parser**: JSON event payloads parsed into typed event objects
+3. **Service**: Event handlers update PostgreSQL read models
+4. **Repository**: JDBC-based data access with upsert patterns
+5. **API**: REST endpoints expose query APIs for read models
 
-### State Stores
+### Storage
 
-Kafka Streams maintains state stores for:
+PostgreSQL is used for all read models:
 
-- **Aggregations**: Running aggregations and summaries
-- **Joins**: State for joining multiple event streams
-- **Windows**: Time-windowed aggregations
-- **Lookups**: Fast lookups for enrichment
+- **Durability**: All projections stored in PostgreSQL
+- **Relational Queries**: Support for joins and complex queries
+- **Indexing**: Strategic indexes for query performance
+- **History Tracking**: Status history tables for audit trails
 
 ## Event Schema
 

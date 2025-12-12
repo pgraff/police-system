@@ -32,8 +32,11 @@ We keep the edge layer thin and event-first: REST commands in → `*Requested` e
 
 ## Query Side (Read Model)
 
-- Projections consume Kafka topics and build read models; they do not feed back into the edge contract.
-- Start simple (Kafka Streams or consumer + in-memory store); move to PostgreSQL when durable reads are needed.
+- ✅ **Implemented**: Projections consume Kafka topics and build read models; they do not feed back into the edge contract.
+- ✅ **Storage**: PostgreSQL is used for all read models (durable, relational queries, joins).
+- ✅ **Technology**: Spring Kafka consumers (not Kafka Streams) for simplicity and flexibility.
+- ✅ **Deployment**: Each projection is a separate standalone service (future K8s pod).
+- ✅ **Modules**: 6 projection modules implemented (officer, incident, call, dispatch, activity, assignment).
 - Support replay from Kafka and DLQ for bad events.
 
 ## Selection Rules (when to choose)

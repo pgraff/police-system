@@ -69,3 +69,31 @@ We need a practical path to add CQRS projections without breaking the current ed
 - Needs immediate validation/ack: choose **B**.
 - Tolerates eventual consistency/polling: choose **A**.
 - Only consider **C** after deliberate API/edge deprecation decision.
+
+---
+
+## Implementation Status (Updated)
+
+✅ **CQRS Projections Fully Implemented**
+
+**What Was Built:**
+- ✅ **6 standalone projection services** implemented (officer, incident, call, dispatch, activity, assignment)
+- ✅ **PostgreSQL** used for all read models (durable, relational queries)
+- ✅ **Spring Kafka consumers** (not Kafka Streams) for event consumption
+- ✅ **Query APIs** exposed directly by projection services (Option C pattern, but projections are separate services)
+- ✅ **Idempotent event processing** with event ID tracking
+- ✅ **Status history tracking** for all domains
+- ✅ **Health/readiness endpoints** via Spring Boot Actuator
+
+**Architecture Decision:**
+- Projections are **separate deployable services** (future K8s pods), not integrated into edge
+- Each projection service exposes its own REST API for queries
+- Edge layer remains focused on command handling (publishing events)
+- PostgreSQL chosen over in-memory for durability and relational query capabilities
+
+**Technology Choices:**
+- Spring Kafka consumers (simpler than Kafka Streams for our use case)
+- PostgreSQL for all read models (not MongoDB or in-memory)
+- Manual acknowledgment with idempotency for error handling
+
+See `/doc/architecture/projection-pattern.md` for the implementation pattern and `/doc/history/01_IMPLEMENT_CQRS_PLAN.md` for the complete implementation plan.

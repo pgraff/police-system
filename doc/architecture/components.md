@@ -29,10 +29,16 @@ This document describes the abstract components of the system and their responsi
 └───────┼────────────────┼────────────┘
         │                │
         │                ▼
-        │        ┌──────────────────┐
-        │        │ CQRS Projections │
-        │        │  (Kafka Streams) │
-        │        └────────┬─────────┘
+        │        ┌─────────────────────────────┐
+        │        │  CQRS Projection Services    │
+        │        │  (Spring Kafka Consumers)    │
+        │        │  - officer-projection        │
+        │        │  - incident-projection       │
+        │        │  - call-projection           │
+        │        │  - dispatch-projection       │
+        │        │  - activity-projection       │
+        │        │  - assignment-projection     │
+        │        └────────┬─────────────────────┘
         │                 │
         └─────────────────┘
 ```
@@ -52,11 +58,10 @@ Edge servers are the entry point to the system. They handle all client interacti
    - Generate and publish events
    - Return responses to clients
 
-2. **Query Handling**
-   - Receive queries from clients
-   - Route queries to appropriate read models
-   - Aggregate data from multiple sources if needed
-   - Return query results to clients
+2. **Query Handling** (Note: Currently handled by projection services directly)
+   - Projection services expose their own query APIs
+   - Each projection service handles queries for its domain
+   - Future: Edge may route queries to projection services
 
 3. **API Gateway**
    - Provide unified REST API
@@ -146,9 +151,11 @@ CQRS projections build and maintain read models from events, enabling efficient 
 
 ### Technology
 
-- **Framework**: Spring Framework
-- **Stream Processing**: Kafka Streams
+- **Framework**: Spring Boot
+- **Event Consumption**: Spring Kafka consumers (not Kafka Streams)
+- **Storage**: PostgreSQL for read models
 - **Language**: Java 17
+- **Deployment**: Standalone services (future K8s pods)
 
 ### Characteristics
 
@@ -157,19 +164,42 @@ CQRS projections build and maintain read models from events, enabling efficient 
 - **Scalable**: Can scale independently from command side
 - **Resilient**: Can recover from failures by replaying events
 
-### Projection Types
+### Implemented Projections
 
-1. **Materialized Views**
-   - Pre-computed views of data
-   - Optimized for specific queries
-   - Updated as events arrive
+✅ **6 projection modules fully implemented:**
 
-2. **Aggregations**
+1. **Officer Projection** (`officer-projection`)
+   - Handles officer registration, updates, status changes
+   - Query endpoints: Get by badge, list with filters, status history
+
+2. **Incident Projection** (`incident-projection`)
+   - Handles all incident events (report, dispatch, arrive, clear, update, status change)
+   - Query endpoints: Get by ID, list with filters, status history
+
+3. **Call Projection** (`call-projection`)
+   - Handles all call events (receive, dispatch, arrive, clear, update, status change)
+   - Query endpoints: Get by ID, list with filters, status history
+
+4. **Dispatch Projection** (`dispatch-projection`)
+   - Handles dispatch creation and status changes
+   - Query endpoints: Get by ID, list with filters, status history
+
+5. **Activity Projection** (`activity-projection`)
+   - Handles activity start, update, status change, completion
+   - Query endpoints: Get by ID, list with filters, status history
+
+6. **Assignment Projection** (`assignment-projection`)
+   - Handles assignment creation, status changes, completion, dispatch linking, resource assignment
+   - Query endpoints: Get by ID, list with filters, status history, resource assignments
+
+### Future Projection Types (Optional)
+
+1. **Aggregations**
    - Summary statistics
    - Incremental updates
    - Used for dashboards
 
-3. **Search Indexes**
+2. **Search Indexes**
    - Full-text search
    - Fast lookup capabilities
    - Updated from events
@@ -187,9 +217,10 @@ CQRS projections build and maintain read models from events, enabling efficient 
 
 ### Query Flow
 
-1. Client sends query to edge server
-2. Edge server queries read model (from projections)
-3. Edge server returns results to client
+1. Client sends query directly to projection service API
+2. Projection service queries PostgreSQL read model
+3. Projection service returns results to client
+4. (Future: Edge may route queries to projection services)
 
 ### Event Flow
 

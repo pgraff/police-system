@@ -20,14 +20,19 @@ The edge remains event-first and stateless: REST commands enter, `*Requested` ev
 ## Event Propagation and Projections
 
 - Kafka stores `*Requested` events; DLQ protects failed publishes/consumes.
-- Projections consume Kafka topics and build read models (start with Kafka Streams or consumer + in-memory; move to PostgreSQL when durable reads are needed).
+- ✅ **Implemented**: 6 projection services consume Kafka/NATS topics and build read models in PostgreSQL.
+- ✅ **Technology**: Spring Kafka consumers (not Kafka Streams) for event consumption.
+- ✅ **Storage**: PostgreSQL for all read models (durable, relational queries, joins).
+- ✅ **Idempotency**: Event ID tracking prevents duplicate processing.
 - Support replay from Kafka beginning; projection errors go to DLQ with retries.
 
 ## Query Flow
 
-1. Client issues query to edge REST.
-2. Edge routes to query handler that serves from read models.
-3. Responses reflect eventual consistency; clients can correlate command→query via `correlationId` when provided.
+1. Client issues query directly to projection service REST API (e.g., `/api/projections/officers/{badgeNumber}`).
+2. Projection service queries PostgreSQL read model.
+3. Projection service returns results to client.
+4. Responses reflect eventual consistency; clients can correlate command→query via `correlationId` when provided.
+5. (Future: Edge may route queries to projection services for unified API)
 
 ## Consistency and Idempotency
 

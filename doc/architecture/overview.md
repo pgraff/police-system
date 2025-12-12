@@ -16,18 +16,19 @@ Commands and queries are split. Commands enter via the edge and are expressed as
 
 ## System Components
 
-1. **Edge Servers**: Authenticate/authorize requests, publish `*Requested` events, optionally request/response over NATS for immediate acceptance, and serve queries from read models.
+1. **Edge Servers**: Authenticate/authorize requests, publish `*Requested` events, optionally request/response over NATS for immediate acceptance.
 2. **Event Bus (Kafka)**: Source of truth for command events, supporting replay and DLQ.
 3. **NATS (request/response)**: Optional fast-path validation/ack channel paired with Kafka publish.
-4. **CQRS Projections**: Consume Kafka to build read models; start lightweight (Kafka Streams or consumer + in-memory) and move to durable stores as needed.
+4. **CQRS Projections**: ✅ **6 standalone projection services** consume Kafka/NATS to build read models in PostgreSQL. Each projection is a separate deployable service with its own query APIs.
 
 ## Technology Stack
 
 - **Language**: Java 17
-- **Framework**: Spring Framework
+- **Framework**: Spring Framework / Spring Boot
 - **Event Bus**: Apache Kafka
-- **Request/Response**: NATS
-- **Stream Processing**: Kafka Streams (for projections)
+- **Request/Response**: NATS/JetStream
+- **Projections**: Spring Kafka consumers (6 standalone projection services)
+- **Read Model Storage**: PostgreSQL
 
 ## Document Structure
 

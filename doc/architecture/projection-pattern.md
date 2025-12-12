@@ -244,11 +244,24 @@ The officer projection (`officer-projection` module) serves as the reference imp
 
 See the implementation for a complete working example.
 
-## Future Projections
+## Implemented Projections
 
-Create separate modules following this pattern:
-- **Incident Projection**: `incident-projection/` module → `incident-events` → `incident_projection` table
-- **Call Projection**: `call-projection/` module → `call-events` → `call_projection` table
-- **Dispatch Projection**: `dispatch-projection/` module → `dispatch-events` → `dispatch_projection` table
+✅ **All 6 projection modules are complete:**
+
+- ✅ **Officer Projection**: `officer-projection/` module → `officer-events` → `officer_projection` table
+- ✅ **Incident Projection**: `incident-projection/` module → `incident-events` → `incident_projection` table
+- ✅ **Call Projection**: `call-projection/` module → `call-events` → `call_projection` table
+- ✅ **Dispatch Projection**: `dispatch-projection/` module → `dispatch-events` → `dispatch_projection` table
+- ✅ **Activity Projection**: `activity-projection/` module → `activity-events` → `activity_projection` table
+- ✅ **Assignment Projection**: `assignment-projection/` module → `assignment-events` → `assignment_projection` table
+
+Each is a separate deployable service (future K8s pod).
+
+## Future Projections (Optional)
+
+Additional domains that could be projected:
 - **Unit Projection**: `unit-projection/` module → `unit-events` → `unit_projection` table
-- Each is a separate deployable service (future K8s pod)
+- **Vehicle Projection**: `vehicle-projection/` module → `vehicle-events` → `vehicle_projection` table
+- **Person Projection**: `person-projection/` module → `person-events` → `person_projection` table
+- **Location Projection**: `location-projection/` module → `location-events` → `location_projection` table
+- **Shift Projection**: `shift-projection/` module → `shift-events` → `shift_projection` table

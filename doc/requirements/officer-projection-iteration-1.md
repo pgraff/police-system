@@ -1,5 +1,7 @@
 # Officer Projection – Iteration 1 (Requirements)
 
+> **Status**: ✅ **COMPLETE** - This iteration has been fully implemented and expanded. The officer projection serves as the reference implementation for all other projections. See `/doc/architecture/projection-pattern.md` for the implementation pattern and `/doc/history/01_IMPLEMENT_CQRS_PLAN.md` for the complete implementation status.
+
 ## Goal
 Deliver a standalone `projection` Spring Boot module that consumes officer events from Kafka/NATS, projects them into Postgres, and exposes read-only HTTP endpoints for querying the officer read model and status history.
 
