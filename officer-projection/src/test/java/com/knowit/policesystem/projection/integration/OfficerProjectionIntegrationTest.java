@@ -6,7 +6,6 @@ import com.knowit.policesystem.common.events.EventClassification;
 import com.knowit.policesystem.common.events.officers.ChangeOfficerStatusRequested;
 import com.knowit.policesystem.common.events.officers.RegisterOfficerRequested;
 import com.knowit.policesystem.common.events.officers.UpdateOfficerRequested;
-import com.knowit.policesystem.edge.config.TopicConfiguration;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -178,7 +177,7 @@ class OfficerProjectionIntegrationTest extends IntegrationTestBase {
 
     private void publishToKafka(String key, Object event) throws Exception {
         String payload = objectMapper.writeValueAsString(event);
-        producer.send(new ProducerRecord<>(TopicConfiguration.OFFICER_EVENTS, key, payload)).get(10, TimeUnit.SECONDS);
+        producer.send(new ProducerRecord<>("officer-events", key, payload)).get(10, TimeUnit.SECONDS);
     }
 
     private ResponseEntity<Map> awaitOfficer(String badge) {

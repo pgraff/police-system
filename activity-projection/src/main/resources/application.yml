@@ -28,6 +28,22 @@ spring:
 server:
   port: 0
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,readiness,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  health:
+    readiness-state:
+      enabled: true
+    liveness-state:
+      enabled: true
+
 projection:
   nats:
     enabled: ${NATS_ENABLED:true}

@@ -4,14 +4,14 @@ Phased plan to transition to full CQRS with projections. Each increment has scop
 
 ## Status Summary
 
-**✅ Completed: Phases 1-3 + Phase 4 (Idempotency)**
+**✅ Completed: Phases 1-4**
 - ✅ Phase 1: Projection Foundations (module, schema, infrastructure)
 - ✅ Phase 2: Officer Projection (all event handlers, E2E tests)
 - ✅ Phase 3: Query APIs (all endpoints, integration tests)
 - ✅ Phase 4.9: Idempotency (tested and verified)
+- ✅ Phase 4.10: Observability & readiness (health endpoints, metrics, tests)
 
 **⏳ Remaining:**
-- ⏳ Phase 4.10: Observability & readiness (health endpoints, metrics)
 - ⏳ Phase 5: Expand to other domains (assignment, etc.)
   - ✅ Call Projection (complete)
   - ✅ Dispatch Projection (complete)
@@ -67,9 +67,12 @@ Each projection is a separate deployable service (future K8s pod). The `officer-
    - Ensure upserts are idempotent; handle replays.  
    - Test: re-publish same events → no duplication in main table/history.
 
-10) Observability & readiness (TODO)  
-   - Health/readiness endpoints; basic metrics/logging for projection consumer lag/errors.  
-   - Test: health endpoints up; log on failure; metric exposure stubs in place.
+10) Observability & readiness (✅ COMPLETE)  
+   - Added Spring Boot Actuator to all projection modules.  
+   - Configured health, readiness, and liveness endpoints.  
+   - Added ConsumerMetrics component for tracking consumer errors (example in officer-projection).  
+   - Enhanced error logging with event context (topic, partition, offset).  
+   - Test: HealthEndpointTest verifies all actuator endpoints return UP status.
 
 ## Phase 5 – Expand to Other Domains (Follow-on)
 11) Add next domain projections (incident, dispatch, etc.) (IN PROGRESS)  
