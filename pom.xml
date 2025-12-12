@@ -25,6 +25,7 @@
         <module>edge</module>
         <module>officer-projection</module>
         <module>incident-projection</module>
+        <module>call-projection</module>
     </modules>
 
     <properties>
