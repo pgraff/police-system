@@ -25,6 +25,9 @@ Detailed description of how data flows through the system: commands, events, que
 ### [Docker Compose Infrastructure](docker-compose.md)
 Complete guide to the infrastructure services provided by docker-compose, including Kafka cluster, NATS cluster, databases, and admin UIs.
 
+### [Testing Strategy and Principles](testing.md)
+Comprehensive guide to testing approach, principles, and patterns used throughout the system, including Test-Driven Development, event-driven testing, integration testing with Testcontainers, and layer-specific testing patterns.
+
 ## Architecture Principles
 
 ### Event Sourcing

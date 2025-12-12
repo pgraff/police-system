@@ -79,6 +79,7 @@ System architecture and design patterns:
 - [Component Architecture](doc/architecture/components.md) - System components and their interactions
 - [Event Bus](doc/architecture/event-bus.md) - Kafka and NATS/JetStream event buses
 - [Data Flow](doc/architecture/data-flow.md) - How data flows through the system
+- [Testing Strategy](doc/architecture/testing.md) - Testing principles, patterns, and practices
 
 ### 📋 [Event Documentation](doc/events/README.md)
 
