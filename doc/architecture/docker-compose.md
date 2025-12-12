@@ -6,6 +6,8 @@ This document describes the infrastructure services provided by the `docker-comp
 
 The docker-compose setup provides all necessary infrastructure services for the Police System:
 - **Event Buses**: Kafka (3 brokers) and NATS (3-node cluster)
+- **Search Engine**: Elasticsearch for event indexing and search
+- **Event Indexing**: Kafka Connect for Elasticsearch indexing
 - **Databases**: PostgreSQL, MongoDB, InfluxDB
 - **Admin UIs**: Kafka UI and NATS Tower
 - **Development Tools**: pgAdmin, MongoDB Express
@@ -61,6 +63,19 @@ The docker-compose setup provides all necessary infrastructure services for the 
 - JetStream Info: `http://localhost:8222/jsz`
 - Connections: `http://localhost:8222/connz`
 
+### Kafka Connect
+
+**Kafka Connect** (Port 8083)
+- Distributed mode for high availability
+- REST API: http://localhost:8083
+- Connects to all 3 Kafka brokers
+- Used for Elasticsearch indexing via OpenSearch Sink Connector
+
+**Connectors**: 14 connectors, one per event topic
+- Indexes events to Elasticsearch with domain-specific indices
+- Dead letter topics for error handling
+- See [Kafka Connect Elasticsearch](kafka-connect-elasticsearch.md) for details
+
 ### Databases
 
 **PostgreSQL** (Port 5432)
@@ -85,6 +100,13 @@ The docker-compose setup provides all necessary infrastructure services for the 
 - User: `policesystem`
 - Password: `policesystem`
 - Admin Token: `policesystem-admin-token`
+
+**Elasticsearch** (Port 9200)
+- Single-node cluster (development mode)
+- Security: Disabled (development only)
+- Memory: 512MB heap
+- Used for: Event indexing and search via Kafka Connect
+- Health: `http://localhost:9200/_cluster/health`
 
 ## Starting Services
 

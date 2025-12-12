@@ -1,0 +1,36 @@
+{
+  "index_patterns": ["officer-events-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "index.lifecycle.name": "police-events-policy",
+      "index.lifecycle.rollover_alias": "officer-events",
+      "refresh_interval": "5s"
+    },
+    "mappings": {
+      "properties": {
+        "eventId": {
+          "type": "keyword"
+        },
+        "eventType": {
+          "type": "keyword"
+        },
+        "timestamp": {
+          "type": "date"
+        },
+        "aggregateId": {
+          "type": "keyword"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "data": {
+          "type": "object",
+          "enabled": true
+        }
+      }
+    }
+  }
+}
+

@@ -34,6 +34,8 @@ The Police Incident Management System is designed to handle the complete lifecyc
    - **PostgreSQL** on port 5432
    - **MongoDB** on port 27017
    - **InfluxDB** on port 8086
+   - **Elasticsearch** on port 9200 (for event indexing and search)
+   - **Kafka Connect** on port 8083 (for Elasticsearch indexing)
    - **Kafka UI** on http://localhost:8080
    - **NATS Tower** on http://localhost:8099
 
@@ -54,11 +56,22 @@ The Police Incident Management System is designed to handle the complete lifecyc
 
 5. **Access Admin UIs**:
    - **Kafka UI**: http://localhost:8080 (Kafka management)
+   - **Kafka Connect REST API**: http://localhost:8083 (Connector management)
    - **NATS Tower**: http://localhost:8099 (NATS cluster management)
    - **NATS Monitoring**: 
      - nats-1: http://localhost:8222
      - nats-2: http://localhost:8223
      - nats-3: http://localhost:8224
+
+6. **Deploy Kafka Connect Connectors** (optional, for Elasticsearch indexing):
+   ```bash
+   # Install OpenSearch connector plugin (see docker/kafka-connect/plugins/README.md)
+   # Then deploy all connectors:
+   ./scripts/deploy-connectors.sh
+   
+   # Check connector health:
+   ./scripts/check-connectors.sh
+   ```
 
 ## Documentation
 
@@ -79,6 +92,7 @@ System architecture and design patterns:
 - [Component Architecture](doc/architecture/components.md) - System components and their interactions
 - [Event Bus](doc/architecture/event-bus.md) - Kafka and NATS/JetStream event buses
 - [Data Flow](doc/architecture/data-flow.md) - How data flows through the system
+- [Kafka Connect Elasticsearch](doc/architecture/kafka-connect-elasticsearch.md) - Event indexing to Elasticsearch
 - [Testing Strategy](doc/architecture/testing.md) - Testing principles, patterns, and practices
 
 ### 📋 [Event Documentation](doc/events/README.md)

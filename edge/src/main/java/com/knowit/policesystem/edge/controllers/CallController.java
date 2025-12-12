@@ -182,7 +182,7 @@ public class CallController extends BaseRestController {
 
         UpdateCallCommand command = new UpdateCallCommand(callId, requestDto);
         return executeCommand(command, updateCallCommandValidator, commandHandlerRegistry, UpdateCallCommand.class,
-                "Call updated", HttpStatus.OK);
+                "Call update request processed", HttpStatus.OK);
     }
 
     /**

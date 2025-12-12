@@ -1,0 +1,25 @@
+{
+  "name": "unit-events-to-elasticsearch",
+  "config": {
+    "connector.class": "org.opensearch.kafka.connect.OpensearchSinkConnector",
+    "tasks.max": "2",
+    "topics": "unit-events",
+    "connection.url": "${ELASTICSEARCH_URL:http://elasticsearch:9200}",
+    "connection.username": "${ELASTICSEARCH_USERNAME:}",
+    "connection.password": "${ELASTICSEARCH_PASSWORD:}",
+    "index": "unit-events",
+    "type.name": "_doc",
+    "key.ignore": "false",
+    "document.id": "${eventId}",
+    "transforms": "ExtractEventId",
+    "transforms.ExtractEventId.type": "org.apache.kafka.connect.transforms.ExtractField$Value",
+    "transforms.ExtractEventId.field": "eventId",
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "dlq-unit-events",
+    "errors.deadletterqueue.topic.replication.factor": "3",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter.schemas.enable": "false"
+  }
+}
+

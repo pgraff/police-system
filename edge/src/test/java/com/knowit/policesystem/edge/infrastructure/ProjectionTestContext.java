@@ -139,6 +139,7 @@ public class ProjectionTestContext {
             org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<Object, Object> factory = 
                 new org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<>();
             factory.setConsumerFactory((org.springframework.kafka.core.ConsumerFactory<Object, Object>) consumerFactory);
+            factory.getContainerProperties().setAckMode(org.springframework.kafka.listener.ContainerProperties.AckMode.MANUAL);
             return factory;
         }
         
