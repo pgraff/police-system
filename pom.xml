@@ -28,6 +28,7 @@
         <module>call-projection</module>
         <module>dispatch-projection</module>
         <module>activity-projection</module>
+        <module>assignment-projection</module>
     </modules>
 
     <properties>
