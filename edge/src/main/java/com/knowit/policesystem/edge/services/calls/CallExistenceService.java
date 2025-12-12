@@ -2,7 +2,7 @@ package com.knowit.policesystem.edge.services.calls;
 
 /**
  * Abstraction to verify whether a call exists before processing commands.
- * In production this can be backed by an external system; tests override with a controllable implementation.
+ * In production this is backed by projection queries via NATS; tests override with a controllable implementation.
  */
 public interface CallExistenceService {
 

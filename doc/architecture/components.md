@@ -58,10 +58,17 @@ Edge servers are the entry point to the system. They handle all client interacti
    - Generate and publish events
    - Return responses to clients
 
-2. **Query Handling** (Note: Currently handled by projection services directly)
-   - Projection services expose their own query APIs
+2. **Query Handling**
+   - **Direct Queries**: Projection services expose their own query APIs
+   - **Synchronous Queries**: Edge queries projections via NATS request-response for resource existence checks
    - Each projection service handles queries for its domain
-   - Future: Edge may route queries to projection services
+   - Future: Edge may route queries to projection services for unified API
+
+3. **Resource Existence Checks**
+   - Uses `ProjectionQueryService` to query projections synchronously via NATS
+   - Enables 404 Not Found responses for non-existent resources
+   - Enables 409 Conflict responses for duplicate resources
+   - Queries use subject pattern: `query.{domain}.exists`
 
 3. **API Gateway**
    - Provide unified REST API
@@ -123,6 +130,39 @@ Events are organized into topics:
 - **Replayability**: Events can be replayed from any offset
 - **Scalability**: Handles millions of events per second
 
+## NATS/JetStream
+
+### Purpose
+
+NATS/JetStream serves two roles in the system:
+1. **Event Distribution**: Critical events are published to NATS for near realtime processing
+2. **Request-Response**: Synchronous queries from edge to projections for resource existence checks
+
+### Responsibilities
+
+1. **Event Distribution**
+   - Publish critical events (all `*Requested` events) to NATS subjects
+   - Enable low-latency event processing
+   - Support JetStream for persistence and at-least-once delivery
+
+2. **Request-Response Queries**
+   - Handle synchronous query requests from edge to projections
+   - Subject pattern: `query.{domain}.{operation}` (e.g., `query.officer.exists`)
+   - Enable immediate resource existence checks
+   - Support timeout configuration for reliability
+
+### Subject Patterns
+
+- **Command Events**: `commands.{domain}.{action}` (e.g., `commands.officer.register`)
+- **Query Requests**: `query.{domain}.{operation}` (e.g., `query.officer.exists`)
+
+### Characteristics
+
+- **Low Latency**: Near realtime message delivery
+- **High Availability**: 3-node cluster with automatic failover
+- **Request-Response**: Built-in support for synchronous queries
+- **Persistence**: JetStream provides at-least-once delivery guarantees
+
 ## CQRS Projections
 
 ### Purpose
@@ -148,6 +188,8 @@ CQRS projections build and maintain read models from events, enabling efficient 
    - Support various query patterns
    - Aggregate data for reporting
    - Provide search capabilities
+   - **NATS Query Handlers**: Handle synchronous query requests from edge via NATS
+   - Respond to existence checks (`query.{domain}.exists`) for resource validation
 
 ### Technology
 
@@ -217,10 +259,21 @@ CQRS projections build and maintain read models from events, enabling efficient 
 
 ### Query Flow
 
+#### Direct Projection Queries
+
 1. Client sends query directly to projection service API
 2. Projection service queries PostgreSQL read model
 3. Projection service returns results to client
 4. (Future: Edge may route queries to projection services)
+
+#### Synchronous Edge Queries (via NATS)
+
+1. Edge receives REST command that requires resource existence check
+2. Edge sends NATS query request to projection (e.g., `query.officer.exists`)
+3. Projection queries PostgreSQL read model
+4. Projection responds via NATS with existence status
+5. Edge uses response to return appropriate HTTP status (404/409) or proceed with command
+6. Edge publishes `*Requested` event to Kafka/NATS as before
 
 ### Event Flow
 

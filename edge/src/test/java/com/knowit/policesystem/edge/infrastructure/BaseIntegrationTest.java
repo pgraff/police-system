@@ -85,5 +85,7 @@ public abstract class BaseIntegrationTest {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("nats.url", nats::getNatsUrl);
         registry.add("nats.enabled", () -> "true");
+        // Disable NATS queries in tests - we use in-memory services instead
+        registry.add("nats.query.enabled", () -> "false");
     }
 }

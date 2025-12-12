@@ -925,7 +925,7 @@ class CallControllerTest extends BaseIntegrationTest {
     static class TestCallExistenceConfig {
         @Bean
         @Primary
-        InMemoryCallExistenceService inMemoryCallExistenceService() {
+        CallExistenceService callExistenceService() {
             return new InMemoryCallExistenceService();
         }
 

@@ -3,7 +3,6 @@ package com.knowit.policesystem.edge.exceptions;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.knowit.policesystem.edge.dto.ErrorResponse;
 import com.knowit.policesystem.edge.dto.ValidationErrorResponse;
-import com.knowit.policesystem.edge.exceptions.NotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -92,6 +91,19 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(
                 "Not Found", exception.getMessage(), List.of());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    /**
+     * Handles ConflictException.
+     *
+     * @param exception the conflict exception
+     * @return 409 Conflict with error response
+     */
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflictException(ConflictException exception) {
+        ErrorResponse response = new ErrorResponse(
+                "Conflict", exception.getMessage(), List.of());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
     /**

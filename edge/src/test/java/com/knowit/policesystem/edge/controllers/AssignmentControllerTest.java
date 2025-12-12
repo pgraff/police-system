@@ -36,14 +36,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import com.knowit.policesystem.edge.services.assignments.AssignmentExistenceService;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -55,6 +62,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for AssignmentController.
  * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
+@Import(AssignmentControllerTest.TestAssignmentServiceConfig.class)
 class AssignmentControllerTest extends BaseIntegrationTest {
 
     @Autowired
@@ -65,6 +73,9 @@ class AssignmentControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private TopicConfiguration topicConfiguration;
+
+    @Autowired
+    private AssignmentExistenceService assignmentExistenceService;
 
     private Consumer<String, String> consumer;
     private Consumer<String, String> resourceAssignmentConsumer;
@@ -117,6 +128,11 @@ class AssignmentControllerTest extends BaseIntegrationTest {
             natsHelper.ensureStreamForSubject("commands.>");
         } catch (Exception e) {
             // Stream may already exist, continue
+        }
+
+        // Clear in-memory services
+        if (assignmentExistenceService instanceof InMemoryAssignmentExistenceService) {
+            ((InMemoryAssignmentExistenceService) assignmentExistenceService).clear();
         }
     }
 
@@ -543,6 +559,16 @@ class AssignmentControllerTest extends BaseIntegrationTest {
     void testChangeAssignmentStatus_WithValidStatus_ProducesEvent() throws Exception {
         // Given
         String assignmentId = "ASSIGN-013";
+        // Verify we're using the in-memory service and add assignments
+        assertThat(assignmentExistenceService).isInstanceOf(InMemoryAssignmentExistenceService.class);
+        InMemoryAssignmentExistenceService inMemoryService = (InMemoryAssignmentExistenceService) assignmentExistenceService;
+        // Add the main assignment and all the ones used in testStatusConversion
+        inMemoryService.addExistingAssignment(assignmentId);
+        inMemoryService.addExistingAssignment(assignmentId + "-1");
+        inMemoryService.addExistingAssignment(assignmentId + "-2");
+        inMemoryService.addExistingAssignment(assignmentId + "-3");
+        inMemoryService.addExistingAssignment(assignmentId + "-4");
+        
         ChangeAssignmentStatusRequestDto request = new ChangeAssignmentStatusRequestDto(AssignmentStatus.InProgress);
 
         // When - call REST API
@@ -1301,5 +1327,61 @@ class AssignmentControllerTest extends BaseIntegrationTest {
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = resourceAssignmentConsumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testChangeAssignmentStatus_WithNonExistentAssignmentId_Returns404() throws Exception {
+        // Given - assignment doesn't exist in projection
+        String nonExistentAssignmentId = "ASSIGN-999";
+        ChangeAssignmentStatusRequestDto request = new ChangeAssignmentStatusRequestDto(AssignmentStatus.InProgress);
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(patch("/api/v1/assignments/{assignmentId}/status", nonExistentAssignmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Assignment not found: " + nonExistentAssignmentId));
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    /**
+     * Test-only in-memory assignment existence service to control 404 scenarios.
+     */
+    static class InMemoryAssignmentExistenceService extends AssignmentExistenceService {
+        private final Set<String> existingAssignments = new HashSet<>();
+
+        public InMemoryAssignmentExistenceService() {
+            super(null); // Pass null since we override exists()
+        }
+
+        @Override
+        public boolean exists(String assignmentId) {
+            return existingAssignments.contains(assignmentId);
+        }
+
+        void addExistingAssignment(String assignmentId) {
+            existingAssignments.add(assignmentId);
+        }
+
+        void clear() {
+            existingAssignments.clear();
+        }
+    }
+
+    /**
+     * Test configuration to override AssignmentExistenceService with in-memory implementation.
+     */
+    @TestConfiguration
+    static class TestAssignmentServiceConfig {
+        @Bean
+        @Primary
+        AssignmentExistenceService assignmentExistenceService() {
+            return new InMemoryAssignmentExistenceService();
+        }
     }
 }

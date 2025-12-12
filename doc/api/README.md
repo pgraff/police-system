@@ -111,6 +111,59 @@ Error responses follow this structure:
 }
 ```
 
+### Resource Existence and Conflict Detection
+
+The API supports synchronous resource existence checks via NATS request-response queries to projections. This enables immediate feedback on resource state:
+
+#### 404 Not Found
+
+Returned when attempting to update, modify, or perform operations on a resource that doesn't exist in the projection.
+
+**Example 404 Response**:
+```json
+{
+  "error": "Not Found",
+  "message": "Officer not found: BADGE-999",
+  "details": []
+}
+```
+
+**Endpoints that return 404**:
+- `PUT /officers/{badgeNumber}` - When officer doesn't exist
+- `PATCH /officers/{badgeNumber}/status` - When officer doesn't exist
+- `PUT /incidents/{incidentId}` - When incident doesn't exist
+- `POST /incidents/{incidentId}/dispatch` - When incident doesn't exist
+- `PUT /activities/{activityId}` - When activity doesn't exist
+- `PATCH /assignments/{assignmentId}/status` - When assignment doesn't exist
+- Similar update/status change endpoints for other domains
+
+#### 409 Conflict
+
+Returned when attempting to create a resource that already exists (e.g., duplicate badge number).
+
+**Example 409 Response**:
+```json
+{
+  "error": "Conflict",
+  "message": "Officer with badge number already exists: 12345",
+  "details": []
+}
+```
+
+**Endpoints that return 409**:
+- `POST /officers` - When badge number already exists
+
+#### Eventual Consistency Note
+
+Projections are eventually consistent. A resource may not appear in the projection immediately after creation. The edge queries projections synchronously via NATS, so:
+
+- **Recently created resources** may return 404 if queried too quickly after creation
+- This is expected behavior in an eventually consistent system
+- Clients should handle 404 responses appropriately (e.g., retry after a short delay)
+- The resource will be available once the projection has processed the creation event
+
+**Best Practice**: When creating a resource and then immediately updating it, add a small delay or use the projection's REST API to verify the resource exists before updating.
+
 ## API Endpoints by Domain
 
 ### Officers

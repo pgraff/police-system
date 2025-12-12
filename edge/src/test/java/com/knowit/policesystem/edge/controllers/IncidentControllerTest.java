@@ -33,13 +33,20 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import com.knowit.policesystem.edge.services.incidents.IncidentExistenceService;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -51,6 +58,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for IncidentController.
  * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
+@Import(IncidentControllerTest.TestIncidentServiceConfig.class)
 class IncidentControllerTest extends BaseIntegrationTest {
 
     @Autowired
@@ -61,6 +69,9 @@ class IncidentControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private TopicConfiguration topicConfiguration;
+
+    @Autowired
+    private IncidentExistenceService incidentExistenceService;
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
@@ -98,6 +109,11 @@ class IncidentControllerTest extends BaseIntegrationTest {
             natsHelper.ensureStreamForSubject("commands.>");
         } catch (Exception e) {
             // Stream may already exist, continue
+        }
+
+        // Clear in-memory services
+        if (incidentExistenceService instanceof InMemoryIncidentExistenceService) {
+            ((InMemoryIncidentExistenceService) incidentExistenceService).clear();
         }
     }
 
@@ -316,6 +332,11 @@ class IncidentControllerTest extends BaseIntegrationTest {
     void testDispatchIncident_WithValidData_ProducesEvent() throws Exception {
         // Given
         String incidentId = "INC-100";
+        // Add incident to in-memory existence service
+        if (incidentExistenceService instanceof InMemoryIncidentExistenceService) {
+            ((InMemoryIncidentExistenceService) incidentExistenceService).addExistingIncident(incidentId);
+        }
+        
         Instant dispatchedTime = Instant.now();
         DispatchIncidentRequestDto request = new DispatchIncidentRequestDto(dispatchedTime);
 
@@ -716,6 +737,11 @@ class IncidentControllerTest extends BaseIntegrationTest {
     void testUpdateIncident_WithValidData_ProducesEvent() throws Exception {
         // Given
         String incidentId = "INC-200";
+        // Add incident to in-memory existence service
+        if (incidentExistenceService instanceof InMemoryIncidentExistenceService) {
+            ((InMemoryIncidentExistenceService) incidentExistenceService).addExistingIncident(incidentId);
+        }
+        
         UpdateIncidentRequestDto request = new UpdateIncidentRequestDto(
                 Priority.High,
                 "Updated description: Traffic accident with injuries",
@@ -757,6 +783,11 @@ class IncidentControllerTest extends BaseIntegrationTest {
     void testUpdateIncident_WithPartialData_ProducesEvent() throws Exception {
         // Given - only description provided
         String incidentId = "INC-201";
+        // Add incident to in-memory existence service
+        if (incidentExistenceService instanceof InMemoryIncidentExistenceService) {
+            ((InMemoryIncidentExistenceService) incidentExistenceService).addExistingIncident(incidentId);
+        }
+        
         UpdateIncidentRequestDto request = new UpdateIncidentRequestDto(
                 null,
                 "Only updating description",
@@ -798,6 +829,11 @@ class IncidentControllerTest extends BaseIntegrationTest {
     void testUpdateIncident_WithEmptyBody_ProducesEvent() throws Exception {
         // Given - empty body
         String incidentId = "INC-202";
+        // Add incident to in-memory existence service
+        if (incidentExistenceService instanceof InMemoryIncidentExistenceService) {
+            ((InMemoryIncidentExistenceService) incidentExistenceService).addExistingIncident(incidentId);
+        }
+        
         String requestJson = "{}";
 
         // When - call REST API
@@ -894,5 +930,85 @@ class IncidentControllerTest extends BaseIntegrationTest {
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateIncident_WithNonExistentIncidentId_Returns404() throws Exception {
+        // Given - incident doesn't exist in projection
+        String nonExistentIncidentId = "INC-999";
+        UpdateIncidentRequestDto request = new UpdateIncidentRequestDto(
+                Priority.High,
+                "Updated description",
+                IncidentType.Traffic
+        );
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/incidents/{incidentId}", nonExistentIncidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Incident not found: " + nonExistentIncidentId));
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testDispatchIncident_WithNonExistentIncidentId_Returns404() throws Exception {
+        // Given - incident doesn't exist in projection
+        String nonExistentIncidentId = "INC-998";
+        DispatchIncidentRequestDto request = new DispatchIncidentRequestDto(Instant.now());
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(post("/api/v1/incidents/{incidentId}/dispatch", nonExistentIncidentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Incident not found: " + nonExistentIncidentId));
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    /**
+     * Test-only in-memory incident existence service to control 404 scenarios.
+     */
+    static class InMemoryIncidentExistenceService extends IncidentExistenceService {
+        private final Set<String> existingIncidents = new HashSet<>();
+
+        public InMemoryIncidentExistenceService() {
+            super(null); // Pass null since we override exists()
+        }
+
+        @Override
+        public boolean exists(String incidentId) {
+            return existingIncidents.contains(incidentId);
+        }
+
+        void addExistingIncident(String incidentId) {
+            existingIncidents.add(incidentId);
+        }
+
+        void clear() {
+            existingIncidents.clear();
+        }
+    }
+
+    /**
+     * Test configuration to override IncidentExistenceService with in-memory implementation.
+     */
+    @TestConfiguration
+    static class TestIncidentServiceConfig {
+        @Bean
+        @Primary
+        IncidentExistenceService incidentExistenceService() {
+            return new InMemoryIncidentExistenceService();
+        }
     }
 }

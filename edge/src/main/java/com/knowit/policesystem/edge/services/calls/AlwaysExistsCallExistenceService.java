@@ -1,12 +1,13 @@
 package com.knowit.policesystem.edge.services.calls;
 
-import org.springframework.stereotype.Component;
-
 /**
  * Default implementation that assumes calls exist.
- * For production this should be replaced with a real lookup; tests override with a test-scoped bean.
+ * 
+ * @deprecated Replaced by ProjectionCallExistenceService which queries projections via NATS.
+ * This class is kept for backward compatibility but should not be used in production.
+ * Tests should override with a test-scoped bean.
  */
-@Component
+@Deprecated
 public class AlwaysExistsCallExistenceService implements CallExistenceService {
 
     @Override

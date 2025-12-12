@@ -30,14 +30,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import com.knowit.policesystem.edge.services.activities.ActivityExistenceService;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -49,6 +56,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for ActivityController.
  * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
+@Import(ActivityControllerTest.TestActivityServiceConfig.class)
 class ActivityControllerTest extends BaseIntegrationTest {
 
     @Autowired
@@ -62,6 +70,9 @@ class ActivityControllerTest extends BaseIntegrationTest {
 
     @Autowired
     private TopicConfiguration topicConfiguration;
+
+    @Autowired
+    private ActivityExistenceService activityExistenceService;
 
     private Consumer<String, String> consumer;
     private ObjectMapper eventObjectMapper;
@@ -99,6 +110,11 @@ class ActivityControllerTest extends BaseIntegrationTest {
             natsHelper.ensureStreamForSubject("commands.>");
         } catch (Exception e) {
             // Stream may already exist, continue
+        }
+
+        // Clear in-memory services
+        if (activityExistenceService instanceof InMemoryActivityExistenceService) {
+            ((InMemoryActivityExistenceService) activityExistenceService).clear();
         }
     }
 
@@ -458,6 +474,11 @@ class ActivityControllerTest extends BaseIntegrationTest {
     void testUpdateActivity_WithValidData_ProducesEvent() throws Exception {
         // Given
         String activityId = "ACT-009";
+        // Add activity to in-memory existence service
+        if (activityExistenceService instanceof InMemoryActivityExistenceService) {
+            ((InMemoryActivityExistenceService) activityExistenceService).addExistingActivity(activityId);
+        }
+        
         String description = "Updated description for activity";
         UpdateActivityRequestDto request = new UpdateActivityRequestDto(description);
 
@@ -641,5 +662,61 @@ class ActivityControllerTest extends BaseIntegrationTest {
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
+    }
+
+    @Test
+    void testUpdateActivity_WithNonExistentActivityId_Returns404() throws Exception {
+        // Given - activity doesn't exist in projection
+        String nonExistentActivityId = "ACT-999";
+        UpdateActivityRequestDto request = new UpdateActivityRequestDto("Updated description");
+
+        // When - call REST API
+        String requestJson = objectMapper.writeValueAsString(request);
+        mockMvc.perform(put("/api/v1/activities/{activityId}", nonExistentActivityId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Activity not found: " + nonExistentActivityId));
+
+        // Then - verify no event in Kafka
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
+        assertThat(records).isEmpty();
+    }
+
+    /**
+     * Test-only in-memory activity existence service to control 404 scenarios.
+     */
+    static class InMemoryActivityExistenceService extends ActivityExistenceService {
+        private final Set<String> existingActivities = new HashSet<>();
+
+        public InMemoryActivityExistenceService() {
+            super(null); // Pass null since we override exists()
+        }
+
+        @Override
+        public boolean exists(String activityId) {
+            return existingActivities.contains(activityId);
+        }
+
+        void addExistingActivity(String activityId) {
+            existingActivities.add(activityId);
+        }
+
+        void clear() {
+            existingActivities.clear();
+        }
+    }
+
+    /**
+     * Test configuration to override ActivityExistenceService with in-memory implementation.
+     */
+    @TestConfiguration
+    static class TestActivityServiceConfig {
+        @Bean
+        @Primary
+        ActivityExistenceService activityExistenceService() {
+            return new InMemoryActivityExistenceService();
+        }
     }
 }

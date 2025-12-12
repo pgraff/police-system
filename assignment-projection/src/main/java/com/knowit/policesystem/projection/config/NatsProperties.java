@@ -7,9 +7,11 @@ public class NatsProperties {
 
     private boolean enabled = true;
     private String url = "nats://localhost:4222";
-    private String stream = "activity-events";
-    private String consumer = "activity-projection-service";
+    private String stream = "assignment-events";
+    private String consumer = "assignment-projection-service";
     private String subjectPrefix = "";
+    private boolean queryEnabled = true;
+    private String querySubjectPrefix = "query";
 
     public boolean isEnabled() {
         return enabled;
@@ -49,6 +51,22 @@ public class NatsProperties {
 
     public void setSubjectPrefix(String subjectPrefix) {
         this.subjectPrefix = subjectPrefix;
+    }
+
+    public boolean isQueryEnabled() {
+        return queryEnabled;
+    }
+
+    public void setQueryEnabled(boolean queryEnabled) {
+        this.queryEnabled = queryEnabled;
+    }
+
+    public String getQuerySubjectPrefix() {
+        return querySubjectPrefix;
+    }
+
+    public void setQuerySubjectPrefix(String querySubjectPrefix) {
+        this.querySubjectPrefix = querySubjectPrefix;
     }
 }
 

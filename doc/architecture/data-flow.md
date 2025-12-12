@@ -28,11 +28,34 @@ The edge remains event-first and stateless: REST commands enter, `*Requested` ev
 
 ## Query Flow
 
+### Direct Projection Queries
+
 1. Client issues query directly to projection service REST API (e.g., `/api/projections/officers/{badgeNumber}`).
 2. Projection service queries PostgreSQL read model.
 3. Projection service returns results to client.
 4. Responses reflect eventual consistency; clients can correlate command→query via `correlationId` when provided.
 5. (Future: Edge may route queries to projection services for unified API)
+
+### Synchronous Projection Queries via NATS
+
+The edge service can query projections synchronously via NATS request-response for resource existence checks and conflict detection:
+
+1. Edge receives REST command (e.g., `PUT /officers/{badgeNumber}`).
+2. Edge validates request shape and required fields.
+3. Edge sends NATS query request to projection (e.g., `query.officer.exists`).
+4. Projection queries PostgreSQL read model.
+5. Projection responds via NATS with existence status.
+6. Edge uses response to:
+   - Return 404 Not Found if resource doesn't exist (for update operations)
+   - Return 409 Conflict if resource already exists (for create operations)
+   - Proceed with command processing if resource exists
+7. Edge publishes `*Requested` event to Kafka/NATS as before.
+
+**Query Subject Pattern**: `query.{domain}.{operation}` (e.g., `query.officer.exists`, `query.call.exists`)
+
+**Timeout**: Configurable timeout (default 2s) prevents hanging requests if projection is unavailable.
+
+**Error Handling**: If projection query fails or times out, edge defaults to safe behavior (e.g., returns 404 for existence checks to prevent false positives).
 
 ## Consistency and Idempotency
 

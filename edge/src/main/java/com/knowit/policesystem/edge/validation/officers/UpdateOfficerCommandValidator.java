@@ -2,6 +2,8 @@ package com.knowit.policesystem.edge.validation.officers;
 
 import com.knowit.policesystem.edge.commands.Command;
 import com.knowit.policesystem.edge.commands.officers.UpdateOfficerCommand;
+import com.knowit.policesystem.edge.exceptions.NotFoundException;
+import com.knowit.policesystem.edge.services.officers.OfficerExistenceService;
 import com.knowit.policesystem.edge.validation.CommandValidator;
 import com.knowit.policesystem.edge.validation.ValidationError;
 import com.knowit.policesystem.edge.validation.ValidationResult;
@@ -9,10 +11,16 @@ import org.springframework.stereotype.Component;
 
 /**
  * Validator for UpdateOfficerCommand.
- * Validates that badgeNumber is present and email format is valid if provided.
+ * Validates that badgeNumber is present, email format is valid if provided, and officer exists.
  */
 @Component
 public class UpdateOfficerCommandValidator extends CommandValidator {
+
+    private final OfficerExistenceService officerExistenceService;
+
+    public UpdateOfficerCommandValidator(OfficerExistenceService officerExistenceService) {
+        this.officerExistenceService = officerExistenceService;
+    }
 
     @Override
     public ValidationResult validate(Command command) {
@@ -35,6 +43,16 @@ public class UpdateOfficerCommandValidator extends CommandValidator {
             }
         }
 
-        return builder.build();
+        ValidationResult result = builder.build();
+        if (!result.isValid()) {
+            return result;
+        }
+
+        // Check if officer exists
+        if (!officerExistenceService.exists(updateCommand.getBadgeNumber())) {
+            throw new NotFoundException("Officer not found: " + updateCommand.getBadgeNumber());
+        }
+
+        return result;
     }
 }
