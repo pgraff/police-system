@@ -26,6 +26,7 @@
         <module>officer-projection</module>
         <module>incident-projection</module>
         <module>call-projection</module>
+        <module>dispatch-projection</module>
     </modules>
 
     <properties>
