@@ -27,6 +27,7 @@
         <module>incident-projection</module>
         <module>call-projection</module>
         <module>dispatch-projection</module>
+        <module>activity-projection</module>
     </modules>
 
     <properties>

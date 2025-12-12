@@ -12,9 +12,10 @@ Phased plan to transition to full CQRS with projections. Each increment has scop
 
 **⏳ Remaining:**
 - ⏳ Phase 4.10: Observability & readiness (health endpoints, metrics)
-- ⏳ Phase 5: Expand to other domains (activity, assignment, etc.)
+- ⏳ Phase 5: Expand to other domains (assignment, etc.)
   - ✅ Call Projection (complete)
   - ✅ Dispatch Projection (complete)
+  - ✅ Activity Projection (complete)
 
 **Reference Implementation:**
 The officer projection (`officer-projection` module) serves as the complete reference implementation. See `/doc/architecture/projection-pattern.md` for the implementation pattern guide.
@@ -75,7 +76,7 @@ Each projection is a separate deployable service (future K8s pod). The `officer-
    - ✅ `incident-projection` - Complete (all event handlers, E2E tests, query APIs)
    - ✅ `call-projection` - Complete (all event handlers, E2E tests, query APIs)
    - ✅ `dispatch-projection` - Complete (all event handlers, E2E tests, query APIs)
-   - ⏳ `activity-projection` - TODO
+   - ✅ `activity-projection` - Complete (all event handlers, E2E tests, query APIs)
    - ⏳ `assignment-projection` - TODO
    - Each is a standalone deployable service (future K8s pod).  
    - Repeat pattern: schema, consumers, queries, tests per domain.  
