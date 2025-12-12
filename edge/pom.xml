@@ -105,6 +105,45 @@
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Projection modules for E2E tests - needed to load application classes via reflection -->
+        <!-- Note: Component scanning is filtered in ProjectionTestContext to prevent cross-module conflicts -->
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>officer-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>call-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>incident-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>dispatch-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>activity-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>assignment-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>

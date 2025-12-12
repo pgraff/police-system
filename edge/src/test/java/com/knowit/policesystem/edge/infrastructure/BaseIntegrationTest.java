@@ -85,7 +85,15 @@ public abstract class BaseIntegrationTest {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("nats.url", nats::getNatsUrl);
         registry.add("nats.enabled", () -> "true");
+        
         // Disable NATS queries in tests - we use in-memory services instead
-        registry.add("nats.query.enabled", () -> "false");
+        // EXCEPTION: If this is an E2E test (indicated by system property), enable NATS queries
+        // NatsQueryE2ETestBase sets this property before Spring context initialization
+        boolean isE2ETest = Boolean.parseBoolean(System.getProperty("nats.query.e2e.test.enabled", "false"));
+        if (!isE2ETest) {
+            registry.add("nats.query.enabled", () -> "false");
+        }
+        // If isE2ETest is true, we don't set nats.query.enabled here,
+        // allowing NatsQueryE2ETestBase to set it to true
     }
 }

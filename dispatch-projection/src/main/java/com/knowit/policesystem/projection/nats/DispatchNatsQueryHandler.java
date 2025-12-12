@@ -3,6 +3,8 @@ package com.knowit.policesystem.projection.nats;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.knowit.policesystem.common.nats.query.ExistsQueryRequest;
 import com.knowit.policesystem.common.nats.query.ExistsQueryResponse;
+import com.knowit.policesystem.common.nats.query.GetQueryRequest;
+import com.knowit.policesystem.common.nats.query.GetQueryResponse;
 import com.knowit.policesystem.projection.config.NatsProperties;
 import com.knowit.policesystem.projection.service.DispatchProjectionService;
 import io.nats.client.Connection;
@@ -73,6 +75,8 @@ public class DispatchNatsQueryHandler {
 
             if (subject.endsWith(".exists")) {
                 handleExistsQuery(message, payload);
+            } else if (subject.endsWith(".get")) {
+                handleGetQuery(message, payload);
             } else {
                 log.warn("Unknown query operation for subject: {}", subject);
                 sendErrorResponse(message, "Unknown query operation: " + subject);
@@ -105,18 +109,48 @@ public class DispatchNatsQueryHandler {
         }
     }
 
+    private void handleGetQuery(Message message, String payload) {
+        try {
+            GetQueryRequest request = objectMapper.readValue(payload, GetQueryRequest.class);
+            String dispatchId = request.getResourceId();
+            
+            Object data = projectionService.getProjection(dispatchId)
+                    .orElse(null); // Return null if not found
+            
+            GetQueryResponse response = new GetQueryResponse(request.getQueryId(), data);
+            String responseJson = objectMapper.writeValueAsString(response);
+            
+            if (message.getReplyTo() != null) {
+                connection.publish(message.getReplyTo(), responseJson.getBytes(StandardCharsets.UTF_8));
+                log.debug("Responded to get query for dispatchId {}: found={}", dispatchId, data != null);
+            } else {
+                log.warn("Cannot respond to get query - no reply subject");
+            }
+        } catch (Exception e) {
+            log.error("Failed to process get query", e);
+            sendErrorResponse(message, "Failed to process get query: " + e.getMessage());
+        }
+    }
+
     private void sendErrorResponse(Message message, String errorMessage) {
         try {
             String queryId = "unknown";
             try {
                 String payload = new String(message.getData(), StandardCharsets.UTF_8);
-                ExistsQueryRequest request = objectMapper.readValue(payload, ExistsQueryRequest.class);
-                queryId = request.getQueryId();
+                // Try to parse as either ExistsQueryRequest or GetQueryRequest
+                try {
+                    ExistsQueryRequest existsRequest = objectMapper.readValue(payload, ExistsQueryRequest.class);
+                    queryId = existsRequest.getQueryId();
+                } catch (Exception e) {
+                    GetQueryRequest getRequest = objectMapper.readValue(payload, GetQueryRequest.class);
+                    queryId = getRequest.getQueryId();
+                }
             } catch (Exception e) {
                 // Ignore - use default queryId
             }
             
-            ExistsQueryResponse errorResponse = new ExistsQueryResponse(queryId, errorMessage);
+            // Use GetQueryResponse for errors as it's more generic
+            GetQueryResponse errorResponse = new GetQueryResponse(queryId, errorMessage);
             String responseJson = objectMapper.writeValueAsString(errorResponse);
             if (message.getReplyTo() != null) {
                 connection.publish(message.getReplyTo(), responseJson.getBytes(StandardCharsets.UTF_8));

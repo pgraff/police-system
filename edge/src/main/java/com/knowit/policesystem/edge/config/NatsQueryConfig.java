@@ -35,6 +35,9 @@ public class NatsQueryConfig {
     @Bean
     public NatsQueryClient natsQueryClient(ObjectMapper objectMapper) {
         boolean enabled = natsEnabled && queryEnabled;
+        org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NatsQueryConfig.class);
+        log.info("Creating NatsQueryClient: natsEnabled={}, queryEnabled={}, enabled={}, url={}", 
+                natsEnabled, queryEnabled, enabled, natsUrl);
         return new NatsQueryClient(natsUrl, objectMapper, queryTimeoutMillis, enabled);
     }
 

@@ -3,6 +3,8 @@ package com.knowit.policesystem.edge.services.projections;
 import com.knowit.policesystem.common.nats.NatsQueryClient;
 import com.knowit.policesystem.common.nats.query.ExistsQueryRequest;
 import com.knowit.policesystem.common.nats.query.ExistsQueryResponse;
+import com.knowit.policesystem.common.nats.query.GetQueryRequest;
+import com.knowit.policesystem.common.nats.query.GetQueryResponse;
 
 /**
  * Service for querying projections via NATS request-response.
@@ -35,6 +37,28 @@ public class ProjectionQueryService {
             return response.isExists();
         } catch (NatsQueryClient.NatsQueryException e) {
             throw new ProjectionQueryException("Failed to query projection for existence: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Gets a resource from a projection.
+     *
+     * @param domain the domain name (e.g., "officer", "call", "incident")
+     * @param resourceId the resource identifier
+     * @return the resource data, or null if not found
+     * @throws ProjectionQueryException if the query fails
+     */
+    public Object get(String domain, String resourceId) throws ProjectionQueryException {
+        if (queryClient == null) {
+            throw new ProjectionQueryException("NATS query client is not available");
+        }
+        try {
+            String subject = "query." + domain + ".get";
+            GetQueryRequest request = new GetQueryRequest(null, domain, resourceId);
+            GetQueryResponse response = queryClient.query(subject, request, GetQueryResponse.class);
+            return response.getData();
+        } catch (NatsQueryClient.NatsQueryException e) {
+            throw new ProjectionQueryException("Failed to query projection for resource: " + e.getMessage(), e);
         }
     }
 
