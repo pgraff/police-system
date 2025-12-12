@@ -192,6 +192,58 @@ Error responses follow this structure:
 - `PUT /involved-parties/{involvementId}` - Update party involvement
 - `POST /involved-parties/{involvementId}/end` - End party involvement
 
+## Projection Query APIs
+
+✅ **Implemented**: 6 standalone projection services expose query APIs for read-only access to projected data. Each projection service runs as a separate deployable service (future K8s pod).
+
+### Base URLs
+- Officer Projection: `http://localhost:8081/api/projections/officers`
+- Incident Projection: `http://localhost:8082/api/projections/incidents`
+- Call Projection: `http://localhost:8083/api/projections/calls`
+- Dispatch Projection: `http://localhost:8084/api/projections/dispatches`
+- Activity Projection: `http://localhost:8085/api/projections/activities`
+- Assignment Projection: `http://localhost:8086/api/projections/assignments`
+
+### Common Query Patterns
+
+All projection services support:
+- `GET /{id}` - Get single entity by ID
+- `GET /{id}/history` - Get status change history for entity
+- `GET /` - List entities with filtering and pagination
+
+### Officer Projection
+- `GET /api/projections/officers/{badgeNumber}` - Get officer by badge number
+- `GET /api/projections/officers/{badgeNumber}/history` - Get officer status history
+- `GET /api/projections/officers?status={status}&rank={rank}&page={page}&size={size}` - List officers with filters
+
+### Incident Projection
+- `GET /api/projections/incidents/{incidentId}` - Get incident by ID
+- `GET /api/projections/incidents/{incidentId}/history` - Get incident status history
+- `GET /api/projections/incidents?status={status}&priority={priority}&page={page}&size={size}` - List incidents with filters
+
+### Call Projection
+- `GET /api/projections/calls/{callId}` - Get call by ID
+- `GET /api/projections/calls/{callId}/history` - Get call status history
+- `GET /api/projections/calls?status={status}&page={page}&size={size}` - List calls with filters
+
+### Dispatch Projection
+- `GET /api/projections/dispatches/{dispatchId}` - Get dispatch by ID
+- `GET /api/projections/dispatches/{dispatchId}/history` - Get dispatch status history
+- `GET /api/projections/dispatches?status={status}&page={page}&size={size}` - List dispatches with filters
+
+### Activity Projection
+- `GET /api/projections/activities/{activityId}` - Get activity by ID
+- `GET /api/projections/activities/{activityId}/history` - Get activity status history
+- `GET /api/projections/activities?status={status}&activityType={type}&page={page}&size={size}` - List activities with filters
+
+### Assignment Projection
+- `GET /api/projections/assignments/{assignmentId}` - Get assignment by ID
+- `GET /api/projections/assignments/{assignmentId}/history` - Get assignment status history
+- `GET /api/projections/assignments/{assignmentId}/resources` - Get resources assigned to assignment
+- `GET /api/projections/assignments?status={status}&assignmentType={type}&dispatchId={id}&incidentId={id}&callId={id}&resourceId={id}&page={page}&size={size}` - List assignments with filters
+
+**Note**: Projection services are eventually consistent. Data may lag slightly behind command operations.
+
 ## Event Production
 
 All API endpoints produce events to Kafka topics:
