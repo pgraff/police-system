@@ -163,6 +163,100 @@ NATS/JetStream serves two roles in the system:
 - **Request-Response**: Built-in support for synchronous queries
 - **Persistence**: JetStream provides at-least-once delivery guarantees
 
+## NATS Query Infrastructure Components
+
+### NatsQueryClient
+
+**Location**: `common` module  
+**Purpose**: Client for sending synchronous query requests to projections via NATS request-response pattern.
+
+**Responsibilities**:
+- Establish and manage NATS connection
+- Send query requests to projection services
+- Wait for responses with configurable timeout
+- Handle connection failures and timeouts
+- Support both synchronous and asynchronous query methods
+- Support single server and multi-server (cluster) configurations
+
+**Configuration**:
+- `nats.url`: NATS server URL(s) (comma-separated for clusters)
+- `nats.query.timeout`: Query timeout in milliseconds (default: 2000ms)
+- `nats.query.enabled`: Enable/disable query client (default: true)
+
+**Error Handling**:
+- Throws `NatsQueryException` on failures
+- Handles timeouts gracefully
+- Supports disabled state for testing
+
+### ProjectionQueryService
+
+**Location**: `edge` module  
+**Purpose**: Service layer for querying projections via NATS. Provides high-level methods for existence checks and resource retrieval.
+
+**Responsibilities**:
+- Abstract NATS query details from edge services
+- Construct correct subject patterns (`query.{domain}.exists`, `query.{domain}.get`)
+- Handle query failures and exceptions
+- Provide domain-specific query methods
+
+**Methods**:
+- `exists(String domain, String resourceId)`: Check if resource exists
+- `get(String domain, String resourceId)`: Get resource data
+
+**Error Handling**:
+- Throws `ProjectionQueryException` on failures
+- Wraps `NatsQueryException` with context
+
+### Existence Services
+
+**Location**: `edge` module, domain-specific packages  
+**Purpose**: Domain-specific services for checking resource existence in projections.
+
+**Services**:
+- `OfficerExistenceService`: Check officer existence by badge number
+- `OfficerConflictService`: Check for duplicate badge numbers
+- `CallExistenceService`: Check call existence by call ID
+- `IncidentExistenceService`: Check incident existence by incident ID
+- `ActivityExistenceService`: Check activity existence by activity ID
+- `AssignmentExistenceService`: Check assignment existence by assignment ID
+- `DispatchExistenceService`: Check dispatch existence by dispatch ID
+
+**Responsibilities**:
+- Provide domain-specific existence check methods
+- Handle query failures gracefully (default to safe values)
+- Log errors for debugging
+
+**Error Handling**:
+- Default to `false` on query failures (safe defaults)
+- Log errors for monitoring
+- Return appropriate boolean values for existence checks
+
+### Projection Query Handlers
+
+**Location**: Each projection module (`{domain}-projection`)  
+**Purpose**: Handle synchronous query requests from edge via NATS.
+
+**Components**:
+- `{Domain}NatsQueryHandler`: Handles NATS query requests for each projection domain
+
+**Responsibilities**:
+- Subscribe to NATS query subjects (`query.{domain}.exists`, `query.{domain}.get`)
+- Query PostgreSQL read model
+- Respond with `ExistsQueryResponse` or `GetQueryResponse`
+- Handle errors and return error responses
+
+**Query Types**:
+- **Exists queries**: Check if resource exists in projection
+- **Get queries**: Retrieve full resource data from projection
+
+**Subject Patterns**:
+- `query.officer.exists`, `query.officer.get`
+- `query.call.exists`, `query.call.get`
+- `query.incident.exists`, `query.incident.get`
+- `query.dispatch.exists`, `query.dispatch.get`
+- `query.activity.exists`, `query.activity.get`
+- `query.assignment.exists`, `query.assignment.get`
+
 ## CQRS Projections
 
 ### Purpose
