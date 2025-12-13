@@ -108,7 +108,13 @@ public class NatsQueryClient {
             logger.debug("Sending query request to subject {}: {}", subject, requestJson);
 
             // Send request and wait for response
-            Message response = natsConnection.request(subject, requestBytes, Duration.ofMillis(timeoutMillis));
+            Message response;
+            try {
+                response = natsConnection.request(subject, requestBytes, Duration.ofMillis(timeoutMillis));
+            } catch (IllegalStateException e) {
+                // Connection closed or other connection issues
+                throw new NatsQueryException("NATS connection error: " + e.getMessage(), e);
+            }
 
             if (response == null) {
                 throw new NatsQueryException("Query request to " + subject + " timed out after " + timeoutMillis + "ms");
@@ -125,11 +131,20 @@ public class NatsQueryClient {
             }
 
             return queryResponse;
+        } catch (NatsQueryException e) {
+            // Re-throw NatsQueryException as-is
+            throw e;
         } catch (IOException e) {
             throw new NatsQueryException("Failed to serialize/deserialize query request/response", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new NatsQueryException("Query request was interrupted", e);
+        } catch (Exception e) {
+            // Catch any other exceptions (e.g., timeout exceptions from NATS client)
+            if (e.getMessage() != null && (e.getMessage().contains("timeout") || e.getMessage().contains("timed out"))) {
+                throw new NatsQueryException("Query request to " + subject + " timed out after " + timeoutMillis + "ms", e);
+            }
+            throw new NatsQueryException("Query request failed: " + e.getMessage(), e);
         }
     }
 

@@ -62,7 +62,9 @@ class NatsQueryClientTest {
         Connection responderConnection = Nats.connect(natsUrl);
         Dispatcher dispatcher = responderConnection.createDispatcher(msg -> {
             try {
-                ExistsQueryResponse response = new ExistsQueryResponse(msg.getSubject(), true);
+                // Deserialize request to get the queryId
+                ExistsQueryRequest request = objectMapper.readValue(msg.getData(), ExistsQueryRequest.class);
+                ExistsQueryResponse response = new ExistsQueryResponse(request.getQueryId(), true);
                 String responseJson = objectMapper.writeValueAsString(response);
                 responderConnection.publish(msg.getReplyTo(), responseJson.getBytes(StandardCharsets.UTF_8));
             } catch (Exception e) {

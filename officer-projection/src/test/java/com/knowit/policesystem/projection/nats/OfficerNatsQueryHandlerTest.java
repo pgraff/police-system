@@ -6,6 +6,7 @@ import com.knowit.policesystem.common.nats.query.ExistsQueryRequest;
 import com.knowit.policesystem.common.nats.query.ExistsQueryResponse;
 import com.knowit.policesystem.common.nats.query.GetQueryRequest;
 import com.knowit.policesystem.common.nats.query.GetQueryResponse;
+import com.knowit.policesystem.projection.api.OfficerProjectionResponse;
 import com.knowit.policesystem.projection.config.NatsProperties;
 import com.knowit.policesystem.projection.model.OfficerProjectionEntity;
 import com.knowit.policesystem.projection.service.OfficerProjectionService;
@@ -92,7 +93,7 @@ class OfficerNatsQueryHandlerTest {
         // Given
         String badgeNumber = "BADGE-123";
         when(projectionService.getProjection(badgeNumber))
-                .thenReturn(Optional.of(createMockOfficer(badgeNumber)));
+                .thenReturn(Optional.of(createMockOfficerResponse(badgeNumber)));
 
         ExistsQueryRequest request = new ExistsQueryRequest("test-query-id", "officer", badgeNumber);
         String requestJson = objectMapper.writeValueAsString(request);
@@ -134,7 +135,7 @@ class OfficerNatsQueryHandlerTest {
     void testHandleGetQuery_ResourceExists_ReturnsData() throws Exception {
         // Given
         String badgeNumber = "BADGE-789";
-        OfficerProjectionEntity officer = createMockOfficer(badgeNumber);
+        OfficerProjectionResponse officer = createMockOfficerResponse(badgeNumber);
         when(projectionService.getProjection(badgeNumber))
                 .thenReturn(Optional.of(officer));
 
@@ -208,8 +209,8 @@ class OfficerNatsQueryHandlerTest {
         assertThat(response).isNotNull();
     }
 
-    private OfficerProjectionEntity createMockOfficer(String badgeNumber) {
-        return new OfficerProjectionEntity(
+    private OfficerProjectionResponse createMockOfficerResponse(String badgeNumber) {
+        return new OfficerProjectionResponse(
                 badgeNumber,
                 "John",
                 "Doe",

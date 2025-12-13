@@ -72,8 +72,8 @@ class GetQueryResponseTest {
         // Given
         String queryId = "query-123";
 
-        // When
-        GetQueryResponse response = new GetQueryResponse(queryId, null);
+        // When - cast null to Object to avoid constructor ambiguity with String errorMessage constructor
+        GetQueryResponse response = new GetQueryResponse(queryId, (Object) null);
 
         // Then
         assertThat(response.getQueryId()).isEqualTo(queryId);
