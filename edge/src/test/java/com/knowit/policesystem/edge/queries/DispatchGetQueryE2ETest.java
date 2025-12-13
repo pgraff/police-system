@@ -68,7 +68,8 @@ class DispatchGetQueryE2ETest extends NatsQueryE2ETestBase {
                 getPostgresPassword()
         );
 
-        boolean started = projectionContext.startProjection("dispatch", "com.knowit.policesystem.projection.DispatchProjectionApplication");
+        // Use consolidated operational-projection for dispatch domain
+        boolean started = projectionContext.startProjection("dispatch");
         assertThat(started).as("Projection should start successfully").isTrue();
 
         boolean ready = projectionContext.waitForProjectionReady("dispatch", Duration.ofSeconds(30));

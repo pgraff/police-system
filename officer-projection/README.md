@@ -1,5 +1,11 @@
 # Officer Projection Module
 
+> **⚠️ DEPRECATED:** This module is deprecated and will be removed in a future release.
+> 
+> **Migration:** Use `resource-projection` instead, which handles officers along with vehicles, units, persons, and locations.
+> 
+> **Migration Guide:** See [Client Migration Guide](../../doc/migration/client-migration-guide.md) for details.
+
 Officer projection service that consumes officer events from Kafka/NATS, stores projection tables in Postgres, and exposes read-only query endpoints. This is a standalone deployable service (future K8s pod).
 
 ## Endpoints

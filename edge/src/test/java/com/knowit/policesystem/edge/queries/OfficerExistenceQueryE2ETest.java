@@ -87,7 +87,8 @@ class OfficerExistenceQueryE2ETest extends NatsQueryE2ETestBase {
                 getPostgresPassword()
         );
 
-        boolean started = projectionContext.startProjection("officer", "com.knowit.policesystem.projection.OfficerProjectionApplication");
+        // Use consolidated resource-projection for officer domain
+        boolean started = projectionContext.startProjection("officer");
         assertThat(started).as("Projection should start successfully").isTrue();
 
         // Wait for projection to be ready

@@ -20,11 +20,15 @@ The edge remains event-first and stateless: REST commands enter, `*Requested` ev
 ## Event Propagation and Projections
 
 - Kafka stores `*Requested` events; DLQ protects failed publishes/consumes.
-- ✅ **Implemented**: 6 projection services consume Kafka/NATS topics and build read models in PostgreSQL.
+- ✅ **Implemented**: 3 consolidated projection services consume Kafka/NATS topics and build read models in PostgreSQL.
+  - **operational-projection**: Handles incidents, calls, dispatches, activities, assignments, involved parties, resource assignments
+  - **resource-projection**: Handles officers, vehicles, units, persons, locations
+  - **workforce-projection**: Handles shifts, officer shifts, shift changes
 - ✅ **Technology**: Spring Kafka consumers (not Kafka Streams) for event consumption.
 - ✅ **Storage**: PostgreSQL for all read models (durable, relational queries, joins).
 - ✅ **Idempotency**: Event ID tracking prevents duplicate processing.
 - Support replay from Kafka beginning; projection errors go to DLQ with retries.
+- ⚠️ **Legacy**: 6 individual projection modules are deprecated and will be removed (see migration guide).
 
 ## Query Flow
 

@@ -108,36 +108,62 @@
 
         <!-- Projection modules for E2E tests - needed to load application classes via reflection -->
         <!-- Note: Component scanning is filtered in ProjectionTestContext to prevent cross-module conflicts -->
+        <!-- New consolidated projections -->
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>operational-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>resource-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.knowit.policesystem</groupId>
+            <artifactId>workforce-projection</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Old individual projections (DEPRECATED - will be removed after migration) -->
+        <!-- @deprecated Use resource-projection instead -->
         <dependency>
             <groupId>com.knowit.policesystem</groupId>
             <artifactId>officer-projection</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- @deprecated Use operational-projection instead -->
         <dependency>
             <groupId>com.knowit.policesystem</groupId>
             <artifactId>call-projection</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- @deprecated Use operational-projection instead -->
         <dependency>
             <groupId>com.knowit.policesystem</groupId>
             <artifactId>incident-projection</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- @deprecated Use operational-projection instead -->
         <dependency>
             <groupId>com.knowit.policesystem</groupId>
             <artifactId>dispatch-projection</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- @deprecated Use operational-projection instead -->
         <dependency>
             <groupId>com.knowit.policesystem</groupId>
             <artifactId>activity-projection</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- @deprecated Use operational-projection instead -->
         <dependency>
             <groupId>com.knowit.policesystem</groupId>
             <artifactId>assignment-projection</artifactId>

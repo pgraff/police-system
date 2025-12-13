@@ -247,15 +247,22 @@ Projections are eventually consistent. A resource may not appear in the projecti
 
 ## Projection Query APIs
 
-✅ **Implemented**: 6 standalone projection services expose query APIs for read-only access to projected data. Each projection service runs as a separate deployable service (future K8s pod).
+✅ **Implemented**: 3 consolidated projection services expose query APIs for read-only access to projected data. Each projection service runs as a separate deployable service (future K8s pod).
 
 ### Base URLs
-- Officer Projection: `http://localhost:8081/api/projections/officers`
-- Incident Projection: `http://localhost:8082/api/projections/incidents`
-- Call Projection: `http://localhost:8083/api/projections/calls`
-- Dispatch Projection: `http://localhost:8084/api/projections/dispatches`
-- Activity Projection: `http://localhost:8085/api/projections/activities`
-- Assignment Projection: `http://localhost:8086/api/projections/assignments`
+
+**Consolidated Projections:**
+- Operational Projection: `http://localhost:8081/api/projections/` (handles: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments)
+- Resource Projection: `http://localhost:8082/api/projections/` (handles: officers, vehicles, units, persons, locations)
+- Workforce Projection: `http://localhost:8083/api/projections/` (handles: shifts, officer shifts, shift changes)
+
+**Legacy Individual Projections (Deprecated):**
+- Officer Projection: `http://localhost:8081/api/projections/officers` (deprecated, use resource-projection)
+- Incident Projection: `http://localhost:8082/api/projections/incidents` (deprecated, use operational-projection)
+- Call Projection: `http://localhost:8083/api/projections/calls` (deprecated, use operational-projection)
+- Dispatch Projection: `http://localhost:8084/api/projections/dispatches` (deprecated, use operational-projection)
+- Activity Projection: `http://localhost:8085/api/projections/activities` (deprecated, use operational-projection)
+- Assignment Projection: `http://localhost:8086/api/projections/assignments` (deprecated, use operational-projection)
 
 ### Common Query Patterns
 
@@ -264,36 +271,81 @@ All projection services support:
 - `GET /{id}/history` - Get status change history for entity
 - `GET /` - List entities with filtering and pagination
 
-### Officer Projection
+### Operational Projection (Port 8081)
+
+**Incidents:**
+- `GET /api/projections/incidents/{incidentId}` - Get incident by ID
+- `GET /api/projections/incidents/{incidentId}/history` - Get incident status history
+- `GET /api/projections/incidents?status={status}&priority={priority}&page={page}&size={size}` - List incidents with filters
+- `GET /api/projections/incidents/{incidentId}/full` - Get incident with all related data (composite query)
+
+**Calls:**
+- `GET /api/projections/calls/{callId}` - Get call by ID
+- `GET /api/projections/calls/{callId}/history` - Get call status history
+- `GET /api/projections/calls?status={status}&priority={priority}&incidentId={id}&page={page}&size={size}` - List calls with filters
+
+**Dispatches:**
+- `GET /api/projections/dispatches/{dispatchId}` - Get dispatch by ID
+- `GET /api/projections/dispatches/{dispatchId}/history` - Get dispatch status history
+- `GET /api/projections/dispatches?status={status}&callId={id}&page={page}&size={size}` - List dispatches with filters
+
+**Activities:**
+- `GET /api/projections/activities/{activityId}` - Get activity by ID
+- `GET /api/projections/activities/{activityId}/history` - Get activity status history
+- `GET /api/projections/activities?status={status}&activityType={type}&incidentId={id}&callId={id}&page={page}&size={size}` - List activities with filters
+
+**Assignments:**
+- `GET /api/projections/assignments/{assignmentId}` - Get assignment by ID
+- `GET /api/projections/assignments/{assignmentId}/history` - Get assignment status history
+- `GET /api/projections/assignments?status={status}&dispatchId={id}&incidentId={id}&callId={id}&page={page}&size={size}` - List assignments with filters
+
+**Involved Parties:**
+- `GET /api/projections/involved-parties/{involvementId}` - Get involved party by ID
+- `GET /api/projections/involved-parties?personId={id}&incidentId={id}&callId={id}&activityId={id}&page={page}&size={size}` - List involved parties with filters
+
+**Resource Assignments:**
+- `GET /api/projections/resource-assignments/{id}` - Get resource assignment by ID
+- `GET /api/projections/resource-assignments?assignmentId={id}&resourceId={id}&resourceType={type}&page={page}&size={size}` - List resource assignments with filters
+
+### Resource Projection (Port 8082)
+
+**Officers:**
 - `GET /api/projections/officers/{badgeNumber}` - Get officer by badge number
 - `GET /api/projections/officers/{badgeNumber}/history` - Get officer status history
 - `GET /api/projections/officers?status={status}&rank={rank}&page={page}&size={size}` - List officers with filters
 
-### Incident Projection
-- `GET /api/projections/incidents/{incidentId}` - Get incident by ID
-- `GET /api/projections/incidents/{incidentId}/history` - Get incident status history
-- `GET /api/projections/incidents?status={status}&priority={priority}&page={page}&size={size}` - List incidents with filters
+**Vehicles:**
+- `GET /api/projections/vehicles/{unitId}` - Get vehicle by unit ID
+- `GET /api/projections/vehicles/{unitId}/history` - Get vehicle status history
+- `GET /api/projections/vehicles?status={status}&page={page}&size={size}` - List vehicles with filters
 
-### Call Projection
-- `GET /api/projections/calls/{callId}` - Get call by ID
-- `GET /api/projections/calls/{callId}/history` - Get call status history
-- `GET /api/projections/calls?status={status}&page={page}&size={size}` - List calls with filters
+**Units:**
+- `GET /api/projections/units/{unitId}` - Get unit by unit ID
+- `GET /api/projections/units/{unitId}/history` - Get unit status history
+- `GET /api/projections/units?status={status}&page={page}&size={size}` - List units with filters
 
-### Dispatch Projection
-- `GET /api/projections/dispatches/{dispatchId}` - Get dispatch by ID
-- `GET /api/projections/dispatches/{dispatchId}/history` - Get dispatch status history
-- `GET /api/projections/dispatches?status={status}&page={page}&size={size}` - List dispatches with filters
+**Persons:**
+- `GET /api/projections/persons/{personId}` - Get person by person ID
+- `GET /api/projections/persons?page={page}&size={size}` - List persons with pagination
 
-### Activity Projection
-- `GET /api/projections/activities/{activityId}` - Get activity by ID
-- `GET /api/projections/activities/{activityId}/history` - Get activity status history
-- `GET /api/projections/activities?status={status}&activityType={type}&page={page}&size={size}` - List activities with filters
+**Locations:**
+- `GET /api/projections/locations/{locationId}` - Get location by location ID
+- `GET /api/projections/locations?page={page}&size={size}` - List locations with pagination
 
-### Assignment Projection
-- `GET /api/projections/assignments/{assignmentId}` - Get assignment by ID
-- `GET /api/projections/assignments/{assignmentId}/history` - Get assignment status history
-- `GET /api/projections/assignments/{assignmentId}/resources` - Get resources assigned to assignment
-- `GET /api/projections/assignments?status={status}&assignmentType={type}&dispatchId={id}&incidentId={id}&callId={id}&resourceId={id}&page={page}&size={size}` - List assignments with filters
+### Workforce Projection (Port 8083)
+
+**Shifts:**
+- `GET /api/projections/shifts/{shiftId}` - Get shift by shift ID
+- `GET /api/projections/shifts/{shiftId}/history` - Get shift status history
+- `GET /api/projections/shifts?status={status}&shiftType={type}&page={page}&size={size}` - List shifts with filters
+
+**Officer Shifts:**
+- `GET /api/projections/officer-shifts/{id}` - Get officer shift by ID
+- `GET /api/projections/officer-shifts?shiftId={id}&badgeNumber={badge}&page={page}&size={size}` - List officer shifts with filters
+
+**Shift Changes:**
+- `GET /api/projections/shift-changes/{shiftChangeId}` - Get shift change by shift change ID
+- `GET /api/projections/shift-changes?shiftId={id}&page={page}&size={size}` - List shift changes with filters
 
 **Note**: Projection services are eventually consistent. Data may lag slightly behind command operations.
 

@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: resource-projection
+  datasource:
+    url: ${PROJECTION_DATASOURCE_URL:jdbc:postgresql://localhost:5432/police}
+    username: ${PROJECTION_DATASOURCE_USERNAME:postgres}
+    password: ${PROJECTION_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${PROJECTION_KAFKA_GROUP_ID:resource-projection-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.knowit.policesystem.common.events.*
+    listener:
+      ack-mode: manual
+  jackson:
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,readiness,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  health:
+    readiness-state:
+      enabled: true
+    liveness-state:
+      enabled: true
+
+nats:
+  enabled: ${NATS_ENABLED:true}
+  url: ${NATS_URL:nats://localhost:4222}
+  subject-prefix: ${NATS_SUBJECT_PREFIX:}
+  query-enabled: ${NATS_QUERY_ENABLED:true}

@@ -32,12 +32,11 @@ This document describes the abstract components of the system and their responsi
         │        ┌─────────────────────────────┐
         │        │  CQRS Projection Services    │
         │        │  (Spring Kafka Consumers)    │
-        │        │  - officer-projection        │
-        │        │  - incident-projection       │
-        │        │  - call-projection           │
-        │        │  - dispatch-projection       │
-        │        │  - activity-projection       │
-        │        │  - assignment-projection     │
+        │        │  - operational-projection    │
+        │        │  - resource-projection       │
+        │        │  - workforce-projection      │
+        │        │  (Legacy: 6 individual       │
+        │        │   projections - deprecated)  │
         │        └────────┬─────────────────────┘
         │                 │
         └─────────────────┘

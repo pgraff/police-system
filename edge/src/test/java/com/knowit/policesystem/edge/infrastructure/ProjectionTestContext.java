@@ -39,8 +39,13 @@ public class ProjectionTestContext {
 
     /**
      * Helper method to get regex pattern for other module class names.
+     * 
+     * @deprecated This method is for filtering old individual projection modules.
+     * Old projections are deprecated - use consolidated projections instead.
      */
+    @Deprecated
     private static String getOtherModulePatterns(String currentDomain) {
+        // Old individual projection modules (deprecated)
         String[] allModules = {"call", "incident", "dispatch", "activity", "assignment", "officer"};
         StringBuilder pattern = new StringBuilder();
         for (String module : allModules) {
@@ -53,6 +58,45 @@ public class ProjectionTestContext {
             }
         }
         return pattern.toString();
+    }
+
+    /**
+     * Maps a domain to its consolidated projection application class name.
+     * 
+     * @param domain the domain name (e.g., "incident", "officer", "shift")
+     * @return the fully qualified application class name for the consolidated projection
+     */
+    private static String getConsolidatedProjectionApplication(String domain) {
+        // Operational projection domains
+        if (domain.equals("incident") || domain.equals("call") || domain.equals("dispatch") 
+                || domain.equals("activity") || domain.equals("assignment") 
+                || domain.equals("involved-party") || domain.equals("resource-assignment")) {
+            return "com.knowit.policesystem.projection.OperationalProjectionApplication";
+        }
+        // Resource projection domains
+        if (domain.equals("officer") || domain.equals("vehicle") || domain.equals("unit") 
+                || domain.equals("person") || domain.equals("location")) {
+            return "com.knowit.policesystem.projection.ResourceProjectionApplication";
+        }
+        // Workforce projection domains
+        if (domain.equals("shift") || domain.equals("officer-shift") || domain.equals("shift-change")) {
+            return "com.knowit.policesystem.projection.WorkforceProjectionApplication";
+        }
+        // Default to operational for unknown domains (backward compatibility)
+        log.warn("Unknown domain {}, defaulting to operational-projection", domain);
+        return "com.knowit.policesystem.projection.OperationalProjectionApplication";
+    }
+
+    /**
+     * Starts a projection service for the given domain using the appropriate consolidated projection.
+     * This is a convenience method that automatically selects the correct consolidated projection application.
+     * 
+     * @param domain the domain name (e.g., "incident", "officer", "shift")
+     * @return true if the projection started successfully, false otherwise
+     */
+    public boolean startProjection(String domain) {
+        String applicationClassName = getConsolidatedProjectionApplication(domain);
+        return startProjection(domain, applicationClassName);
     }
 
     /**
@@ -73,51 +117,111 @@ public class ProjectionTestContext {
         @Override
         public void postProcessBeanDefinitionRegistry(
                 org.springframework.beans.factory.support.BeanDefinitionRegistry registry) {
-            // Read domain from environment (set via property)
-            String domain = environment.getProperty("projection.test.domain", "officer");
-            String[] allBeanNames = registry.getBeanDefinitionNames();
-            String currentModulePrefix = domain.substring(0, 1).toUpperCase() + domain.substring(1);
-            String[] otherModulePrefixes = {"Call", "Incident", "Dispatch", "Activity", "Assignment", "Officer"};
-            
-            int removedCount = 0;
-            for (String beanName : allBeanNames) {
-                try {
-                    org.springframework.beans.factory.config.BeanDefinition bd = 
-                        registry.getBeanDefinition(beanName);
-                    String beanClassName = bd.getBeanClassName();
+                    // Read domain from environment (set via property)
+                    String domain = environment.getProperty("projection.test.domain", "officer");
+                    String[] allBeanNames = registry.getBeanDefinitionNames();
                     
-                    if (beanClassName != null && 
-                        beanClassName.startsWith("com.knowit.policesystem.projection.")) {
-                        // Check if this is a component from another module
-                        // Components can be in .consumer., .nats., or directly in .projection. package
-                        boolean isOtherModule = false;
-                        for (String otherPrefix : otherModulePrefixes) {
-                            if (!otherPrefix.equals(currentModulePrefix)) {
-                                // Check for various component patterns
-                                if (beanClassName.contains(otherPrefix + "KafkaListener") ||
-                                    beanClassName.contains(otherPrefix + "NatsListener") ||
-                                    beanClassName.contains(otherPrefix + "NatsQueryHandler") ||
-                                    beanClassName.contains(otherPrefix + "EventParser") ||
-                                    beanClassName.equals("com.knowit.policesystem.projection." + otherPrefix + "NatsListener")) {
-                                    isOtherModule = true;
-                                    break;
+                    // Determine which consolidated projection this is based on application class
+                    String applicationClassName = environment.getProperty("projection.test.application.class");
+                    boolean isOperational = applicationClassName != null && applicationClassName.contains("OperationalProjectionApplication");
+                    boolean isResource = applicationClassName != null && applicationClassName.contains("ResourceProjectionApplication");
+                    boolean isWorkforce = applicationClassName != null && applicationClassName.contains("WorkforceProjectionApplication");
+                    
+                    // For consolidated projections, filter out old individual projection components (deprecated)
+                    // and components from other consolidated projections
+                    // @deprecated Old individual projection prefixes - these modules are deprecated
+                    String[] oldIndividualPrefixes = {"Call", "Incident", "Dispatch", "Activity", "Assignment", "Officer"};
+                    
+                    int removedCount = 0;
+                    for (String beanName : allBeanNames) {
+                        try {
+                            org.springframework.beans.factory.config.BeanDefinition bd = 
+                                registry.getBeanDefinition(beanName);
+                            String beanClassName = bd.getBeanClassName();
+                            
+                            if (beanClassName != null && 
+                                beanClassName.startsWith("com.knowit.policesystem.projection.")) {
+                                boolean shouldRemove = false;
+                                
+                                // Always remove old individual projection components
+                                for (String oldPrefix : oldIndividualPrefixes) {
+                                    if (beanClassName.contains(oldPrefix + "KafkaListener") ||
+                                        beanClassName.contains(oldPrefix + "NatsListener") ||
+                                        beanClassName.contains(oldPrefix + "NatsQueryHandler") ||
+                                        beanClassName.contains(oldPrefix + "EventParser") ||
+                                        beanClassName.contains(oldPrefix + "ProjectionApplication")) {
+                                        shouldRemove = true;
+                                        break;
+                                    }
+                                }
+                                
+                                // Remove components from other consolidated projections
+                                // Check for specific class name patterns to avoid false positives
+                                if (!shouldRemove) {
+                                    if (isOperational) {
+                                        // Remove Resource and Workforce components (but keep Operational)
+                                        if ((beanClassName.contains("ResourceKafkaListener") ||
+                                             beanClassName.contains("ResourceNatsListener") ||
+                                             beanClassName.contains("ResourceNatsQueryHandler") ||
+                                             beanClassName.contains("ResourceEventParser") ||
+                                             beanClassName.contains("ResourceProjectionService") ||
+                                             beanClassName.contains("ResourceProjectionApplication")) ||
+                                            (beanClassName.contains("WorkforceKafkaListener") ||
+                                             beanClassName.contains("WorkforceNatsListener") ||
+                                             beanClassName.contains("WorkforceNatsQueryHandler") ||
+                                             beanClassName.contains("WorkforceEventParser") ||
+                                             beanClassName.contains("WorkforceProjectionService") ||
+                                             beanClassName.contains("WorkforceProjectionApplication"))) {
+                                            shouldRemove = true;
+                                        }
+                                    } else if (isResource) {
+                                        // Remove Operational and Workforce components (but keep Resource)
+                                        if ((beanClassName.contains("OperationalKafkaListener") ||
+                                             beanClassName.contains("OperationalNatsListener") ||
+                                             beanClassName.contains("OperationalNatsQueryHandler") ||
+                                             beanClassName.contains("OperationalEventParser") ||
+                                             beanClassName.contains("OperationalProjectionService") ||
+                                             beanClassName.contains("OperationalProjectionApplication")) ||
+                                            (beanClassName.contains("WorkforceKafkaListener") ||
+                                             beanClassName.contains("WorkforceNatsListener") ||
+                                             beanClassName.contains("WorkforceNatsQueryHandler") ||
+                                             beanClassName.contains("WorkforceEventParser") ||
+                                             beanClassName.contains("WorkforceProjectionService") ||
+                                             beanClassName.contains("WorkforceProjectionApplication"))) {
+                                            shouldRemove = true;
+                                        }
+                                    } else if (isWorkforce) {
+                                        // Remove Operational and Resource components (but keep Workforce)
+                                        if ((beanClassName.contains("OperationalKafkaListener") ||
+                                             beanClassName.contains("OperationalNatsListener") ||
+                                             beanClassName.contains("OperationalNatsQueryHandler") ||
+                                             beanClassName.contains("OperationalEventParser") ||
+                                             beanClassName.contains("OperationalProjectionService") ||
+                                             beanClassName.contains("OperationalProjectionApplication")) ||
+                                            (beanClassName.contains("ResourceKafkaListener") ||
+                                             beanClassName.contains("ResourceNatsListener") ||
+                                             beanClassName.contains("ResourceNatsQueryHandler") ||
+                                             beanClassName.contains("ResourceEventParser") ||
+                                             beanClassName.contains("ResourceProjectionService") ||
+                                             beanClassName.contains("ResourceProjectionApplication"))) {
+                                            shouldRemove = true;
+                                        }
+                                    }
+                                }
+                                
+                                if (shouldRemove) {
+                                    registry.removeBeanDefinition(beanName);
+                                    removedCount++;
+                                    log.debug("Removed bean {} from other projection module", beanName);
                                 }
                             }
-                        }
-                        
-                        if (isOtherModule) {
-                            registry.removeBeanDefinition(beanName);
-                            removedCount++;
-                            log.debug("Removed bean {} from other projection module", beanName);
+                        } catch (Exception e) {
+                            // Ignore errors during filtering
                         }
                     }
-                } catch (Exception e) {
-                    // Ignore errors during filtering
-                }
-            }
-            if (removedCount > 0) {
-                log.info("Removed {} bean definitions from other projection modules for domain {}", removedCount, domain);
-            }
+                    if (removedCount > 0) {
+                        log.info("Removed {} bean definitions from other projection modules for domain {}", removedCount, domain);
+                    }
         }
         
         @Override
@@ -240,18 +344,20 @@ public class ProjectionTestContext {
                     properties.put("spring.jpa.hibernate.ddl-auto", "none");
                     // Disable Flyway - projections use schema.sql instead
                     properties.put("spring.flyway.enabled", "false");
-                    properties.put("projection.nats.enabled", "true");
-                    properties.put("projection.nats.url", natsUrl);
-                    properties.put("projection.nats.query.enabled", "true");
+                    // NATS properties - consolidated projections use "nats." prefix
+                    properties.put("nats.enabled", "true");
+                    properties.put("nats.url", natsUrl);
+                    properties.put("nats.query-enabled", "true");
                     properties.put("server.port", "0"); // Random port
                     properties.put("spring.jmx.enabled", "false"); // Disable JMX for tests
                     properties.put("spring.main.allow-bean-definition-overriding", "true");
                     properties.put("logging.level.root", "WARN"); // Reduce log noise
                     properties.put("logging.level.com.knowit.policesystem", "INFO");
                     
-                    // Store domain in a property so the filter config can access it
+                    // Store domain and application class in properties so the filter config can access them
                     String finalDomain = domain;
                     properties.put("projection.test.domain", finalDomain);
+                    properties.put("projection.test.application.class", applicationClassName);
                     
                     // Add configurations: filter config first (runs early), then stubs, then application
                     // The ProjectionFilterConfiguration is a static inner class that reads the domain from properties

@@ -233,35 +233,51 @@ When implementing a new projection:
 
 ## Example: Officer Projection
 
-The officer projection (`officer-projection` module) serves as the reference implementation:
+## Consolidated Projections (Current)
 
-- **Module**: `officer-projection/`
-- **Events**: `RegisterOfficerRequested`, `UpdateOfficerRequested`, `ChangeOfficerStatusRequested`
-- **Topic**: `TopicConfiguration.OFFICER_EVENTS`
-- **Tables**: `officer_projection`, `officer_status_history`
-- **Endpoints**: `/api/projections/officers/{badgeNumber}`, `/api/projections/officers/{badgeNumber}/history`, `/api/projections/officers`
-- **Deployment**: Standalone service (future K8s pod)
+The system uses 3 consolidated projection services organized by use case:
 
-See the implementation for a complete working example.
+### Operational Projection
 
-## Implemented Projections
+- **Module**: `operational-projection/`
+- **Handles**: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments
+- **Events**: All operational domain events
+- **Topics**: `incident-events`, `call-events`, `dispatch-events`, `activity-events`, `assignment-events`, `involved-party-events`, `resource-assignment-events`
+- **Tables**: `incident_projection`, `call_projection`, `dispatch_projection`, `activity_projection`, `assignment_projection`, `involved_party_projection`, `resource_assignment_projection`, and status history tables
+- **Endpoints**: `/api/projections/incidents/*`, `/api/projections/calls/*`, `/api/projections/dispatches/*`, `/api/projections/activities/*`, `/api/projections/assignments/*`, etc.
+- **Deployment**: Standalone service (Port 8081, future K8s pod)
 
-✅ **All 6 projection modules are complete:**
+### Resource Projection
 
-- ✅ **Officer Projection**: `officer-projection/` module → `officer-events` → `officer_projection` table
-- ✅ **Incident Projection**: `incident-projection/` module → `incident-events` → `incident_projection` table
-- ✅ **Call Projection**: `call-projection/` module → `call-events` → `call_projection` table
-- ✅ **Dispatch Projection**: `dispatch-projection/` module → `dispatch-events` → `dispatch_projection` table
-- ✅ **Activity Projection**: `activity-projection/` module → `activity-events` → `activity_projection` table
-- ✅ **Assignment Projection**: `assignment-projection/` module → `assignment-events` → `assignment_projection` table
+- **Module**: `resource-projection/`
+- **Handles**: officers, vehicles, units, persons, locations
+- **Events**: All resource/master data events
+- **Topics**: `officer-events`, `vehicle-events`, `unit-events`, `person-events`, `location-events`
+- **Tables**: `officer_projection`, `vehicle_projection`, `unit_projection`, `person_projection`, `location_projection`, and status history tables
+- **Endpoints**: `/api/projections/officers/*`, `/api/projections/vehicles/*`, `/api/projections/units/*`, `/api/projections/persons/*`, `/api/projections/locations/*`
+- **Deployment**: Standalone service (Port 8082, future K8s pod)
 
-Each is a separate deployable service (future K8s pod).
+### Workforce Projection
 
-## Future Projections (Optional)
+- **Module**: `workforce-projection/`
+- **Handles**: shifts, officer shifts, shift changes
+- **Events**: All workforce/shift management events
+- **Topics**: `shift-events`, `officer-shift-events`
+- **Tables**: `shift_projection`, `officer_shift_projection`, `shift_change_projection`, `shift_status_history`
+- **Endpoints**: `/api/projections/shifts/*`, `/api/projections/officer-shifts/*`, `/api/projections/shift-changes/*`
+- **Deployment**: Standalone service (Port 8083, future K8s pod)
 
-Additional domains that could be projected:
-- **Unit Projection**: `unit-projection/` module → `unit-events` → `unit_projection` table
-- **Vehicle Projection**: `vehicle-projection/` module → `vehicle-events` → `vehicle_projection` table
-- **Person Projection**: `person-projection/` module → `person-events` → `person_projection` table
-- **Location Projection**: `location-projection/` module → `location-events` → `location_projection` table
-- **Shift Projection**: `shift-projection/` module → `shift-events` → `shift_projection` table
+## Legacy Individual Projections (Deprecated)
+
+⚠️ **DEPRECATED**: The following individual projection modules are deprecated and will be removed in a future release:
+
+- ⚠️ **Officer Projection**: `officer-projection/` → Use `resource-projection` instead
+- ⚠️ **Incident Projection**: `incident-projection/` → Use `operational-projection` instead
+- ⚠️ **Call Projection**: `call-projection/` → Use `operational-projection` instead
+- ⚠️ **Dispatch Projection**: `dispatch-projection/` → Use `operational-projection` instead
+- ⚠️ **Activity Projection**: `activity-projection/` → Use `operational-projection` instead
+- ⚠️ **Assignment Projection**: `assignment-projection/` → Use `operational-projection` instead
+
+**Migration Guide**: See [Client Migration Guide](../migration/client-migration-guide.md) for details.
+
+**Note**: These modules are kept in the codebase during the migration period but are marked as deprecated. They will be removed after successful migration.

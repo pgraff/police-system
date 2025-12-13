@@ -68,7 +68,8 @@ class CallGetQueryE2ETest extends NatsQueryE2ETestBase {
                 getPostgresPassword()
         );
 
-        boolean started = projectionContext.startProjection("call", "com.knowit.policesystem.projection.CallProjectionApplication");
+        // Use consolidated operational-projection for call domain
+        boolean started = projectionContext.startProjection("call");
         assertThat(started).as("Projection should start successfully").isTrue();
 
         boolean ready = projectionContext.waitForProjectionReady("call", Duration.ofSeconds(30));

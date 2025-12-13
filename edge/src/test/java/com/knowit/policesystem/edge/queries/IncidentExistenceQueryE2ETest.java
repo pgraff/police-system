@@ -72,7 +72,8 @@ class IncidentExistenceQueryE2ETest extends NatsQueryE2ETestBase {
                 getPostgresPassword()
         );
 
-        boolean started = projectionContext.startProjection("incident", "com.knowit.policesystem.projection.IncidentProjectionApplication");
+        // Use consolidated operational-projection for incident domain
+        boolean started = projectionContext.startProjection("incident");
         assertThat(started).as("Projection should start successfully").isTrue();
 
         boolean ready = projectionContext.waitForProjectionReady("incident", Duration.ofSeconds(30));

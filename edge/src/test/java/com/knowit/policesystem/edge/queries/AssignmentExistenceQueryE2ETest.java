@@ -72,7 +72,8 @@ class AssignmentExistenceQueryE2ETest extends NatsQueryE2ETestBase {
                 getPostgresPassword()
         );
 
-        boolean started = projectionContext.startProjection("assignment", "com.knowit.policesystem.projection.AssignmentProjectionApplication");
+        // Use consolidated operational-projection for assignment domain
+        boolean started = projectionContext.startProjection("assignment");
         assertThat(started).as("Projection should start successfully").isTrue();
 
         boolean ready = projectionContext.waitForProjectionReady("assignment", Duration.ofSeconds(30));

@@ -68,7 +68,8 @@ class ActivityGetQueryE2ETest extends NatsQueryE2ETestBase {
                 getPostgresPassword()
         );
 
-        boolean started = projectionContext.startProjection("activity", "com.knowit.policesystem.projection.ActivityProjectionApplication");
+        // Use consolidated operational-projection for activity domain
+        boolean started = projectionContext.startProjection("activity");
         assertThat(started).as("Projection should start successfully").isTrue();
 
         boolean ready = projectionContext.waitForProjectionReady("activity", Duration.ofSeconds(30));
