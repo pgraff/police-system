@@ -343,12 +343,15 @@ This document tracks the progress of consolidating 6 separate projection modules
 
 **Current Increment:** 5.4 Complete - Phase 5 (Migration and Deprecation) Complete
 
-**Status:** All migration and deprecation work is complete. Old projection modules are marked as deprecated and ready for removal after successful migration period (2+ weeks of operation with new projections).
+**Status:** All migration and deprecation work is complete. Old projection modules have been removed from the codebase.
 
-**Next Steps:** 
-- Monitor new consolidated projections in production
-- Validate data consistency
-- After successful migration period, remove old projection modules (see `doc/migration/removal-summary.md`)
+**Completed:**
+- Removed 6 old individual projection modules from build (`pom.xml`)
+- Removed old projection test dependencies from `edge/pom.xml`
+- Removed old projection support from `ProjectionTestContext`
+- Deleted old projection module directories
+- Updated documentation to reflect removal
+- Verified build succeeds without old modules
 
 ## Progress Tracking
 
