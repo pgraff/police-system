@@ -12,7 +12,18 @@ set -e
 
 KAFKA_CONNECT_URL="${KAFKA_CONNECT_URL:-http://localhost:8083}"
 KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
-ELASTICSEARCH_URL="${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
+
+# Detect if running from host or inside Docker
+# If ELASTICSEARCH_URL is not set, try to detect the environment
+if [ -z "$ELASTICSEARCH_URL" ]; then
+  # Check if we can reach elasticsearch hostname (inside Docker network)
+  if curl -sf http://elasticsearch:9200/_cluster/health > /dev/null 2>&1; then
+    ELASTICSEARCH_URL="http://elasticsearch:9200"
+  else
+    # Running from host, use localhost
+    ELASTICSEARCH_URL="http://localhost:9200"
+  fi
+fi
 ELASTICSEARCH_USERNAME="${ELASTICSEARCH_USERNAME:-}"
 ELASTICSEARCH_PASSWORD="${ELASTICSEARCH_PASSWORD:-}"
 
@@ -69,15 +80,39 @@ create_topic() {
   local topic=$1
   echo "Creating topic: $topic"
   
-  docker exec kafka-broker-1 kafka-topics \
-    --bootstrap-server localhost:9092 \
+  # Use the broker hostname from within the container network
+  local bootstrap_server="kafka-broker-1:9092"
+  
+  # Wait for Kafka to be ready
+  local max_attempts=10
+  local attempt=1
+  while [ $attempt -le $max_attempts ]; do
+    if docker exec kafka-broker-1 kafka-topics --bootstrap-server "$bootstrap_server" --list > /dev/null 2>&1; then
+      break
+    fi
+    echo "  Waiting for Kafka to be ready (attempt $attempt/$max_attempts)..."
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+  
+  # Check if topic already exists
+  if docker exec kafka-broker-1 kafka-topics --bootstrap-server "$bootstrap_server" --list 2>/dev/null | grep -q "^${topic}$"; then
+    echo "  Topic $topic already exists, skipping creation"
+    return 0
+  fi
+  
+  # Create the topic
+  if docker exec kafka-broker-1 kafka-topics \
+    --bootstrap-server "$bootstrap_server" \
     --create \
     --topic "$topic" \
     --partitions 3 \
     --replication-factor 3 \
-    --if-not-exists 2>/dev/null || {
-    echo "Note: Topic $topic may already exist or creation failed (this is OK if it exists)"
-  }
+    --if-not-exists 2>/dev/null; then
+    echo "  ✓ Topic $topic created successfully"
+  else
+    echo "  ⚠ Warning: Failed to create topic $topic (may already exist)"
+  fi
 }
 
 # Function to apply Elasticsearch ILM policy

@@ -383,7 +383,9 @@ services:
 
   # Kafka Connect - Distributed mode for Elasticsearch indexing
   kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.6.0
+    build:
+      context: ./docker/kafka-connect
+      dockerfile: Dockerfile
     container_name: kafka-connect
     hostname: kafka-connect
     depends_on:
@@ -416,6 +418,9 @@ services:
       - "8083:8083"
     volumes:
       - kafka-connect-plugins:/kafka/connect/plugins
+      # Bind mount for connector plugin - allows copying connector JAR from host
+      # If connector JAR is in docker/kafka-connect/plugins/opensearch-sink/lib/, it will be available
+      - ./docker/kafka-connect/plugins/opensearch-sink/lib:/kafka/connect/plugins/opensearch-sink/lib:ro
     networks:
       - policesystem-network
     healthcheck:

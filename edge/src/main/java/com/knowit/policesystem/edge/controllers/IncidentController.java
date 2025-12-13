@@ -177,6 +177,6 @@ public class IncidentController extends BaseRestController {
 
         UpdateIncidentCommand command = new UpdateIncidentCommand(incidentId, requestDto);
         return executeCommand(command, updateIncidentCommandValidator, commandHandlerRegistry, UpdateIncidentCommand.class,
-                "Incident update request created", HttpStatus.OK);
+                "Incident update request processed", HttpStatus.OK);
     }
 }

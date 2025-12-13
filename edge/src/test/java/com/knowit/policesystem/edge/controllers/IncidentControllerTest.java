@@ -639,6 +639,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
     void testChangeIncidentStatus_WithValidStatus_ProducesEvent() throws Exception {
         // Given
         String incidentId = "INC-400";
+        ((InMemoryIncidentExistenceService) incidentExistenceService).addExistingIncident(incidentId);
         ChangeIncidentStatusRequestDto request = new ChangeIncidentStatusRequestDto(IncidentStatus.InProgress);
 
         // When - call REST API
@@ -755,7 +756,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
                         .content(requestJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.incidentId").value(incidentId))
-                .andExpect(jsonPath("$.message").value("Incident update request created"));
+                .andExpect(jsonPath("$.message").value("Incident update request processed"));
 
         // Then - verify event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
@@ -801,7 +802,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
                         .content(requestJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.incidentId").value(incidentId))
-                .andExpect(jsonPath("$.message").value("Incident update request created"));
+                .andExpect(jsonPath("$.message").value("Incident update request processed"));
 
         // Then - verify event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));
@@ -842,7 +843,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
                         .content(requestJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.incidentId").value(incidentId))
-                .andExpect(jsonPath("$.message").value("Incident update request created"));
+                .andExpect(jsonPath("$.message").value("Incident update request processed"));
 
         // Then - verify event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(5));

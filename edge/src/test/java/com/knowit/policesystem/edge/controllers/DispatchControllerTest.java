@@ -37,11 +37,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import com.knowit.policesystem.edge.services.dispatches.DispatchExistenceService;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Integration tests for DispatchController.
  * Tests the full flow from REST API call to both Kafka and NATS/JetStream event production.
  */
+@org.springframework.test.context.junit.jupiter.SpringJUnitConfig(DispatchControllerTest.TestDispatchServiceConfig.class)
 class DispatchControllerTest extends BaseIntegrationTest {
 
     @Autowired
@@ -54,6 +62,9 @@ class DispatchControllerTest extends BaseIntegrationTest {
     private DispatchController dispatchController;
 
     @Autowired
+    private InMemoryDispatchExistenceService dispatchExistenceService;
+
+    @Autowired
     private TopicConfiguration topicConfiguration;
 
     private Consumer<String, String> consumer;
@@ -62,6 +73,9 @@ class DispatchControllerTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        // Clear in-memory existence service
+        dispatchExistenceService.clear();
+        
         // Configure ObjectMapper for event deserialization
         eventObjectMapper = new ObjectMapper();
         eventObjectMapper.registerModule(new JavaTimeModule());
@@ -225,6 +239,7 @@ class DispatchControllerTest extends BaseIntegrationTest {
     void testChangeDispatchStatus_WithValidStatus_ProducesEvent() throws Exception {
         // Given
         String dispatchId = "DISP-013";
+        dispatchExistenceService.addExistingDispatch(dispatchId);
         ChangeDispatchStatusRequestDto request = new ChangeDispatchStatusRequestDto(DispatchStatus.Sent);
 
         // When - call REST API
@@ -291,6 +306,7 @@ class DispatchControllerTest extends BaseIntegrationTest {
     }
 
     private void testStatusConversion(String dispatchId, DispatchStatus status, String expectedStatusString) throws Exception {
+        dispatchExistenceService.addExistingDispatch(dispatchId);
         ChangeDispatchStatusRequestDto request = new ChangeDispatchStatusRequestDto(status);
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(patch("/api/v1/dispatches/{dispatchId}/status", dispatchId)
@@ -342,5 +358,41 @@ class DispatchControllerTest extends BaseIntegrationTest {
         // Then - verify no event in Kafka
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(2));
         assertThat(records).isEmpty();
+    }
+
+    /**
+     * Test-only in-memory dispatch existence service to control 404 scenarios.
+     */
+    static class InMemoryDispatchExistenceService extends DispatchExistenceService {
+        private final Set<String> existingDispatches = new HashSet<>();
+
+        public InMemoryDispatchExistenceService() {
+            super(null); // Pass null since we override exists()
+        }
+
+        @Override
+        public boolean exists(String dispatchId) {
+            return existingDispatches.contains(dispatchId);
+        }
+
+        void addExistingDispatch(String dispatchId) {
+            existingDispatches.add(dispatchId);
+        }
+
+        void clear() {
+            existingDispatches.clear();
+        }
+    }
+
+    /**
+     * Test configuration to override DispatchExistenceService with in-memory implementation.
+     */
+    @TestConfiguration
+    static class TestDispatchServiceConfig {
+        @Bean
+        @Primary
+        DispatchExistenceService dispatchExistenceService() {
+            return new InMemoryDispatchExistenceService();
+        }
     }
 }

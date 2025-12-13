@@ -144,35 +144,35 @@ public class ProjectionTestContext {
         }
         
         @org.springframework.context.annotation.Bean(name = "callKafkaListenerContainerFactory")
-        @org.springframework.context.annotation.Primary
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "callKafkaListenerContainerFactory")
         org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> callFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
         }
         
         @org.springframework.context.annotation.Bean(name = "incidentKafkaListenerContainerFactory")
-        @org.springframework.context.annotation.Primary
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "incidentKafkaListenerContainerFactory")
         org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> incidentFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
         }
         
         @org.springframework.context.annotation.Bean(name = "dispatchKafkaListenerContainerFactory")
-        @org.springframework.context.annotation.Primary
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "dispatchKafkaListenerContainerFactory")
         org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> dispatchFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
         }
         
         @org.springframework.context.annotation.Bean(name = "activityKafkaListenerContainerFactory")
-        @org.springframework.context.annotation.Primary
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "activityKafkaListenerContainerFactory")
         org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> activityFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
         }
         
         @org.springframework.context.annotation.Bean(name = "assignmentKafkaListenerContainerFactory")
-        @org.springframework.context.annotation.Primary
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "assignmentKafkaListenerContainerFactory")
         org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> assignmentFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
@@ -208,11 +208,13 @@ public class ProjectionTestContext {
             CountDownLatch startupLatch = new CountDownLatch(1);
             AtomicReference<ConfigurableApplicationContext> contextRef = new AtomicReference<>();
             AtomicReference<Exception> startupException = new AtomicReference<>();
+            AtomicReference<Class<?>> applicationClassRef = new AtomicReference<>();
 
             Thread appThread = new Thread(() -> {
                 try {
                     // Load the application class dynamically
                     Class<?> applicationClass = Class.forName(applicationClassName);
+                    applicationClassRef.set(applicationClass);
                     String currentPackage = applicationClass.getPackage().getName();
                     
                     // Use SpringApplicationBuilder for more control
@@ -229,10 +231,12 @@ public class ProjectionTestContext {
                     properties.put("spring.datasource.url", postgresJdbcUrl);
                     properties.put("spring.datasource.username", postgresUsername);
                     properties.put("spring.datasource.password", postgresPassword);
-                    // Enable SQL initialization (projections use schema.sql for table creation)
-                    properties.put("spring.sql.init.mode", "always");
-                    properties.put("spring.sql.init.schema-locations", "classpath:schema.sql");
-                    properties.put("spring.sql.init.continue-on-error", "false");
+                    properties.put("spring.datasource.driver-class-name", "org.postgresql.Driver");
+                    properties.put("spring.datasource.driverClassName", "org.postgresql.Driver");
+                    // Disable Spring Boot's auto SQL initialization - we'll do it manually to ensure
+                    // we load the correct schema.sql from the specific module's JAR
+                    properties.put("spring.sql.init.mode", "never");
+                    properties.put("spring.sql.init.schema-locations", ""); // Clear any default locations
                     properties.put("spring.jpa.hibernate.ddl-auto", "none");
                     // Disable Flyway - projections use schema.sql instead
                     properties.put("spring.flyway.enabled", "false");
@@ -306,6 +310,217 @@ public class ProjectionTestContext {
             }
 
             contexts.put(domain, context);
+            
+            // Manually initialize schema if Spring Boot's auto-init didn't work
+            // This ensures tables exist before queries are executed
+            try {
+                org.springframework.jdbc.core.JdbcTemplate jdbcTemplate = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+                String tableName = domain + "_projection";
+                
+                // Check if table exists, if not, try to read and execute schema.sql
+                try {
+                    jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Integer.class);
+                    log.debug("Schema already initialized for projection {}", domain);
+                } catch (org.springframework.jdbc.BadSqlGrammarException e) {
+                    // Table doesn't exist - try to read and execute schema.sql manually
+                    log.info("Schema not initialized for projection {}, attempting manual initialization", domain);
+                    try {
+                        Class<?> appClass = applicationClassRef.get();
+                        if (appClass == null) {
+                            log.warn("Application class not available for schema initialization");
+                        } else {
+                            // Use Spring's ResourceDatabasePopulator to execute schema.sql
+                            // This is the proper way to execute SQL scripts in Spring
+                            // IMPORTANT: We need to load schema.sql from the specific module's JAR, not from
+                            // another module that might be on the classpath. We do this by:
+                            // 1. Finding which JAR file contains the application class
+                            // 2. Loading schema.sql from that same JAR file
+                            try {
+                                org.springframework.core.io.Resource schemaResource = null;
+                                if (appClass != null) {
+                                    // Find the JAR file that contains the application class
+                                    String appClassPath = appClass.getName().replace('.', '/') + ".class";
+                                    java.net.URL appClassUrl = appClass.getClassLoader().getResource(appClassPath);
+                                    if (appClassUrl != null) {
+                                        String appClassUrlString = appClassUrl.toString();
+                                        // Extract JAR path from URL like "jar:file:/path/to/jar!/com/package/Class.class"
+                                        if (appClassUrlString.startsWith("jar:file:")) {
+                                            int jarEndIndex = appClassUrlString.indexOf("!/");
+                                            if (jarEndIndex > 0) {
+                                                String jarPath = appClassUrlString.substring(9, jarEndIndex); // Remove "jar:file:" prefix
+                                                // Construct URL to schema.sql in the same JAR
+                                                String schemaUrlString = "jar:file:" + jarPath + "!/schema.sql";
+                                                try {
+                                                    java.net.URL schemaUrl = new java.net.URL(schemaUrlString);
+                                                    schemaResource = new org.springframework.core.io.UrlResource(schemaUrl);
+                                                    log.info("Loading schema.sql for projection {} from JAR: exists={}, url={}", 
+                                                            domain, schemaResource.exists(), schemaUrl);
+                                                } catch (java.net.MalformedURLException urlEx) {
+                                                    log.warn("Failed to construct schema.sql URL from JAR path for projection {}: {}", 
+                                                            domain, urlEx.getMessage());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Fallback: try getResource() if JAR-based approach didn't work
+                                    if (schemaResource == null || !schemaResource.exists()) {
+                                        java.net.URL schemaUrl = appClass.getResource("/schema.sql");
+                                        if (schemaUrl != null) {
+                                            schemaResource = new org.springframework.core.io.UrlResource(schemaUrl);
+                                            log.info("Loading schema.sql for projection {} using getResource() fallback: exists={}, url={}", 
+                                                    domain, schemaResource.exists(), schemaUrl);
+                                        }
+                                    }
+                                    
+                                    // Final fallback: ClassPathResource
+                                    if (schemaResource == null || !schemaResource.exists()) {
+                                        schemaResource = new org.springframework.core.io.ClassPathResource("schema.sql", appClass.getClassLoader());
+                                        log.warn("Using ClassPathResource fallback for projection {}: exists={}", 
+                                                domain, schemaResource.exists());
+                                    }
+                                } else {
+                                    // Fallback to context resource loader if appClass is not available
+                                    org.springframework.core.io.ResourceLoader resourceLoader = context;
+                                    schemaResource = resourceLoader.getResource("classpath:schema.sql");
+                                    log.info("Loading schema.sql for projection {} using context resource loader: exists={}, description={}", 
+                                            domain, schemaResource.exists(), schemaResource.getDescription());
+                                }
+                                
+                                if (schemaResource.exists()) {
+                                    // Log database connection info for debugging
+                                    javax.sql.DataSource dataSource = context.getBean(javax.sql.DataSource.class);
+                                    try (java.sql.Connection testConn = dataSource.getConnection()) {
+                                        String dbUrl = testConn.getMetaData().getURL();
+                                        String dbUser = testConn.getMetaData().getUserName();
+                                        log.info("Database connection for projection {}: url={}, user={}", domain, dbUrl, dbUser);
+                                    }
+                                    org.springframework.jdbc.datasource.init.ResourceDatabasePopulator populator = 
+                                        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(schemaResource);
+                                    populator.setContinueOnError(false); // Fail fast to see errors
+                                    populator.setSeparator(";");
+                                    
+                                    try {
+                                        // Use ScriptUtils directly for more control
+                                        java.sql.Connection connection = dataSource.getConnection();
+                                        try {
+                                            // Ensure we can control transactions
+                                            boolean originalAutoCommit = connection.getAutoCommit();
+                                            try {
+                                                // Disable auto-commit to ensure all statements execute in one transaction
+                                                connection.setAutoCommit(false);
+                                                
+                                                org.springframework.core.io.support.EncodedResource encodedResource = 
+                                                    new org.springframework.core.io.support.EncodedResource(schemaResource, "UTF-8");
+                                                
+                                                log.debug("Executing schema.sql for projection {} using ScriptUtils", domain);
+                                                org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(
+                                                    connection,
+                                                    encodedResource,
+                                                    false,
+                                                    false,
+                                                    org.springframework.jdbc.datasource.init.ScriptUtils.DEFAULT_COMMENT_PREFIX,
+                                                    ";",
+                                                    org.springframework.jdbc.datasource.init.ScriptUtils.DEFAULT_BLOCK_COMMENT_START_DELIMITER,
+                                                    org.springframework.jdbc.datasource.init.ScriptUtils.DEFAULT_BLOCK_COMMENT_END_DELIMITER
+                                                );
+                                                
+                                                // Commit the transaction
+                                                connection.commit();
+                                                log.info("Executed and committed schema.sql using Spring ScriptUtils for projection {}", domain);
+                                                
+                                                // List all tables to verify creation
+                                                try {
+                                                    java.sql.DatabaseMetaData metaData = connection.getMetaData();
+                                                    java.sql.ResultSet tables = metaData.getTables(null, "public", "%", new String[]{"TABLE"});
+                                                    java.util.List<String> tableNames = new java.util.ArrayList<>();
+                                                    while (tables.next()) {
+                                                        tableNames.add(tables.getString("TABLE_NAME"));
+                                                    }
+                                                    log.info("Tables in database after schema execution for projection {}: {}", domain, tableNames);
+                                                } catch (Exception metaEx) {
+                                                    log.debug("Could not list tables: {}", metaEx.getMessage());
+                                                }
+                                            } catch (Exception sqlEx) {
+                                                // Rollback on error
+                                                try {
+                                                    connection.rollback();
+                                                    log.warn("Rolled back schema.sql execution for projection {} due to error", domain);
+                                                } catch (Exception rollbackEx) {
+                                                    log.warn("Failed to rollback: {}", rollbackEx.getMessage());
+                                                }
+                                                throw sqlEx;
+                                            } finally {
+                                                // Restore original auto-commit setting
+                                                connection.setAutoCommit(originalAutoCommit);
+                                            }
+                                        } finally {
+                                            connection.close();
+                                        }
+                                    } catch (Exception popEx) {
+                                        log.error("Error executing schema.sql using ScriptUtils for projection {}: {}", 
+                                                domain, popEx.getMessage(), popEx);
+                                        // Fallback to ResourceDatabasePopulator
+                                        try {
+                                            log.info("Attempting fallback to ResourceDatabasePopulator for projection {}", domain);
+                                            populator.setContinueOnError(false); // Fail fast to see errors
+                                            populator.execute(dataSource);
+                                            log.info("Executed schema.sql with ResourceDatabasePopulator (fallback) for projection {}", domain);
+                                        } catch (Exception retryEx) {
+                                            log.error("Failed to execute schema.sql even with fallback for projection {}: {}", 
+                                                    domain, retryEx.getMessage(), retryEx);
+                                            // Try to read and log the schema.sql content for debugging
+                                            try {
+                                                java.io.InputStream is = schemaResource.getInputStream();
+                                                java.util.Scanner scanner = new java.util.Scanner(is).useDelimiter("\\A");
+                                                String schemaContent = scanner.hasNext() ? scanner.next() : "";
+                                                log.debug("Schema.sql content for {}:\n{}", domain, schemaContent);
+                                            } catch (Exception readEx) {
+                                                log.debug("Could not read schema.sql content: {}", readEx.getMessage());
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Verify schema was created - retry a few times with longer delays
+                                    boolean schemaVerified = false;
+                                    for (int i = 0; i < 10; i++) {
+                                        try {
+                                            jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Integer.class);
+                                            schemaVerified = true;
+                                            log.info("Successfully initialized and verified schema for projection {}", domain);
+                                            break;
+                                        } catch (Exception verifyEx) {
+                                            if (i < 9) {
+                                                Thread.sleep(500); // Longer delay
+                                            } else {
+                                                log.error("Schema initialization completed but table {} still not accessible after {} retries: {}", 
+                                                        tableName, i + 1, verifyEx.getMessage());
+                                                // Try to list all tables to debug
+                                                try {
+                                                    java.util.List<java.util.Map<String, Object>> tables = jdbcTemplate.queryForList(
+                                                        "SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+                                                    log.debug("Available tables in database: {}", tables);
+                                                } catch (Exception listEx) {
+                                                    log.debug("Could not list tables: {}", listEx.getMessage());
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    log.warn("Could not find schema.sql resource at classpath:schema.sql for projection {}", domain);
+                                }
+                            } catch (Exception ex) {
+                                log.warn("Failed to execute schema.sql using ResourceDatabasePopulator for projection {}: {}", 
+                                        domain, ex.getMessage());
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.warn("Failed to manually initialize schema for projection {}: {}", domain, ex.getMessage(), ex);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not verify/initialize schema for projection {}: {}", domain, e.getMessage());
+            }
             
             // Wait a bit more for NATS query handler to be ready
             Thread.sleep(2000);

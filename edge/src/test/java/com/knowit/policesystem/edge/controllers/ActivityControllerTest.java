@@ -352,6 +352,9 @@ class ActivityControllerTest extends BaseIntegrationTest {
     void testChangeActivityStatus_WithValidStatus_ProducesEvent() throws Exception {
         // Given
         String activityId = "ACT-006";
+        if (activityExistenceService instanceof InMemoryActivityExistenceService) {
+            ((InMemoryActivityExistenceService) activityExistenceService).addExistingActivity(activityId);
+        }
         ChangeActivityStatusRequestDto request = new ChangeActivityStatusRequestDto(ActivityStatus.InProgress);
 
         // When - call REST API
@@ -417,6 +420,9 @@ class ActivityControllerTest extends BaseIntegrationTest {
     }
 
     private void testStatusConversion(String activityId, ActivityStatus status, String expectedStatusString) throws Exception {
+        if (activityExistenceService instanceof InMemoryActivityExistenceService) {
+            ((InMemoryActivityExistenceService) activityExistenceService).addExistingActivity(activityId);
+        }
         ChangeActivityStatusRequestDto request = new ChangeActivityStatusRequestDto(status);
         String requestJson = objectMapper.writeValueAsString(request);
         mockMvc.perform(patch("/api/v1/activities/{activityId}/status", activityId)

@@ -1,16 +1,37 @@
 # Kafka Connect Plugins
 
-This directory contains connector plugins for Kafka Connect.
+This directory contains connector plugins for Kafka Connect. The connector JAR files placed here are automatically available to Kafka Connect via bind mount in docker-compose.
 
 ## OpenSearch Sink Connector
 
 The OpenSearch Sink Connector is used to index events from Kafka topics into Elasticsearch/OpenSearch.
 
-### Installation
+### Quick Installation
 
-1. Download the latest release from: https://github.com/opensearch-project/opensearch-kafka-connect/releases
-2. Extract the JAR files to `docker/kafka-connect/plugins/opensearch-sink/lib/`
-3. Ensure all dependencies are included
+**The connector plugin is integrated into Docker Compose!** Just download the JAR file to this directory:
+
+1. **Download the connector:**
+   ```bash
+   # Option 1: Use the download script (requires version number)
+   ./scripts/download-opensearch-connector.sh <version>
+   
+   # Option 2: Manual download
+   # Visit: https://github.com/opensearch-project/opensearch-kafka-connect/releases
+   # Download the opensearch-sink-connector-*.jar file
+   # Place it in: docker/kafka-connect/plugins/opensearch-sink/lib/
+   ```
+
+2. **Restart Kafka Connect** (no rebuild needed - uses bind mount):
+   ```bash
+   docker compose restart kafka-connect
+   ```
+
+3. **Verify installation:**
+   ```bash
+   curl http://localhost:8083/connector-plugins | jq '.[] | select(.class | contains("Opensearch"))'
+   ```
+
+You should see `org.opensearch.kafka.connect.OpensearchSinkConnector` in the list.
 
 ### Directory Structure
 
@@ -18,32 +39,19 @@ The OpenSearch Sink Connector is used to index events from Kafka topics into Ela
 plugins/
   opensearch-sink/
     lib/
-      opensearch-sink-connector-*.jar
-      (dependencies)
+      opensearch-sink-connector-*.jar  ← Place JAR file here
 ```
 
-### Alternative: Using Docker Volume
+### How It Works
 
-If you prefer to download the connector directly into the volume:
+- The `docker-compose.yml` includes a bind mount: `./docker/kafka-connect/plugins/opensearch-sink/lib:/kafka/connect/plugins/opensearch-sink/lib:ro`
+- Any JAR files you place in `docker/kafka-connect/plugins/opensearch-sink/lib/` on your host are automatically available in the container
+- No need to rebuild the image or copy files manually - just restart Kafka Connect after placing the JAR
 
-```bash
-# Start Kafka Connect (it will create the volume)
-docker-compose up -d kafka-connect
+### Finding the Latest Version
 
-# Copy connector JARs into the volume
-docker cp opensearch-sink-connector-*.jar kafka-connect:/kafka/connect/plugins/opensearch-sink/lib/
+Visit the releases page to find the latest version:
+https://github.com/opensearch-project/opensearch-kafka-connect/releases
 
-# Restart Kafka Connect to load the plugin
-docker-compose restart kafka-connect
-```
-
-### Verification
-
-After installing the connector, verify it's loaded:
-
-```bash
-curl http://localhost:8083/connector-plugins | jq '.[] | select(.class | contains("Opensearch"))'
-```
-
-You should see `org.opensearch.kafka.connect.OpensearchSinkConnector` in the list.
+Look for files named `opensearch-sink-connector-*.jar`
 

@@ -500,6 +500,7 @@ class CallControllerTest extends BaseIntegrationTest {
     void testChangeCallStatus_WithValidStatus_ProducesEvent() throws Exception {
         // Given
         String callId = "CALL-400";
+        callExistenceService.addExistingCall(callId);
         String status = "OnScene";
         ChangeCallStatusRequestDto request = new ChangeCallStatusRequestDto(status);
 
@@ -579,6 +580,7 @@ class CallControllerTest extends BaseIntegrationTest {
     void testUpdateCall_WithValidData_ProducesEvent() throws Exception {
         // Given
         String callId = "CALL-500";
+        callExistenceService.addExistingCall(callId);
         String description = "Updated description";
 
         String requestJson = """
@@ -593,7 +595,7 @@ class CallControllerTest extends BaseIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Call updated"))
+                .andExpect(jsonPath("$.message").value("Call update request processed"))
                 .andExpect(jsonPath("$.data.callId").value(callId));
 
         // Then - verify event in Kafka

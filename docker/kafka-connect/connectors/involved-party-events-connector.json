@@ -1,13 +1,13 @@
 {
   "name": "involved-party-events-to-elasticsearch",
   "config": {
-    "connector.class": "org.opensearch.kafka.connect.OpensearchSinkConnector",
+    "connector.class": "io.aiven.kafka.connect.opensearch.OpensearchSinkConnector",
     "tasks.max": "2",
     "topics": "involved-party-events",
-    "connection.url": "${ELASTICSEARCH_URL:http://elasticsearch:9200}",
+    "connection.url": "http://elasticsearch:9200",
     "connection.username": "${ELASTICSEARCH_USERNAME:}",
     "connection.password": "${ELASTICSEARCH_PASSWORD:}",
-    "index": "involved-party-events",
+    "index": "involved-party-events-${timestamp:yyyy.MM.dd}",
     "type.name": "_doc",
     "key.ignore": "false",
     "document.id": "${eventId}",

@@ -65,11 +65,18 @@ The Police Incident Management System is designed to handle the complete lifecyc
 
 6. **Deploy Kafka Connect Connectors** (optional, for Elasticsearch indexing):
    ```bash
-   # Install OpenSearch connector plugin (see docker/kafka-connect/plugins/README.md)
-   # Then deploy all connectors:
+   # Step 1: Install OpenSearch connector plugin
+   # Download from: https://github.com/opensearch-project/opensearch-kafka-connect/releases
+   # Place JAR in: docker/kafka-connect/plugins/opensearch-sink/lib/
+   # Or use: ./scripts/download-opensearch-connector.sh <version>
+   
+   # Step 2: Restart Kafka Connect to load plugin
+   docker compose restart kafka-connect
+   
+   # Step 3: Deploy all connectors
    ./scripts/deploy-connectors.sh
    
-   # Check connector health:
+   # Step 4: Check connector health
    ./scripts/check-connectors.sh
    ```
 

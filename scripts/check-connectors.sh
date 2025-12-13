@@ -43,6 +43,15 @@ echo ""
 check_connector_status() {
   local connector_name=$1
   local status_response=$(curl -s "$KAFKA_CONNECT_URL/connectors/$connector_name/status")
+  
+  # Check if connector exists (404 means not deployed)
+  if echo "$status_response" | jq -e '.error_code == 404' > /dev/null 2>&1; then
+    echo "Connector: $connector_name"
+    echo "  State: NOT DEPLOYED"
+    echo "  ℹ INFO: Connector has not been deployed yet. Run ./scripts/deploy-connectors.sh to deploy."
+    return 2
+  fi
+  
   local connector_state=$(echo "$status_response" | jq -r '.connector.state // "UNKNOWN"')
   local tasks=$(echo "$status_response" | jq -r '.tasks // []')
   
@@ -127,11 +136,32 @@ if [ ! -d "$CONNECTORS_DIR" ]; then
   exit 1
 fi
 
+# First check if connector plugin is installed
+echo "Checking if OpenSearch connector plugin is installed..."
+plugin_check=$(curl -s "$KAFKA_CONNECT_URL/connector-plugins" | jq '.[] | select(.class | contains("Opensearch"))' | head -1)
+if [ -z "$plugin_check" ]; then
+  echo "  ⚠ WARNING: OpenSearch connector plugin is not installed!"
+  echo "  Please install it first:"
+  echo "    1. Download from: https://github.com/opensearch-project/opensearch-kafka-connect/releases"
+  echo "    2. Extract JAR to: docker/kafka-connect/plugins/opensearch-sink/lib/"
+  echo "    3. Restart Kafka Connect: docker compose restart kafka-connect"
+  echo ""
+  all_healthy=false
+else
+  echo "  ✓ OpenSearch connector plugin is installed"
+  echo ""
+fi
+
 for connector_file in "$CONNECTORS_DIR"/*.json; do
   if [ -f "$connector_file" ]; then
     connector_name=$(jq -r '.name' "$connector_file")
-    if ! check_connector_status "$connector_name"; then
+    check_result=$(check_connector_status "$connector_name")
+    exit_code=$?
+    if [ $exit_code -eq 1 ]; then
       all_healthy=false
+    elif [ $exit_code -eq 2 ]; then
+      # Not deployed - this is expected if deploy script hasn't been run
+      not_deployed=true
     fi
     echo ""
   fi
