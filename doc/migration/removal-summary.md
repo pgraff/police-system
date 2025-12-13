@@ -2,9 +2,11 @@
 
 ## Overview
 
-This document summarizes what will be removed when old individual projection modules are fully deprecated and removed from the codebase.
+This document summarizes what was removed when old individual projection modules were removed from the codebase.
 
-## Modules to be Removed
+**Status:** ✅ All modules have been removed.
+
+## Modules Removed
 
 ### 1. officer-projection
 
@@ -167,10 +169,10 @@ This document summarizes what will be removed when old individual projection mod
 
 ## Code Statistics
 
-### Files to be Removed
+### Files Removed
 
-**Approximate counts:**
-- 6 module directories
+**Actual counts:**
+- 6 module directories (removed)
 - ~120 Java source files
 - 6 schema.sql files
 - 6 application.yml files

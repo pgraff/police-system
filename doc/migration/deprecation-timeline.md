@@ -6,9 +6,9 @@ This document outlines the deprecation timeline for old individual projection mo
 
 ## Deprecation Status
 
-### Current Status: ⚠️ DEPRECATED
+### Current Status: ✅ REMOVED
 
-All old individual projection modules are now marked as deprecated:
+All old individual projection modules have been removed:
 - `officer-projection` → Use `resource-projection`
 - `incident-projection` → Use `operational-projection`
 - `call-projection` → Use `operational-projection`

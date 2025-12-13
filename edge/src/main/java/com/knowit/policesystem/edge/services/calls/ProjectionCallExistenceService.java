@@ -8,8 +8,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 /**
- * Service for checking call existence in the projection.
- * Replaces the stub AlwaysExistsCallExistenceService with real projection queries.
+ * Service for checking call existence in the projection via NATS queries.
  * 
  * This service is conditionally created - it will not be created if a test provides
  * a bean named "callExistenceService" (which test configurations do).
