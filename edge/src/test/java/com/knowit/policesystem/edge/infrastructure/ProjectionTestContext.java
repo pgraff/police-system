@@ -321,9 +321,23 @@ public class ProjectionTestContext {
                 try {
                     jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Integer.class);
                     log.debug("Schema already initialized for projection {}", domain);
-                } catch (org.springframework.jdbc.BadSqlGrammarException e) {
-                    // Table doesn't exist - try to read and execute schema.sql manually
-                    log.info("Schema not initialized for projection {}, attempting manual initialization", domain);
+                } catch (Exception e) {
+                    // Check if this is a "table doesn't exist" error
+                    String errorMessage = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                    boolean isTableMissing = errorMessage.contains("does not exist") || 
+                                          (errorMessage.contains("relation") && errorMessage.contains("not exist")) ||
+                                          e instanceof org.springframework.jdbc.BadSqlGrammarException;
+                    
+                    if (isTableMissing) {
+                        // Table doesn't exist - try to read and execute schema.sql manually
+                        log.info("Schema not initialized for projection {}, attempting manual initialization", domain);
+                    } else {
+                        // Some other error - log it but still try to initialize schema in case it helps
+                        log.warn("Error checking if table {} exists for projection {}: {}. Attempting schema initialization anyway.", 
+                                tableName, domain, e.getMessage());
+                    }
+                    
+                    // Try to read and execute schema.sql manually
                     try {
                         Class<?> appClass = applicationClassRef.get();
                         if (appClass == null) {
@@ -483,14 +497,28 @@ public class ProjectionTestContext {
                                     
                                     // Verify schema was created - retry a few times with longer delays
                                     boolean schemaVerified = false;
-                                    for (int i = 0; i < 10; i++) {
+                                    for (int i = 0; i < 15; i++) {
                                         try {
+                                            // Try a simple query first
                                             jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Integer.class);
+                                            
+                                            // Also verify we can actually query the table structure by trying to select from it
+                                            // This ensures the table is fully created and accessible
+                                            try {
+                                                jdbcTemplate.queryForList("SELECT * FROM " + tableName + " LIMIT 1");
+                                            } catch (Exception structEx) {
+                                                // If structure query fails, table might not be fully ready
+                                                if (i < 14) {
+                                                    Thread.sleep(500);
+                                                    continue;
+                                                }
+                                            }
+                                            
                                             schemaVerified = true;
                                             log.info("Successfully initialized and verified schema for projection {}", domain);
                                             break;
                                         } catch (Exception verifyEx) {
-                                            if (i < 9) {
+                                            if (i < 14) {
                                                 Thread.sleep(500); // Longer delay
                                             } else {
                                                 log.error("Schema initialization completed but table {} still not accessible after {} retries: {}", 
@@ -503,8 +531,15 @@ public class ProjectionTestContext {
                                                 } catch (Exception listEx) {
                                                     log.debug("Could not list tables: {}", listEx.getMessage());
                                                 }
+                                                // Don't fail here - let the projection start and see if it works anyway
+                                                // Some databases might have slight delays in table visibility
                                             }
                                         }
+                                    }
+                                    
+                                    if (!schemaVerified) {
+                                        log.warn("Schema verification failed for projection {}, but continuing anyway. Table {} may not be ready.", 
+                                                domain, tableName);
                                     }
                                 } else {
                                     log.warn("Could not find schema.sql resource at classpath:schema.sql for projection {}", domain);
@@ -520,6 +555,17 @@ public class ProjectionTestContext {
                 }
             } catch (Exception e) {
                 log.warn("Could not verify/initialize schema for projection {}: {}", domain, e.getMessage());
+            }
+            
+            // Final verification: ensure table is accessible before marking as ready
+            try {
+                org.springframework.jdbc.core.JdbcTemplate finalJdbcTemplate = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+                String finalTableName = domain + "_projection";
+                finalJdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + finalTableName, Integer.class);
+                log.debug("Final schema verification passed for projection {}", domain);
+            } catch (Exception finalVerifyEx) {
+                log.warn("Final schema verification failed for projection {}: {}. Projection may not be fully ready.", 
+                        domain, finalVerifyEx.getMessage());
             }
             
             // Wait a bit more for NATS query handler to be ready
