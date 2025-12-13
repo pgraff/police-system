@@ -28,7 +28,7 @@ The edge remains event-first and stateless: REST commands enter, `*Requested` ev
 - ✅ **Storage**: PostgreSQL for all read models (durable, relational queries, joins).
 - ✅ **Idempotency**: Event ID tracking prevents duplicate processing.
 - Support replay from Kafka beginning; projection errors go to DLQ with retries.
-- ⚠️ **Legacy**: 6 individual projection modules are deprecated and will be removed (see migration guide).
+- ✅ **Consolidated**: 6 individual projection modules have been removed and replaced by 3 consolidated projections.
 
 ## Query Flow
 

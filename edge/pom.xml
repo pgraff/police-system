@@ -127,49 +127,6 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- Old individual projections (DEPRECATED - will be removed after migration) -->
-        <!-- @deprecated Use resource-projection instead -->
-        <dependency>
-            <groupId>com.knowit.policesystem</groupId>
-            <artifactId>officer-projection</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- @deprecated Use operational-projection instead -->
-        <dependency>
-            <groupId>com.knowit.policesystem</groupId>
-            <artifactId>call-projection</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- @deprecated Use operational-projection instead -->
-        <dependency>
-            <groupId>com.knowit.policesystem</groupId>
-            <artifactId>incident-projection</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- @deprecated Use operational-projection instead -->
-        <dependency>
-            <groupId>com.knowit.policesystem</groupId>
-            <artifactId>dispatch-projection</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- @deprecated Use operational-projection instead -->
-        <dependency>
-            <groupId>com.knowit.policesystem</groupId>
-            <artifactId>activity-projection</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <!-- @deprecated Use operational-projection instead -->
-        <dependency>
-            <groupId>com.knowit.policesystem</groupId>
-            <artifactId>assignment-projection</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
 </project>

@@ -85,8 +85,8 @@ class NatsQueryIntegrationTest extends NatsQueryE2ETestBase {
 
     @Test
     void testExistsQuery_EdgeToProjection_ReturnsResponse() throws Exception {
-        // Given - start call projection
-        boolean started = projectionContext.startProjection("call", "com.knowit.policesystem.projection.CallProjectionApplication");
+        // Given - start call projection (uses consolidated OperationalProjectionApplication)
+        boolean started = projectionContext.startProjection("call");
         assertThat(started).as("Call projection should start successfully").isTrue();
 
         boolean ready = projectionContext.waitForProjectionReady("call", Duration.ofSeconds(30));
@@ -150,8 +150,8 @@ class NatsQueryIntegrationTest extends NatsQueryE2ETestBase {
 
     @Test
     void testGetQuery_EdgeToProjection_ReturnsData() throws Exception {
-        // Given - start officer projection
-        boolean started = projectionContext.startProjection("officer", "com.knowit.policesystem.projection.OfficerProjectionApplication");
+        // Given - start officer projection (uses consolidated ResourceProjectionApplication)
+        boolean started = projectionContext.startProjection("officer");
         assertThat(started).as("Officer projection should start successfully").isTrue();
 
         boolean ready = projectionContext.waitForProjectionReady("officer", Duration.ofSeconds(30));
@@ -216,11 +216,11 @@ class NatsQueryIntegrationTest extends NatsQueryE2ETestBase {
 
     @Test
     void testQuery_MultipleDomains_Works() throws Exception {
-        // Given - start multiple projections
-        boolean callStarted = projectionContext.startProjection("call", "com.knowit.policesystem.projection.CallProjectionApplication");
+        // Given - start multiple projections (using consolidated projections)
+        boolean callStarted = projectionContext.startProjection("call");
         assertThat(callStarted).as("Call projection should start").isTrue();
 
-        boolean officerStarted = projectionContext.startProjection("officer", "com.knowit.policesystem.projection.OfficerProjectionApplication");
+        boolean officerStarted = projectionContext.startProjection("officer");
         assertThat(officerStarted).as("Officer projection should start").isTrue();
 
         // Wait for both to be ready

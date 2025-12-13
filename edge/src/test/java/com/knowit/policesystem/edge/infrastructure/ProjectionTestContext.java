@@ -37,28 +37,6 @@ public class ProjectionTestContext {
     private final String postgresUsername;
     private final String postgresPassword;
 
-    /**
-     * Helper method to get regex pattern for other module class names.
-     * 
-     * @deprecated This method is for filtering old individual projection modules.
-     * Old projections are deprecated - use consolidated projections instead.
-     */
-    @Deprecated
-    private static String getOtherModulePatterns(String currentDomain) {
-        // Old individual projection modules (deprecated)
-        String[] allModules = {"call", "incident", "dispatch", "activity", "assignment", "officer"};
-        StringBuilder pattern = new StringBuilder();
-        for (String module : allModules) {
-            if (!module.equals(currentDomain)) {
-                if (pattern.length() > 0) {
-                    pattern.append("|");
-                }
-                String modulePrefix = module.substring(0, 1).toUpperCase() + module.substring(1);
-                pattern.append(modulePrefix);
-            }
-        }
-        return pattern.toString();
-    }
 
     /**
      * Maps a domain to its consolidated projection application class name.
@@ -127,11 +105,7 @@ public class ProjectionTestContext {
                     boolean isResource = applicationClassName != null && applicationClassName.contains("ResourceProjectionApplication");
                     boolean isWorkforce = applicationClassName != null && applicationClassName.contains("WorkforceProjectionApplication");
                     
-                    // For consolidated projections, filter out old individual projection components (deprecated)
-                    // and components from other consolidated projections
-                    // @deprecated Old individual projection prefixes - these modules are deprecated
-                    String[] oldIndividualPrefixes = {"Call", "Incident", "Dispatch", "Activity", "Assignment", "Officer"};
-                    
+                    // Filter out components from other consolidated projections
                     int removedCount = 0;
                     for (String beanName : allBeanNames) {
                         try {
@@ -143,34 +117,23 @@ public class ProjectionTestContext {
                                 beanClassName.startsWith("com.knowit.policesystem.projection.")) {
                                 boolean shouldRemove = false;
                                 
-                                // Always remove old individual projection components
-                                for (String oldPrefix : oldIndividualPrefixes) {
-                                    if (beanClassName.contains(oldPrefix + "KafkaListener") ||
-                                        beanClassName.contains(oldPrefix + "NatsListener") ||
-                                        beanClassName.contains(oldPrefix + "NatsQueryHandler") ||
-                                        beanClassName.contains(oldPrefix + "EventParser") ||
-                                        beanClassName.contains(oldPrefix + "ProjectionApplication")) {
-                                        shouldRemove = true;
-                                        break;
-                                    }
-                                }
-                                
                                 // Remove components from other consolidated projections
                                 // Check for specific class name patterns to avoid false positives
-                                if (!shouldRemove) {
-                                    if (isOperational) {
+                                if (isOperational) {
                                         // Remove Resource and Workforce components (but keep Operational)
                                         if ((beanClassName.contains("ResourceKafkaListener") ||
                                              beanClassName.contains("ResourceNatsListener") ||
                                              beanClassName.contains("ResourceNatsQueryHandler") ||
                                              beanClassName.contains("ResourceEventParser") ||
                                              beanClassName.contains("ResourceProjectionService") ||
+                                             beanClassName.contains("ResourceProjectionController") ||
                                              beanClassName.contains("ResourceProjectionApplication")) ||
                                             (beanClassName.contains("WorkforceKafkaListener") ||
                                              beanClassName.contains("WorkforceNatsListener") ||
                                              beanClassName.contains("WorkforceNatsQueryHandler") ||
                                              beanClassName.contains("WorkforceEventParser") ||
                                              beanClassName.contains("WorkforceProjectionService") ||
+                                             beanClassName.contains("WorkforceProjectionController") ||
                                              beanClassName.contains("WorkforceProjectionApplication"))) {
                                             shouldRemove = true;
                                         }
@@ -181,12 +144,14 @@ public class ProjectionTestContext {
                                              beanClassName.contains("OperationalNatsQueryHandler") ||
                                              beanClassName.contains("OperationalEventParser") ||
                                              beanClassName.contains("OperationalProjectionService") ||
+                                             beanClassName.contains("OperationalProjectionController") ||
                                              beanClassName.contains("OperationalProjectionApplication")) ||
                                             (beanClassName.contains("WorkforceKafkaListener") ||
                                              beanClassName.contains("WorkforceNatsListener") ||
                                              beanClassName.contains("WorkforceNatsQueryHandler") ||
                                              beanClassName.contains("WorkforceEventParser") ||
                                              beanClassName.contains("WorkforceProjectionService") ||
+                                             beanClassName.contains("WorkforceProjectionController") ||
                                              beanClassName.contains("WorkforceProjectionApplication"))) {
                                             shouldRemove = true;
                                         }
@@ -197,17 +162,18 @@ public class ProjectionTestContext {
                                              beanClassName.contains("OperationalNatsQueryHandler") ||
                                              beanClassName.contains("OperationalEventParser") ||
                                              beanClassName.contains("OperationalProjectionService") ||
+                                             beanClassName.contains("OperationalProjectionController") ||
                                              beanClassName.contains("OperationalProjectionApplication")) ||
                                             (beanClassName.contains("ResourceKafkaListener") ||
                                              beanClassName.contains("ResourceNatsListener") ||
                                              beanClassName.contains("ResourceNatsQueryHandler") ||
                                              beanClassName.contains("ResourceEventParser") ||
                                              beanClassName.contains("ResourceProjectionService") ||
+                                             beanClassName.contains("ResourceProjectionController") ||
                                              beanClassName.contains("ResourceProjectionApplication"))) {
                                             shouldRemove = true;
                                         }
                                     }
-                                }
                                 
                                 if (shouldRemove) {
                                     registry.removeBeanDefinition(beanName);
@@ -247,37 +213,24 @@ public class ProjectionTestContext {
             return factory;
         }
         
-        @org.springframework.context.annotation.Bean(name = "callKafkaListenerContainerFactory")
-        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "callKafkaListenerContainerFactory")
-        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> callFactory(
+        // Consolidated projection factories
+        @org.springframework.context.annotation.Bean(name = "resourceKafkaListenerContainerFactory")
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "resourceKafkaListenerContainerFactory")
+        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> resourceFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
         }
         
-        @org.springframework.context.annotation.Bean(name = "incidentKafkaListenerContainerFactory")
-        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "incidentKafkaListenerContainerFactory")
-        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> incidentFactory(
+        @org.springframework.context.annotation.Bean(name = "operationalKafkaListenerContainerFactory")
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "operationalKafkaListenerContainerFactory")
+        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> operationalFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
         }
         
-        @org.springframework.context.annotation.Bean(name = "dispatchKafkaListenerContainerFactory")
-        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "dispatchKafkaListenerContainerFactory")
-        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> dispatchFactory(
-                org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
-            return createFactory(consumerFactory);
-        }
-        
-        @org.springframework.context.annotation.Bean(name = "activityKafkaListenerContainerFactory")
-        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "activityKafkaListenerContainerFactory")
-        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> activityFactory(
-                org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
-            return createFactory(consumerFactory);
-        }
-        
-        @org.springframework.context.annotation.Bean(name = "assignmentKafkaListenerContainerFactory")
-        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "assignmentKafkaListenerContainerFactory")
-        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> assignmentFactory(
+        @org.springframework.context.annotation.Bean(name = "workforceKafkaListenerContainerFactory")
+        @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(name = "workforceKafkaListenerContainerFactory")
+        org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory<?, ?> workforceFactory(
                 org.springframework.kafka.core.ConsumerFactory<?, ?> consumerFactory) {
             return createFactory(consumerFactory);
         }
@@ -344,10 +297,10 @@ public class ProjectionTestContext {
                     properties.put("spring.jpa.hibernate.ddl-auto", "none");
                     // Disable Flyway - projections use schema.sql instead
                     properties.put("spring.flyway.enabled", "false");
-                    // NATS properties - consolidated projections use "nats." prefix
-                    properties.put("nats.enabled", "true");
-                    properties.put("nats.url", natsUrl);
-                    properties.put("nats.query-enabled", "true");
+                    // NATS properties - consolidated projections use "projection.nats." prefix
+                    properties.put("projection.nats.enabled", "true");
+                    properties.put("projection.nats.url", natsUrl);
+                    properties.put("projection.nats.query-enabled", "true");
                     properties.put("server.port", "0"); // Random port
                     properties.put("spring.jmx.enabled", "false"); // Disable JMX for tests
                     properties.put("spring.main.allow-bean-definition-overriding", "true");

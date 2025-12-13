@@ -35,8 +35,6 @@ This document describes the abstract components of the system and their responsi
         │        │  - operational-projection    │
         │        │  - resource-projection       │
         │        │  - workforce-projection      │
-        │        │  (Legacy: 6 individual       │
-        │        │   projections - deprecated)  │
         │        └────────┬─────────────────────┘
         │                 │
         └─────────────────┘

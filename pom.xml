@@ -23,23 +23,10 @@
     <modules>
         <module>common</module>
         <module>edge</module>
-        <!-- New consolidated projections -->
+        <!-- Consolidated projections -->
         <module>operational-projection</module>
         <module>resource-projection</module>
         <module>workforce-projection</module>
-        <!-- Old individual projections (DEPRECATED - will be removed after migration) -->
-        <!-- @deprecated Use operational-projection instead -->
-        <module>incident-projection</module>
-        <!-- @deprecated Use operational-projection instead -->
-        <module>call-projection</module>
-        <!-- @deprecated Use operational-projection instead -->
-        <module>dispatch-projection</module>
-        <!-- @deprecated Use operational-projection instead -->
-        <module>activity-projection</module>
-        <!-- @deprecated Use operational-projection instead -->
-        <module>assignment-projection</module>
-        <!-- @deprecated Use resource-projection instead -->
-        <module>officer-projection</module>
     </modules>
 
     <properties>

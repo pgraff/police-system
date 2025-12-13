@@ -256,13 +256,6 @@ Projections are eventually consistent. A resource may not appear in the projecti
 - Resource Projection: `http://localhost:8082/api/projections/` (handles: officers, vehicles, units, persons, locations)
 - Workforce Projection: `http://localhost:8083/api/projections/` (handles: shifts, officer shifts, shift changes)
 
-**Legacy Individual Projections (Deprecated):**
-- Officer Projection: `http://localhost:8081/api/projections/officers` (deprecated, use resource-projection)
-- Incident Projection: `http://localhost:8082/api/projections/incidents` (deprecated, use operational-projection)
-- Call Projection: `http://localhost:8083/api/projections/calls` (deprecated, use operational-projection)
-- Dispatch Projection: `http://localhost:8084/api/projections/dispatches` (deprecated, use operational-projection)
-- Activity Projection: `http://localhost:8085/api/projections/activities` (deprecated, use operational-projection)
-- Assignment Projection: `http://localhost:8086/api/projections/assignments` (deprecated, use operational-projection)
 
 ### Common Query Patterns
 

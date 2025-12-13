@@ -267,17 +267,15 @@ The system uses 3 consolidated projection services organized by use case:
 - **Endpoints**: `/api/projections/shifts/*`, `/api/projections/officer-shifts/*`, `/api/projections/shift-changes/*`
 - **Deployment**: Standalone service (Port 8083, future K8s pod)
 
-## Legacy Individual Projections (Deprecated)
+## Legacy Individual Projections (Removed)
 
-⚠️ **DEPRECATED**: The following individual projection modules are deprecated and will be removed in a future release:
+✅ **REMOVED**: The following individual projection modules have been removed and replaced by consolidated projections:
 
-- ⚠️ **Officer Projection**: `officer-projection/` → Use `resource-projection` instead
-- ⚠️ **Incident Projection**: `incident-projection/` → Use `operational-projection` instead
-- ⚠️ **Call Projection**: `call-projection/` → Use `operational-projection` instead
-- ⚠️ **Dispatch Projection**: `dispatch-projection/` → Use `operational-projection` instead
-- ⚠️ **Activity Projection**: `activity-projection/` → Use `operational-projection` instead
-- ⚠️ **Assignment Projection**: `assignment-projection/` → Use `operational-projection` instead
+- ✅ **Officer Projection**: `officer-projection/` → Replaced by `resource-projection`
+- ✅ **Incident Projection**: `incident-projection/` → Replaced by `operational-projection`
+- ✅ **Call Projection**: `call-projection/` → Replaced by `operational-projection`
+- ✅ **Dispatch Projection**: `dispatch-projection/` → Replaced by `operational-projection`
+- ✅ **Activity Projection**: `activity-projection/` → Replaced by `operational-projection`
+- ✅ **Assignment Projection**: `assignment-projection/` → Replaced by `operational-projection`
 
-**Migration Guide**: See [Client Migration Guide](../migration/client-migration-guide.md) for details.
-
-**Note**: These modules are kept in the codebase during the migration period but are marked as deprecated. They will be removed after successful migration.
+**Migration Complete**: All old individual projection modules have been removed. The system now uses 3 consolidated projections.
