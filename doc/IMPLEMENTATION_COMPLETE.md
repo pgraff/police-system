@@ -63,21 +63,37 @@ All tests verify:
   - `testQuery_MultipleDomains_Works()` - Multi-domain verification
   - `testExistsQuery_ProjectionUnavailable_HandlesGracefully()` - Error handling
 
-### Phase 5: Unit Tests for Projection Query Handlers ✅ (Examples)
+### Phase 5: Unit Tests for Projection Query Handlers ✅ (Complete)
 
-**OfficerNatsQueryHandlerTest** (`officer-projection/src/test/java/com/knowit/policesystem/projection/nats/OfficerNatsQueryHandlerTest.java`)
-- 6 test cases covering:
-  - Exists query with existing resource
-  - Exists query with non-existent resource
-  - Get query with existing resource
-  - Get query with non-existent resource
-  - Repository error handling
-  - Subject subscription verification
+**All 6 projection query handlers now have comprehensive unit tests:**
 
-**CallNatsQueryHandlerTest** (`call-projection/src/test/java/com/knowit/policesystem/projection/nats/CallNatsQueryHandlerTest.java`)
-- 5 test cases following same pattern as OfficerNatsQueryHandlerTest
+1. **OfficerNatsQueryHandlerTest** (`officer-projection/src/test/java/com/knowit/policesystem/projection/nats/OfficerNatsQueryHandlerTest.java`)
+   - 6 test cases
 
-**Note**: These serve as examples/templates for creating similar tests for the remaining 4 projections (incident, dispatch, activity, assignment).
+2. **CallNatsQueryHandlerTest** (`call-projection/src/test/java/com/knowit/policesystem/projection/nats/CallNatsQueryHandlerTest.java`)
+   - 5 test cases
+
+3. **IncidentNatsQueryHandlerTest** (`incident-projection/src/test/java/com/knowit/policesystem/projection/nats/IncidentNatsQueryHandlerTest.java`)
+   - 6 test cases
+
+4. **DispatchNatsQueryHandlerTest** (`dispatch-projection/src/test/java/com/knowit/policesystem/projection/nats/DispatchNatsQueryHandlerTest.java`)
+   - 6 test cases
+
+5. **ActivityNatsQueryHandlerTest** (`activity-projection/src/test/java/com/knowit/policesystem/projection/nats/ActivityNatsQueryHandlerTest.java`)
+   - 6 test cases
+
+6. **AssignmentNatsQueryHandlerTest** (`assignment-projection/src/test/java/com/knowit/policesystem/projection/nats/AssignmentNatsQueryHandlerTest.java`)
+   - 6 test cases
+
+**Total: 35 test cases across all 6 projection query handlers**
+
+Each test covers:
+- Exists query with existing resource
+- Exists query with non-existent resource
+- Get query with existing resource
+- Get query with non-existent resource
+- Repository error handling
+- Subject subscription verification
 
 ### Phase 6: Documentation Updates ✅
 
@@ -126,11 +142,12 @@ All tests verify:
 
 ## Statistics
 
-- **Total new test files**: 19
-- **Total new test cases**: ~75+
-- **Lines of test code**: ~2,400+
+- **Total new test files**: 23
+- **Total new test cases**: ~95+
+- **Lines of test code**: ~3,300+
 - **Documentation updates**: 2 major files enhanced
 - **All Priority 1 items**: ✅ Complete
+- **All Priority 3 items (optional)**: ✅ Complete
 - **All code compiles**: ✅ Verified
 
 ## Test Coverage Summary
@@ -138,7 +155,7 @@ All tests verify:
 ### Unit Tests
 - Core infrastructure: 25 test cases
 - Edge services: 27 test cases
-- Projection query handlers: 11 test cases (examples)
+- Projection query handlers: 35 test cases (all 6 projections)
 
 ### Integration Tests
 - E2E NATS query flow: 4 test cases
@@ -148,14 +165,9 @@ All tests verify:
 
 ## Remaining Optional Work
 
-### Phase 5: Additional Projection Query Handler Tests
-- Create similar tests for:
-  - `IncidentNatsQueryHandlerTest`
-  - `DispatchNatsQueryHandlerTest`
-  - `ActivityNatsQueryHandlerTest`
-  - `AssignmentNatsQueryHandlerTest`
+✅ **All optional work completed!**
 
-**Note**: These can be created following the same pattern as `OfficerNatsQueryHandlerTest` and `CallNatsQueryHandlerTest`.
+Phase 5 is now complete with all 6 projection query handlers having comprehensive unit tests.
 
 ## Success Criteria Met
 
@@ -169,12 +181,21 @@ All tests verify:
 
 ## Git Commits
 
-1. **Initial commit**: `feat: add comprehensive test coverage for NATS query infrastructure`
+1. **Initial commit**: `feat: add comprehensive test coverage for NATS query infrastructure` (d7ba12e)
    - 18 new test files
    - Documentation updates
    - 2,423 insertions
 
-2. **Additional commit**: (to be created for CallNatsQueryHandlerTest)
+2. **Second commit**: `test: add CallNatsQueryHandlerTest and implementation summary` (ce8c901)
+   - CallNatsQueryHandlerTest (5 test cases)
+   - IMPLEMENTATION_COMPLETE.md summary document
+
+3. **Third commit**: `test: add unit tests for remaining projection query handlers` (3285c7d)
+   - IncidentNatsQueryHandlerTest (6 test cases)
+   - DispatchNatsQueryHandlerTest (6 test cases)
+   - ActivityNatsQueryHandlerTest (6 test cases)
+   - AssignmentNatsQueryHandlerTest (6 test cases)
+   - 889 insertions
 
 ## Next Steps
 
