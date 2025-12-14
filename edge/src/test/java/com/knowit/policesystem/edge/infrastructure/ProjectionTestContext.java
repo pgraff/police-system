@@ -306,10 +306,10 @@ public class ProjectionTestContext {
                     System.setProperty("PROJECTION_DATASOURCE_URL", postgresJdbcUrl);
                     System.setProperty("PROJECTION_DATASOURCE_USERNAME", postgresUsername);
                     System.setProperty("PROJECTION_DATASOURCE_PASSWORD", postgresPassword);
-                    // Disable Spring Boot's auto SQL initialization - we'll do it manually to ensure
-                    // we load the correct schema.sql from the specific module's JAR
-                    properties.put("spring.sql.init.mode", "never");
-                    properties.put("spring.sql.init.schema-locations", ""); // Clear any default locations
+                    // Enable Spring Boot's auto SQL initialization - it will load schema.sql from classpath
+                    // This is more reliable than manual initialization
+                    properties.put("spring.sql.init.mode", "always");
+                    properties.put("spring.sql.init.schema-locations", "classpath:schema.sql");
                     properties.put("spring.jpa.hibernate.ddl-auto", "none");
                     // Disable Flyway - projections use schema.sql instead
                     properties.put("spring.flyway.enabled", "false");
