@@ -47,7 +47,7 @@ Comprehensive guide to testing approach, principles, and patterns used throughou
 - **Framework**: Spring Framework / Spring Boot
 - **Primary Event Bus**: Apache Kafka (event sourcing and long-term storage)
 - **Secondary Event Bus**: NATS/JetStream (critical events for near realtime processing)
-- **Projections**: Spring Kafka consumers (6 standalone services)
+- **Projections**: Spring Kafka consumers (3 projection services)
 - **Read Model Storage**: PostgreSQL
 
 ## Key Components
@@ -56,8 +56,10 @@ Comprehensive guide to testing approach, principles, and patterns used throughou
 2. **Event Buses**: 
    - **Kafka**: Primary event store and message broker for all events
    - **NATS/JetStream**: Secondary event bus for critical events requiring near realtime processing
-3. **CQRS Projections**: ✅ **6 standalone projection services** build read models using Spring Kafka consumers and PostgreSQL
-   - `officer-projection`, `incident-projection`, `call-projection`, `dispatch-projection`, `activity-projection`, `assignment-projection`
+3. **CQRS Projections**: ✅ **3 projection services** build read models using Spring Kafka consumers and PostgreSQL
+   - `operational-projection` (handles: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments)
+   - `resource-projection` (handles: officers, vehicles, units, persons, locations)
+   - `workforce-projection` (handles: shifts, officer shifts, shift changes)
 
 ## Design Decisions
 

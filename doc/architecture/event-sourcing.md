@@ -64,7 +64,7 @@ The system supports event replay for:
 - **State Reconstruction**: Rebuilding current state from events
 - **Projection Rebuilding**: Recreating read models from scratch
 - **Debugging**: Understanding system behavior at any point in time
-- **Migration**: Applying schema changes to historical events
+- **Schema Evolution**: Applying schema changes to events
 
 ## Benefits in This System
 

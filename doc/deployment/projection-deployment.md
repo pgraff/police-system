@@ -2,11 +2,11 @@
 
 ## Overview
 
-This guide covers deployment of the consolidated projection services for parallel operation with existing individual projection services during migration.
+This guide covers deployment of the projection services.
 
 ## Architecture
 
-### Consolidated Projections
+### Projection Services
 
 - **operational-projection** (Port 8081)
   - Handles: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments
@@ -23,26 +23,6 @@ This guide covers deployment of the consolidated projection services for paralle
   - Consumer Group: `workforce-projection-service`
   - Database Tables: `shift_projection`, `officer_shift_projection`, `shift_change_projection`, `shift_status_history`
 
-### Individual Projections (Legacy)
-
-- **officer-projection** (Port 0 - random)
-  - Consumer Group: `projection-service` (or `officer-projection-group`)
-  - Database Tables: `officer_projection`, `officer_status_history`
-
-- **incident-projection** (Port 0 - random)
-  - Consumer Group: `incident-projection-group`
-  - Database Tables: `incident_projection`, `incident_status_history`
-
-- **call-projection** (Port 0 - random)
-  - Consumer Group: `call-projection-group`
-  - Database Tables: `call_projection`, `call_status_history`
-
-- **dispatch-projection** (Port 0 - random)
-  - Consumer Group: `dispatch-projection-group`
-  - Database Tables: `dispatch_projection`, `dispatch_status_history`
-
-- **activity-projection** (Port 0 - random)
-  - Consumer Group: `activity-projection-group`
   - Database Tables: `activity_projection`, `activity_status_history`
 
 - **assignment-projection** (Port 0 - random)
@@ -55,38 +35,26 @@ This guide covers deployment of the consolidated projection services for paralle
 
 #### Consumer Group IDs
 
-**New Consolidated Projections:**
+**Projection Services:**
 - `operational-projection-service`
 - `resource-projection-service`
 - `workforce-projection-service`
 
-**Old Individual Projections:**
-- `officer-projection-group` (or `projection-service`)
-- `incident-projection-group`
-- `call-projection-group`
-- `dispatch-projection-group`
-- `activity-projection-group`
-- `assignment-projection-group`
-
-**Important:** Different consumer group IDs ensure both old and new projections consume the same Kafka topics independently without conflicts.
+**Note:** Each projection service uses a unique consumer group ID to consume Kafka topics independently.
 
 #### Service Ports
 
-**New Consolidated Projections:**
+**Projection Services:**
 - operational-projection: `8081`
 - resource-projection: `8082`
 - workforce-projection: `8083`
 
-**Old Individual Projections:**
-- Use random ports (port 0) or specific ports if configured
-
 #### Database Configuration
 
-**Shared Database, Separate Tables:**
+**Shared Database:**
 - All projections use the same PostgreSQL database (`police`)
 - Tables are separated by name (no schema separation needed)
-- New consolidated projections use the same table names as old projections for the same entities
-- **Note:** During parallel deployment, both old and new projections will write to the same tables. This is safe due to idempotency (event ID tracking), but ensure only one set is actively serving queries.
+- Idempotency (event ID tracking) ensures safe concurrent writes
 
 **Database Connection:**
 ```yaml
@@ -99,12 +67,12 @@ spring:
 
 #### NATS Configuration
 
-**Both old and new projections subscribe to the same NATS subjects:**
+**Projections subscribe to NATS subjects:**
 - `query.incident.>`, `query.call.>`, etc. (operational)
 - `query.officer.>`, `query.vehicle.>`, etc. (resource)
 - `query.shift.>`, `query.officer-shift.>`, etc. (workforce)
 
-**Important:** NATS routes queries to the first responder. During parallel deployment, queries may be handled by either old or new projections (non-deterministic). This is acceptable during migration but should be monitored.
+**Note:** NATS routes queries to the first responder. Multiple instances of the same projection service will share the load.
 
 ## Deployment Steps
 
@@ -115,12 +83,12 @@ spring:
 - PostgreSQL database running and accessible
 - Infrastructure services healthy
 
-### 2. Deploy New Consolidated Projections
+### 2. Deploy Projection Services
 
 #### Build and Package
 
 ```bash
-# Build all consolidated projections
+# Build all projection services
 mvn clean package -pl operational-projection,resource-projection,workforce-projection
 
 # Verify JARs are created
@@ -202,38 +170,38 @@ Verify NATS subscriptions:
 
 ```bash
 # Check NATS connections (via NATS Tower or CLI)
-# Should see subscriptions to query.* subjects from both old and new projections
+# Should see subscriptions to query.* subjects from projection services
 ```
 
-### 4. Monitor Parallel Operation
+### 4. Monitor Operation
 
 #### Metrics to Monitor
 
 1. **Kafka Consumer Lag**
-   - Monitor lag for both old and new consumer groups
-   - Ensure both are processing events
+   - Monitor lag for all consumer groups
+   - Ensure all services are processing events
 
 2. **Database Activity**
    - Monitor table write activity
-   - Verify both projections are writing (idempotent, so safe)
+   - Verify projections are writing correctly
 
 3. **NATS Query Routing**
-   - Monitor which projection handles queries
-   - May be non-deterministic during parallel deployment
+   - Monitor which projection instance handles queries
+   - NATS routes to the first available responder
 
 4. **Service Health**
    - Monitor health endpoints for all projections
    - Set up alerts for service failures
 
 5. **API Response Times**
-   - Compare response times between old and new projections
-   - Monitor for any performance regressions
+   - Monitor response times for all projection services
+   - Set up alerts for performance degradation
 
 ## Rollback Procedure
 
-If issues are detected during parallel deployment:
+If issues are detected during deployment:
 
-1. **Stop New Consolidated Projections**
+1. **Stop Projection Services**
    ```bash
    # Stop operational-projection
    pkill -f operational-projection
@@ -245,7 +213,7 @@ If issues are detected during parallel deployment:
    pkill -f workforce-projection
    ```
 
-2. **Verify Old Projections Still Running**
+2. **Verify Services Stopped**
    - Check health endpoints for old projections
    - Verify they're still consuming from Kafka
    - Verify they're still responding to NATS queries
@@ -334,7 +302,7 @@ server:
 
 **Symptom:** Queries handled by wrong projection
 
-**Solution:** NATS routes to first responder. During parallel deployment, this is non-deterministic. After migration, stop old projections to ensure queries go to new ones.
+**Solution:** NATS routes to first responder. Ensure only the intended projection services are running to avoid non-deterministic routing.
 
 ### Issue: High Consumer Lag
 
@@ -348,16 +316,16 @@ server:
 
 ## Next Steps
 
-After successful parallel deployment:
+After successful deployment:
 
-1. **Data Validation** (Increment 5.2)
-   - Compare data between old and new projections
-   - Validate consistency
+1. **Data Validation**
+   - Validate projection data consistency
+   - Verify all events are processed correctly
 
-2. **Client Migration** (Increment 5.3)
-   - Migrate clients to new projection APIs
-   - Update configurations
+2. **Client Configuration**
+   - Ensure clients are configured to use projection service APIs
+   - Update client configurations as needed
 
-3. **Deprecation** (Increment 5.4)
-   - Deprecate and remove old projections
-   - Clean up code and documentation
+3. **Monitoring Setup**
+   - Set up comprehensive monitoring and alerting
+   - Configure dashboards for projection metrics

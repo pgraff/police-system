@@ -594,7 +594,9 @@ mvn test
 
 # Run tests for a specific module
 mvn -pl edge test
-mvn -pl officer-projection test
+mvn -pl operational-projection test
+mvn -pl resource-projection test
+mvn -pl workforce-projection test
 ```
 
 ### Run Specific Test Classes

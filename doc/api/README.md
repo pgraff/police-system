@@ -247,11 +247,11 @@ Projections are eventually consistent. A resource may not appear in the projecti
 
 ## Projection Query APIs
 
-✅ **Implemented**: 3 consolidated projection services expose query APIs for read-only access to projected data. Each projection service runs as a separate deployable service (future K8s pod).
+✅ **Implemented**: 3 projection services expose query APIs for read-only access to projected data. Each projection service runs as a separate deployable service (future K8s pod).
 
 ### Base URLs
 
-**Consolidated Projections:**
+**Projection Services:**
 - Operational Projection: `http://localhost:8081/api/projections/` (handles: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments)
 - Resource Projection: `http://localhost:8082/api/projections/` (handles: officers, vehicles, units, persons, locations)
 - Workforce Projection: `http://localhost:8083/api/projections/` (handles: shifts, officer shifts, shift changes)

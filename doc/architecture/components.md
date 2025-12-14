@@ -299,31 +299,22 @@ CQRS projections build and maintain read models from events, enabling efficient 
 
 ### Implemented Projections
 
-✅ **6 projection modules fully implemented:**
+✅ **3 projection services fully implemented:**
 
-1. **Officer Projection** (`officer-projection`)
-   - Handles officer registration, updates, status changes
-   - Query endpoints: Get by badge, list with filters, status history
+1. **Operational Projection** (`operational-projection`)
+   - Handles: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments
+   - Query endpoints: Get by ID, list with filters, status history for all operational entities
+   - Deployment: Standalone service (Port 8081, future K8s pod)
 
-2. **Incident Projection** (`incident-projection`)
-   - Handles all incident events (report, dispatch, arrive, clear, update, status change)
-   - Query endpoints: Get by ID, list with filters, status history
+2. **Resource Projection** (`resource-projection`)
+   - Handles: officers, vehicles, units, persons, locations
+   - Query endpoints: Get by ID, list with filters, status history for all resource entities
+   - Deployment: Standalone service (Port 8082, future K8s pod)
 
-3. **Call Projection** (`call-projection`)
-   - Handles all call events (receive, dispatch, arrive, clear, update, status change)
-   - Query endpoints: Get by ID, list with filters, status history
-
-4. **Dispatch Projection** (`dispatch-projection`)
-   - Handles dispatch creation and status changes
-   - Query endpoints: Get by ID, list with filters, status history
-
-5. **Activity Projection** (`activity-projection`)
-   - Handles activity start, update, status change, completion
-   - Query endpoints: Get by ID, list with filters, status history
-
-6. **Assignment Projection** (`assignment-projection`)
-   - Handles assignment creation, status changes, completion, dispatch linking, resource assignment
-   - Query endpoints: Get by ID, list with filters, status history, resource assignments
+3. **Workforce Projection** (`workforce-projection`)
+   - Handles: shifts, officer shifts, shift changes
+   - Query endpoints: Get by ID, list with filters, status history for all workforce entities
+   - Deployment: Standalone service (Port 8083, future K8s pod)
 
 ### Future Projection Types (Optional)
 

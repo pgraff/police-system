@@ -1,13 +1,13 @@
 # CQRS Projection Implementation Pattern
 
-This document describes the established pattern for implementing CQRS projections in the police system. The officer projection (`officer-projection` module) serves as the reference implementation.
+This document describes the established pattern for implementing CQRS projections in the police system. The system uses **3 projection services** organized by use case.
 
 ## Architecture Overview
 
-**Each projection is a separate deployable service** (future K8s pod). This means:
-- `officer-projection/` - standalone service for officer read models
-- `incident-projection/` - standalone service for incident read models (future)
-- `dispatch-projection/` - standalone service for dispatch read models (future)
+**Each projection is a separate deployable service** (future K8s pod). The system currently uses:
+- `operational-projection/` - handles incidents, calls, dispatches, activities, assignments, involved parties, resource assignments
+- `resource-projection/` - handles officers, vehicles, units, persons, locations
+- `workforce-projection/` - handles shifts, officer shifts, shift changes
 - Each service can be scaled, deployed, and monitored independently
 
 ## Overview
@@ -233,9 +233,9 @@ When implementing a new projection:
 
 ## Example: Officer Projection
 
-## Consolidated Projections (Current)
+## Projection Services
 
-The system uses 3 consolidated projection services organized by use case:
+The system uses 3 projection services organized by use case:
 
 ### Operational Projection
 
@@ -267,15 +267,3 @@ The system uses 3 consolidated projection services organized by use case:
 - **Endpoints**: `/api/projections/shifts/*`, `/api/projections/officer-shifts/*`, `/api/projections/shift-changes/*`
 - **Deployment**: Standalone service (Port 8083, future K8s pod)
 
-## Legacy Individual Projections (Removed)
-
-✅ **REMOVED**: The following individual projection modules have been removed and replaced by consolidated projections:
-
-- ✅ **Officer Projection**: `officer-projection/` → Replaced by `resource-projection`
-- ✅ **Incident Projection**: `incident-projection/` → Replaced by `operational-projection`
-- ✅ **Call Projection**: `call-projection/` → Replaced by `operational-projection`
-- ✅ **Dispatch Projection**: `dispatch-projection/` → Replaced by `operational-projection`
-- ✅ **Activity Projection**: `activity-projection/` → Replaced by `operational-projection`
-- ✅ **Assignment Projection**: `assignment-projection/` → Replaced by `operational-projection`
-
-**Migration Complete**: All old individual projection modules have been removed. The system now uses 3 consolidated projections.

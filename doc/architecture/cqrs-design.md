@@ -36,7 +36,7 @@ We keep the edge layer thin and event-first: REST commands in → `*Requested` e
 - ✅ **Storage**: PostgreSQL is used for all read models (durable, relational queries, joins).
 - ✅ **Technology**: Spring Kafka consumers (not Kafka Streams) for simplicity and flexibility.
 - ✅ **Deployment**: Each projection is a separate standalone service (future K8s pod).
-- ✅ **Modules**: 6 projection modules implemented (officer, incident, call, dispatch, activity, assignment).
+- ✅ **Modules**: 3 projection services implemented (operational-projection, resource-projection, workforce-projection).
 - Support replay from Kafka and DLQ for bad events.
 
 ## Selection Rules (when to choose)

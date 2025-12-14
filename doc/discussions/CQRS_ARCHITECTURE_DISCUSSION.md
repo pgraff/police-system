@@ -72,28 +72,35 @@ We need a practical path to add CQRS projections without breaking the current ed
 
 ---
 
-## Implementation Status (Updated)
+## Implementation Status
 
 ✅ **CQRS Projections Fully Implemented**
 
 **What Was Built:**
-- ✅ **6 standalone projection services** implemented (officer, incident, call, dispatch, activity, assignment)
+- ✅ **3 projection services** implemented:
+  - `operational-projection` (handles: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments)
+  - `resource-projection` (handles: officers, vehicles, units, persons, locations)
+  - `workforce-projection` (handles: shifts, officer shifts, shift changes)
 - ✅ **PostgreSQL** used for all read models (durable, relational queries)
 - ✅ **Spring Kafka consumers** (not Kafka Streams) for event consumption
 - ✅ **Query APIs** exposed directly by projection services (Option C pattern, but projections are separate services)
 - ✅ **Idempotent event processing** with event ID tracking
 - ✅ **Status history tracking** for all domains
 - ✅ **Health/readiness endpoints** via Spring Boot Actuator
+- ✅ **NATS query handlers** for synchronous resource existence checks from edge
 
 **Architecture Decision:**
 - Projections are **separate deployable services** (future K8s pods), not integrated into edge
+- Projections are organized by use case (operational, resource, workforce)
 - Each projection service exposes its own REST API for queries
 - Edge layer remains focused on command handling (publishing events)
+- Edge can query projections synchronously via NATS for resource existence checks
 - PostgreSQL chosen over in-memory for durability and relational query capabilities
 
 **Technology Choices:**
 - Spring Kafka consumers (simpler than Kafka Streams for our use case)
 - PostgreSQL for all read models (not MongoDB or in-memory)
 - Manual acknowledgment with idempotency for error handling
+- NATS request-response for synchronous queries from edge to projections
 
 See `/doc/architecture/projection-pattern.md` for the implementation pattern and `/doc/history/01_IMPLEMENT_CQRS_PLAN.md` for the complete implementation plan.
