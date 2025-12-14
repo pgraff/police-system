@@ -337,7 +337,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
             ((InMemoryIncidentExistenceService) incidentExistenceService).addExistingIncident(incidentId);
         }
         
-        Instant dispatchedTime = Instant.now();
+        Instant dispatchedTime = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         DispatchIncidentRequestDto request = new DispatchIncidentRequestDto(dispatchedTime);
 
         // When - call REST API
@@ -364,7 +364,7 @@ class IncidentControllerTest extends BaseIntegrationTest {
         assertThat(event.getTimestamp()).isNotNull();
         assertThat(event.getAggregateId()).isEqualTo(incidentId);
         assertThat(event.getIncidentId()).isEqualTo(incidentId);
-        assertThat(event.getDispatchedTime()).isEqualTo(dispatchedTime.truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
+        assertThat(event.getDispatchedTime()).isEqualTo(dispatchedTime);
         assertThat(event.getEventType()).isEqualTo("DispatchIncidentRequested");
         assertThat(event.getVersion()).isEqualTo(1);
 

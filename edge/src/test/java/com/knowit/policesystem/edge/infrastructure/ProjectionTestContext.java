@@ -258,7 +258,7 @@ public class ProjectionTestContext {
             return true;
         }
 
-        log.info("Starting projection service for domain: {}", domain);
+        log.info("Starting projection service for domain: {} with PostgreSQL URL: {}", domain, postgresJdbcUrl);
 
         try {
             // Create a new thread to run the Spring Boot application
@@ -268,7 +268,15 @@ public class ProjectionTestContext {
             AtomicReference<Class<?>> applicationClassRef = new AtomicReference<>();
 
             Thread appThread = new Thread(() -> {
+                // Set environment variables that application.yml uses (these take precedence)
+                String originalProjectionUrl = System.getProperty("PROJECTION_DATASOURCE_URL");
+                String originalProjectionUser = System.getProperty("PROJECTION_DATASOURCE_USERNAME");
+                String originalProjectionPass = System.getProperty("PROJECTION_DATASOURCE_PASSWORD");
                 try {
+                    System.setProperty("PROJECTION_DATASOURCE_URL", postgresJdbcUrl);
+                    System.setProperty("PROJECTION_DATASOURCE_USERNAME", postgresUsername);
+                    System.setProperty("PROJECTION_DATASOURCE_PASSWORD", postgresPassword);
+                    
                     // Load the application class dynamically
                     Class<?> applicationClass = Class.forName(applicationClassName);
                     applicationClassRef.set(applicationClass);
@@ -285,11 +293,19 @@ public class ProjectionTestContext {
                     properties.put("spring.kafka.consumer.auto-offset-reset", "earliest");
                     properties.put("spring.kafka.consumer.group-id", "projection-test-" + domain + "-" + System.currentTimeMillis());
                     properties.put("spring.kafka.producer.bootstrap-servers", kafkaBootstrapServers);
+                    // Set datasource properties - these should override application.yml
+                    // Use both spring.datasource.* and PROJECTION_DATASOURCE_* to ensure they're picked up
+                    log.debug("Setting datasource URL for projection {}: {}", domain, postgresJdbcUrl);
                     properties.put("spring.datasource.url", postgresJdbcUrl);
                     properties.put("spring.datasource.username", postgresUsername);
                     properties.put("spring.datasource.password", postgresPassword);
                     properties.put("spring.datasource.driver-class-name", "org.postgresql.Driver");
                     properties.put("spring.datasource.driverClassName", "org.postgresql.Driver");
+                    // Also set as environment variable names that application.yml uses (with ${VAR:default} syntax)
+                    // Spring Boot resolves these from system properties/environment variables
+                    System.setProperty("PROJECTION_DATASOURCE_URL", postgresJdbcUrl);
+                    System.setProperty("PROJECTION_DATASOURCE_USERNAME", postgresUsername);
+                    System.setProperty("PROJECTION_DATASOURCE_PASSWORD", postgresPassword);
                     // Disable Spring Boot's auto SQL initialization - we'll do it manually to ensure
                     // we load the correct schema.sql from the specific module's JAR
                     properties.put("spring.sql.init.mode", "never");
@@ -312,13 +328,26 @@ public class ProjectionTestContext {
                     properties.put("projection.test.domain", finalDomain);
                     properties.put("projection.test.application.class", applicationClassName);
                     
+                    // Create a custom ApplicationContextInitializer to set properties with highest precedence
+                    org.springframework.context.ApplicationContextInitializer<org.springframework.context.ConfigurableApplicationContext> initializer = 
+                        (context) -> {
+                            org.springframework.core.env.ConfigurableEnvironment env = context.getEnvironment();
+                            org.springframework.core.env.MutablePropertySources propertySources = env.getPropertySources();
+                            // Add properties with highest precedence (before application.yml)
+                            propertySources.addFirst(new org.springframework.core.env.MapPropertySource("test-properties", properties));
+                        };
+                    
                     // Add configurations: filter config first (runs early), then stubs, then application
                     // The ProjectionFilterConfiguration is a static inner class that reads the domain from properties
                     SpringApplication app = builder
                         .properties(properties)
+                        .initializers(initializer)
                         .web(org.springframework.boot.WebApplicationType.NONE)
                         .sources(ProjectionFilterConfiguration.class, StubKafkaListenerFactories.class, applicationClass)
                         .build();
+                    
+                    // Set default properties with highest precedence
+                    app.setDefaultProperties(properties);
                     
                     ConfigurableApplicationContext context = app.run();
                     contextRef.set(context);
@@ -331,6 +360,23 @@ public class ProjectionTestContext {
                     startupException.set(e);
                     startupLatch.countDown();
                     log.error("Failed to start projection {}", domain, e);
+                } finally {
+                    // Restore original system properties
+                    if (originalProjectionUrl != null) {
+                        System.setProperty("PROJECTION_DATASOURCE_URL", originalProjectionUrl);
+                    } else {
+                        System.clearProperty("PROJECTION_DATASOURCE_URL");
+                    }
+                    if (originalProjectionUser != null) {
+                        System.setProperty("PROJECTION_DATASOURCE_USERNAME", originalProjectionUser);
+                    } else {
+                        System.clearProperty("PROJECTION_DATASOURCE_USERNAME");
+                    }
+                    if (originalProjectionPass != null) {
+                        System.setProperty("PROJECTION_DATASOURCE_PASSWORD", originalProjectionPass);
+                    } else {
+                        System.clearProperty("PROJECTION_DATASOURCE_PASSWORD");
+                    }
                 }
             }, "projection-" + domain);
 
