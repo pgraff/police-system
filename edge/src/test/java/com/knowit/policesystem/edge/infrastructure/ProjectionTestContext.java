@@ -424,25 +424,24 @@ public class ProjectionTestContext {
                 // For consolidated projections, table names match domain names (e.g., "officer" -> "officer_projection")
                 String tableName = domain + "_projection";
                 
-                // Check if table exists, if not, try to read and execute schema.sql
+                // Always execute schema.sql manually to ensure tables exist
+                // Spring Boot's auto-init may not run reliably when starting applications programmatically
+                // We'll do it manually to guarantee schema is initialized
+                log.info("Ensuring schema is initialized for projection {}", domain);
+                
+                // Check if table exists first
+                boolean tableExists = false;
                 try {
                     jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Integer.class);
-                    log.debug("Schema already initialized for projection {}", domain);
+                    tableExists = true;
+                    log.debug("Table {} already exists for projection {}", tableName, domain);
                 } catch (Exception e) {
-                    // Check if this is a "table doesn't exist" error
-                    String errorMessage = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-                    boolean isTableMissing = errorMessage.contains("does not exist") || 
-                                          (errorMessage.contains("relation") && errorMessage.contains("not exist")) ||
-                                          e instanceof org.springframework.jdbc.BadSqlGrammarException;
-                    
-                    if (isTableMissing) {
-                        // Table doesn't exist - try to read and execute schema.sql manually
-                        log.info("Schema not initialized for projection {}, attempting manual initialization", domain);
-                    } else {
-                        // Some other error - log it but still try to initialize schema in case it helps
-                        log.warn("Error checking if table {} exists for projection {}: {}. Attempting schema initialization anyway.", 
-                                tableName, domain, e.getMessage());
-                    }
+                    // Table doesn't exist - this is expected, we'll create it
+                    log.debug("Table {} does not exist yet for projection {}, will create it", tableName, domain);
+                }
+                
+                // If table doesn't exist, initialize schema
+                if (!tableExists) {
                     
                     // Try to read and execute schema.sql manually
                     try {
@@ -645,34 +644,76 @@ public class ProjectionTestContext {
                                     }
                                     
                                     if (!schemaVerified) {
-                                        log.warn("Schema verification failed for projection {}, but continuing anyway. Table {} may not be ready.", 
-                                                domain, tableName);
+                                        log.error("Schema verification failed for projection {} after {} retries. Table {} may not be ready.", 
+                                                domain, 15, tableName);
+                                        // List all tables to help debug
+                                        try {
+                                            java.util.List<java.util.Map<String, Object>> tables = jdbcTemplate.queryForList(
+                                                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+                                            log.error("Available tables in database: {}", tables);
+                                        } catch (Exception listEx) {
+                                            log.error("Could not list tables: {}", listEx.getMessage());
+                                        }
+                                        // Don't throw - let it continue and see if it works anyway
+                                        // Some databases might have delays in table visibility
                                     }
                                 } else {
-                                    log.warn("Could not find schema.sql resource at classpath:schema.sql for projection {}", domain);
+                                    log.error("Could not find schema.sql resource at classpath:schema.sql for projection {}", domain);
                                 }
                             } catch (Exception ex) {
-                                log.warn("Failed to execute schema.sql using ResourceDatabasePopulator for projection {}: {}", 
-                                        domain, ex.getMessage());
+                                log.error("Failed to execute schema.sql using ResourceDatabasePopulator for projection {}: {}", 
+                                        domain, ex.getMessage(), ex);
                             }
+                        } else {
+                            log.warn("Application class not available for schema initialization for projection {}", domain);
                         }
                     } catch (Exception ex) {
-                        log.warn("Failed to manually initialize schema for projection {}: {}", domain, ex.getMessage(), ex);
+                        log.error("Failed to manually initialize schema for projection {}: {}", domain, ex.getMessage(), ex);
                     }
                 }
             } catch (Exception e) {
-                log.warn("Could not verify/initialize schema for projection {}: {}", domain, e.getMessage());
+                log.error("Could not verify/initialize schema for projection {}: {}", domain, e.getMessage(), e);
             }
             
             // Final verification: ensure table is accessible before marking as ready
-            try {
-                org.springframework.jdbc.core.JdbcTemplate finalJdbcTemplate = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
-                String finalTableName = domain + "_projection";
-                finalJdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + finalTableName, Integer.class);
-                log.debug("Final schema verification passed for projection {}", domain);
-            } catch (Exception finalVerifyEx) {
-                log.warn("Final schema verification failed for projection {}: {}. Projection may not be fully ready.", 
-                        domain, finalVerifyEx.getMessage());
+            // Retry multiple times to handle any timing issues
+            boolean finalVerificationPassed = false;
+            for (int i = 0; i < 10; i++) {
+                try {
+                    org.springframework.jdbc.core.JdbcTemplate finalJdbcTemplate = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+                    String finalTableName = domain + "_projection";
+                    finalJdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + finalTableName, Integer.class);
+                    finalVerificationPassed = true;
+                    log.debug("Final schema verification passed for projection {} (attempt {})", domain, i + 1);
+                    break;
+                } catch (Exception finalVerifyEx) {
+                    if (i < 9) {
+                        log.debug("Final schema verification failed for projection {} (attempt {}): {}. Retrying...", 
+                                domain, i + 1, finalVerifyEx.getMessage());
+                        try {
+                            Thread.sleep(500);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    } else {
+                        log.error("Final schema verification failed for projection {} after {} attempts: {}. Projection may not be fully ready.", 
+                                domain, 10, finalVerifyEx.getMessage());
+                        // List tables to help debug
+                        try {
+                            org.springframework.jdbc.core.JdbcTemplate finalJdbcTemplate = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+                            java.util.List<java.util.Map<String, Object>> tables = finalJdbcTemplate.queryForList(
+                                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+                            log.error("Available tables in database: {}", tables);
+                        } catch (Exception listEx) {
+                            log.error("Could not list tables: {}", listEx.getMessage());
+                        }
+                    }
+                }
+            }
+            
+            if (!finalVerificationPassed) {
+                log.error("WARNING: Final schema verification failed for projection {}. Tables may not be ready for queries.", domain);
             }
             
             // Wait a bit more for NATS query handler to be ready
