@@ -51,6 +51,9 @@ class OfficerExistenceQueryE2ETest extends NatsQueryE2ETestBase {
     @Autowired
     private TopicConfiguration topicConfiguration;
 
+    @Autowired
+    private com.knowit.policesystem.edge.services.projections.ProjectionQueryService projectionQueryService;
+
     private ProjectionTestContext projectionContext;
     private Producer<String, String> kafkaProducer;
     private ObjectMapper eventObjectMapper;
@@ -215,28 +218,17 @@ class OfficerExistenceQueryE2ETest extends NatsQueryE2ETestBase {
                 .pollInterval(Duration.ofMillis(1000))
                 .until(() -> {
                     try {
-                        // First check if table exists
-                        try {
-                            jdbcTemplate.queryForObject("SELECT COUNT(*) FROM officer_projection", Integer.class);
-                        } catch (Exception e) {
-                            log.warn("Table officer_projection does not exist yet: {}", e.getMessage());
-                            return false;
-                        }
-                        
-                        Integer count = jdbcTemplate.queryForObject(
-                                "SELECT COUNT(*) FROM officer_projection WHERE badge_number = ?",
-                                Integer.class,
-                                key);
-                        boolean found = count != null && count > 0;
-                        if (!found) {
-                            // Log progress for debugging
-                            log.debug("Waiting for officer {} to appear in projection database (current count: {})...", key, count);
+                        // Use the projection query service to check existence
+                        // This tests the actual query path (Edge → NATS → Projection → NATS → Edge)
+                        boolean exists = projectionQueryService.exists("officer", key);
+                        if (exists) {
+                            log.info("Officer {} found via projection query service!", key);
                         } else {
-                            log.info("Officer {} found in projection database!", key);
+                            log.debug("Waiting for officer {} to appear in projection (checked via query service)...", key);
                         }
-                        return found;
+                        return exists;
                     } catch (Exception e) {
-                        log.warn("Error checking database for officer {}: {}", key, e.getMessage());
+                        log.warn("Error checking projection for officer {}: {}", key, e.getMessage());
                         return false;
                     }
                 });

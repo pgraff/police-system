@@ -48,6 +48,9 @@ class NatsQueryIntegrationTest extends NatsQueryE2ETestBase {
     @Autowired
     private TopicConfiguration topicConfiguration;
 
+    @Autowired
+    private com.knowit.policesystem.edge.services.projections.ProjectionQueryService projectionQueryService;
+
     private ProjectionTestContext projectionContext;
     private Producer<String, String> kafkaProducer;
     private ObjectMapper eventObjectMapper;

@@ -52,6 +52,9 @@ class ConcurrentQueryE2ETest extends NatsQueryE2ETestBase {
     @Autowired
     private TopicConfiguration topicConfiguration;
 
+    @Autowired
+    private com.knowit.policesystem.edge.services.projections.ProjectionQueryService projectionQueryService;
+
     private ProjectionTestContext projectionContext;
     private Producer<String, String> kafkaProducer;
     private ObjectMapper eventObjectMapper;
@@ -268,12 +271,19 @@ class ConcurrentQueryE2ETest extends NatsQueryE2ETestBase {
         kafkaProducer.send(new ProducerRecord<>(topicConfiguration.OFFICER_EVENTS, key, payload))
                 .get(10, TimeUnit.SECONDS);
 
+        // Wait for projection to process the event by checking via projection query service
         Awaitility.await()
-                .atMost(Duration.ofSeconds(10))
+                .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(500))
-                .until(() -> true);
-        
-        Thread.sleep(2000);
+                .until(() -> {
+                    try {
+                        // Use projection query service to check if officer exists
+                        boolean exists = projectionQueryService.exists("officer", key);
+                        return exists;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                });
     }
 }
 

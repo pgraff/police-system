@@ -372,8 +372,10 @@ public class ProjectionTestContext {
             
             // Manually initialize schema if Spring Boot's auto-init didn't work
             // This ensures tables exist before queries are executed
+            // For consolidated projections, we need to check the correct table name based on domain
             try {
                 org.springframework.jdbc.core.JdbcTemplate jdbcTemplate = context.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+                // For consolidated projections, table names match domain names (e.g., "officer" -> "officer_projection")
                 String tableName = domain + "_projection";
                 
                 // Check if table exists, if not, try to read and execute schema.sql
