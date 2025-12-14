@@ -705,6 +705,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /calls/{callId}/status:
     patch:
       tags:
         - Calls

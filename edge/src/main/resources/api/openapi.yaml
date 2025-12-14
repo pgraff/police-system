@@ -19,9 +19,9 @@ info:
     name: Proprietary
 
 servers:
-  - url: http://localhost:8080/api
+  - url: http://localhost:8080/api/v1
     description: Local development server
-  - url: https://api.policesystem.example.com/api
+  - url: https://api.policesystem.example.com/api/v1
     description: Production server
 
 tags:
@@ -705,6 +705,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /calls/{callId}/status:
     patch:
       tags:
         - Calls
@@ -721,7 +722,7 @@ paths:
               $ref: '#/components/schemas/ChangeStatusRequest'
       responses:
         '200':
-          description: Call status change request processed
+          description: Call status updated
           content:
             application/json:
               schema:
@@ -748,7 +749,7 @@ paths:
               $ref: '#/components/schemas/DispatchRequest'
       responses:
         '200':
-          description: Call dispatch request processed
+          description: Call dispatch recorded
           content:
             application/json:
               schema:
@@ -773,7 +774,7 @@ paths:
               $ref: '#/components/schemas/ArriveRequest'
       responses:
         '200':
-          description: Arrival request processed
+          description: Call arrival recorded
           content:
             application/json:
               schema:
@@ -798,7 +799,7 @@ paths:
               $ref: '#/components/schemas/ClearRequest'
       responses:
         '200':
-          description: Clear call request processed
+          description: Call cleared
           content:
             application/json:
               schema:

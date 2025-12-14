@@ -1,0 +1,371 @@
+# Docker Compose for Integration Testing and Demo
+# This file includes all infrastructure services plus the application services
+# Use this for running the demo scenario script
+
+services:
+  # ============================================================================
+  # Infrastructure Services (from docker-compose.yml)
+  # ============================================================================
+  
+  # Kafka Brokers
+  kafka-broker-1:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-broker-1
+    hostname: kafka-broker-1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://kafka-broker-1:9093,PLAINTEXT://kafka-broker-1:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-1:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-broker-1:9093,2@kafka-broker-2:9093,3@kafka-broker-3:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+    volumes:
+      - kafka-broker-1-data:/var/lib/kafka/data
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  kafka-broker-2:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-broker-2
+    hostname: kafka-broker-2
+    depends_on:
+      - kafka-broker-1
+    environment:
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://kafka-broker-2:9093,PLAINTEXT://kafka-broker-2:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-2:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-broker-1:9093,2@kafka-broker-2:9093,3@kafka-broker-3:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+    volumes:
+      - kafka-broker-2-data:/var/lib/kafka/data
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  kafka-broker-3:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-broker-3
+    hostname: kafka-broker-3
+    depends_on:
+      - kafka-broker-1
+      - kafka-broker-2
+    environment:
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: CONTROLLER://kafka-broker-3:9093,PLAINTEXT://kafka-broker-3:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-3:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-broker-1:9093,2@kafka-broker-2:9093,3@kafka-broker-3:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+    volumes:
+      - kafka-broker-3-data:/var/lib/kafka/data
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    hostname: postgres
+    environment:
+      POSTGRES_USER: policesystem
+      POSTGRES_PASSWORD: policesystem
+      POSTGRES_DB: policesystem
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U policesystem"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NATS Servers
+  nats-1:
+    image: nats:2.10-alpine
+    container_name: nats-1
+    hostname: nats-1
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "-sd"
+      - "/data"
+      - "-server_name"
+      - "nats-1"
+      - "-cluster_name"
+      - "policesystem-nats-cluster"
+      - "-cluster"
+      - "nats://0.0.0.0:6222"
+      - "-routes"
+      - "nats://nats-2:6222,nats://nats-3:6222"
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats-1-data:/data
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz", "||", "exit", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  nats-2:
+    image: nats:2.10-alpine
+    container_name: nats-2
+    hostname: nats-2
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "-sd"
+      - "/data"
+      - "-server_name"
+      - "nats-2"
+      - "-cluster_name"
+      - "policesystem-nats-cluster"
+      - "-cluster"
+      - "nats://0.0.0.0:6222"
+      - "-routes"
+      - "nats://nats-1:6222,nats://nats-3:6222"
+    ports:
+      - "4223:4222"
+      - "8223:8222"
+    volumes:
+      - nats-2-data:/data
+    networks:
+      - policesystem-network
+    depends_on:
+      - nats-1
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz", "||", "exit", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  nats-3:
+    image: nats:2.10-alpine
+    container_name: nats-3
+    hostname: nats-3
+    command:
+      - "-js"
+      - "-m"
+      - "8222"
+      - "-sd"
+      - "/data"
+      - "-server_name"
+      - "nats-3"
+      - "-cluster_name"
+      - "policesystem-nats-cluster"
+      - "-cluster"
+      - "nats://0.0.0.0:6222"
+      - "-routes"
+      - "nats://nats-1:6222,nats://nats-2:6222"
+    ports:
+      - "4224:4222"
+      - "8224:8222"
+    volumes:
+      - nats-3-data:/data
+    networks:
+      - policesystem-network
+    depends_on:
+      - nats-1
+      - nats-2
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz", "||", "exit", "1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============================================================================
+  # Application Services
+  # ============================================================================
+
+  # Edge Service
+  edge-service:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
+    container_name: edge-service
+    hostname: edge-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-broker-1:
+        condition: service_started
+      nats-1:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092
+      NATS_URL: nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
+      NATS_ENABLED: "true"
+      NATS_QUERY_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  # Operational Projection
+  operational-projection:
+    build:
+      context: .
+      dockerfile: operational-projection/Dockerfile
+    container_name: operational-projection
+    hostname: operational-projection
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-broker-1:
+        condition: service_started
+      nats-1:
+        condition: service_started
+    environment:
+      PROJECTION_DATASOURCE_URL: jdbc:postgresql://postgres:5432/policesystem
+      PROJECTION_DATASOURCE_USERNAME: policesystem
+      PROJECTION_DATASOURCE_PASSWORD: policesystem
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092
+      PROJECTION_KAFKA_GROUP_ID: operational-projection-service
+      NATS_URL: nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
+      NATS_ENABLED: "true"
+      NATS_QUERY_ENABLED: "true"
+    ports:
+      - "8081:8081"
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  # Resource Projection
+  resource-projection:
+    build:
+      context: .
+      dockerfile: resource-projection/Dockerfile
+    container_name: resource-projection
+    hostname: resource-projection
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-broker-1:
+        condition: service_started
+      nats-1:
+        condition: service_started
+    environment:
+      PROJECTION_DATASOURCE_URL: jdbc:postgresql://postgres:5432/policesystem
+      PROJECTION_DATASOURCE_USERNAME: policesystem
+      PROJECTION_DATASOURCE_PASSWORD: policesystem
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092
+      PROJECTION_KAFKA_GROUP_ID: resource-projection-service
+      NATS_URL: nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
+      NATS_ENABLED: "true"
+      NATS_QUERY_ENABLED: "true"
+    ports:
+      - "8082:8082"
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  # Workforce Projection
+  workforce-projection:
+    build:
+      context: .
+      dockerfile: workforce-projection/Dockerfile
+    container_name: workforce-projection
+    hostname: workforce-projection
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-broker-1:
+        condition: service_started
+      nats-1:
+        condition: service_started
+    environment:
+      PROJECTION_DATASOURCE_URL: jdbc:postgresql://postgres:5432/policesystem
+      PROJECTION_DATASOURCE_USERNAME: policesystem
+      PROJECTION_DATASOURCE_PASSWORD: policesystem
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092
+      PROJECTION_KAFKA_GROUP_ID: workforce-projection-service
+      NATS_URL: nats://nats-1:4222,nats://nats-2:4222,nats://nats-3:4222
+      NATS_ENABLED: "true"
+      NATS_QUERY_ENABLED: "true"
+    ports:
+      - "8083:8083"
+    networks:
+      - policesystem-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+volumes:
+  kafka-broker-1-data:
+  kafka-broker-2-data:
+  kafka-broker-3-data:
+  postgres-data:
+  nats-1-data:
+  nats-2-data:
+  nats-3-data:
+
+networks:
+  policesystem-network:
+    driver: bridge

@@ -80,6 +80,58 @@ The Police Incident Management System is designed to handle the complete lifecyc
    ./scripts/check-connectors.sh
    ```
 
+### Running the Demo Scenario
+
+The project includes a comprehensive demo script that exercises the entire system through a realistic police incident management scenario. This is the easiest way to see the system in action:
+
+```bash
+# Run the complete demo scenario
+./scripts/demo-scenario.sh
+```
+
+**What the demo does:**
+1. **Automatically starts all services** using Docker Compose (edge service + 3 projection services + infrastructure)
+2. **Creates initial resources**: Officers, vehicles, units, locations, and persons
+3. **Runs a complete incident workflow**:
+   - Starts a shift and checks in officers
+   - Receives a call and reports an incident
+   - Dispatches units and creates assignments
+   - Creates activities and involves parties
+   - Completes activities and clears the incident
+4. **Queries projections** to verify data was processed correctly
+5. **Documents all created resources** for reference
+
+**Output and Logging:**
+- All output is automatically logged to: `/tmp/police-demo-YYYYMMDD-HHMMSS.log`
+- Created resource IDs are stored in: `/tmp/police-demo-data.json`
+- The log file location is displayed at the start and end of the script
+- If the script fails, check the log file for detailed error messages
+
+**Environment Variables:**
+- `START_SERVICES=true` (default) - Automatically start Docker services
+- `STOP_SERVICES=false` (default) - Keep services running after demo
+- `EDGE_BASE_URL` - Override edge service URL (default: http://localhost:8080/api/v1)
+- `DOCKER_COMPOSE_FILE` - Override compose file (default: docker-compose-integration.yml)
+
+**Examples:**
+```bash
+# Run demo without starting services (assumes services already running)
+START_SERVICES=false ./scripts/demo-scenario.sh
+
+# Run demo and stop services when done
+STOP_SERVICES=true ./scripts/demo-scenario.sh
+
+# Use custom URLs
+EDGE_BASE_URL=http://localhost:8080/api/v1 ./scripts/demo-scenario.sh
+```
+
+**Prerequisites:**
+- Docker and Docker Compose installed
+- `curl` installed (required)
+- `jq` installed (optional, for better JSON formatting)
+
+The demo script uses `docker-compose-integration.yml` which includes all infrastructure services (Kafka, NATS, PostgreSQL) plus the application services (edge + 3 projections) in a single compose file for easy testing.
+
 ## Documentation
 
 ### 📚 [API Documentation](doc/api/README.md)
@@ -175,11 +227,25 @@ All events follow the "Requested" naming pattern:
 policesystem/
 ├── common/              # Shared code (events, base classes)
 ├── edge/                # Edge server (REST API, command handlers)
+│   └── Dockerfile       # Docker image for edge service
+├── operational-projection/  # Operational projection service
+│   └── Dockerfile       # Docker image for operational projection
+├── resource-projection/     # Resource projection service
+│   └── Dockerfile       # Docker image for resource projection
+├── workforce-projection/    # Workforce projection service
+│   └── Dockerfile       # Docker image for workforce projection
+├── scripts/             # Utility scripts
+│   ├── demo-scenario.sh # Complete demo scenario script
+│   ├── deploy-connectors.sh
+│   ├── check-connectors.sh
+│   └── ...              # Other utility scripts
 ├── doc/                 # Documentation
 │   ├── api/            # API documentation
 │   ├── architecture/   # Architecture documentation
 │   ├── domainmodel/   # Domain model documentation
 │   └── events/        # Event specifications
+├── docker-compose.yml  # Infrastructure services (Kafka, NATS, PostgreSQL, etc.)
+├── docker-compose-integration.yml  # Full stack for integration testing/demo
 ├── AGENTS.md           # Development process guidelines
 ├── DEVELOPMENT_PLAN.md # Development plan and tracking
 └── README.md           # This file
@@ -278,6 +344,40 @@ mvn -pl edge test
 # Run a specific test class
 mvn -pl edge -Dtest=OfficerControllerTest test
 ```
+
+### Docker Integration
+
+The project includes Docker support for all services:
+
+**Build Docker images:**
+```bash
+# Build all services
+docker compose -f docker-compose-integration.yml build
+
+# Build specific service
+docker compose -f docker-compose-integration.yml build edge-service
+```
+
+**Run services with Docker:**
+```bash
+# Start all services (infrastructure + applications)
+docker compose -f docker-compose-integration.yml up -d
+
+# View logs
+docker compose -f docker-compose-integration.yml logs -f edge-service
+
+# Stop all services
+docker compose -f docker-compose-integration.yml down
+```
+
+**Service Ports:**
+- Edge Service: `8080`
+- Operational Projection: `8081`
+- Resource Projection: `8082`
+- Workforce Projection: `8083`
+- PostgreSQL: `5432`
+- Kafka: `9092-9094`
+- NATS: `4222-4224`
 
 ### Code Style
 
