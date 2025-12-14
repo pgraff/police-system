@@ -4,86 +4,115 @@
 
 This document assesses the completeness of the NATS request-response implementation for projection queries, including test coverage, OpenAPI specification, and documentation.
 
+**Last Updated**: Current assessment reflecting consolidated projection architecture (3 projections, not 6)
+
+## Architecture Context
+
+The system uses **3 consolidated projections** (not 6 individual projections):
+
+1. **operational-projection** - Handles: incidents, calls, dispatches, activities, assignments, involved parties, resource assignments
+2. **resource-projection** - Handles: officers, vehicles, units, persons, locations
+3. **workforce-projection** - Handles: shifts, officer shifts, shift changes
+
+The old 6 individual projection modules (officer-projection, call-projection, incident-projection, dispatch-projection, activity-projection, assignment-projection) have been **removed** and consolidated into the above 3 projections.
+
 ## Test Coverage Assessment
 
-### ❌ Missing Tests
+### ✅ Completed Tests
 
-#### 1. Unit Tests for NATS Query Infrastructure
+#### 1. Unit Tests for NATS Query Infrastructure ✅
 **Location**: `common/src/test/java/com/knowit/policesystem/common/nats/`
 
-**Missing**:
-- `NatsQueryClientTest.java` - Test query client functionality
+**Completed**:
+- ✅ `NatsQueryClientTest.java` - Comprehensive test coverage (10 test cases)
   - Test successful query requests
   - Test timeout handling
   - Test connection failures
   - Test disabled state
   - Test async query methods
+  - Test connection cleanup
+  - Test multi-server cluster support
 
-- `QueryRequestTest.java` / `QueryResponseTest.java` - Test DTOs
-  - Test serialization/deserialization
-  - Test query ID generation
+- ✅ QueryRequest/QueryResponse DTO Tests (6 test files)
+  - `QueryRequestTest.java` - Base request class tests
+  - `ExistsQueryRequestTest.java` - Exists query request tests
+  - `GetQueryRequestTest.java` - Get query request tests
+  - `QueryResponseTest.java` - Base response class tests
+  - `ExistsQueryResponseTest.java` - Exists query response tests
+  - `GetQueryResponseTest.java` - Get query response tests
 
-#### 2. Unit Tests for Projection Query Handlers
-**Location**: `{projection}/src/test/java/com/knowit/policesystem/projection/nats/`
+#### 2. Unit Tests for Projection Query Handlers ✅ (Partial)
 
-**Missing** (for all 6 projections):
-- `OfficerNatsQueryHandlerTest.java`
-- `CallNatsQueryHandlerTest.java`
-- `IncidentNatsQueryHandlerTest.java`
-- `DispatchNatsQueryHandlerTest.java`
-- `ActivityNatsQueryHandlerTest.java`
-- `AssignmentNatsQueryHandlerTest.java`
+**Completed**:
+- ✅ `OperationalNatsQueryHandlerTest.java` (`operational-projection/src/test/java/com/knowit/policesystem/projection/nats/`)
+  - Tests exists query handling for all operational entities (incidents, calls, dispatches, activities, assignments, involved parties, resource assignments)
+  - Tests get query handling
+  - Tests error handling
+  - Tests subject subscription
 
-**Test Cases Needed**:
-- Test exists query handling
-- Test error handling
-- Test disabled state
-- Test subject subscription
-
-#### 3. Unit Tests for Edge Services
-**Location**: `edge/src/test/java/com/knowit/policesystem/edge/services/`
+- ✅ `ResourceNatsQueryHandlerTest.java` (`resource-projection/src/test/java/com/knowit/policesystem/projection/nats/`)
+  - Tests exists query handling for all resource entities (officers, vehicles, units, persons, locations)
+  - Tests get query handling
+  - Tests error handling
+  - Tests subject subscription
 
 **Missing**:
-- `ProjectionQueryServiceTest.java` - Test projection query service
+- ❌ `WorkforceNatsQueryHandlerTest.java` (`workforce-projection/src/test/java/com/knowit/policesystem/projection/nats/`)
+  - Test exists query handling for workforce entities (shifts, officer shifts, shift changes)
+  - Test get query handling
+  - Test error handling
+  - Test subject subscription
+  - Test disabled state
+
+#### 3. Unit Tests for Edge Services ✅
+**Location**: `edge/src/test/java/com/knowit/policesystem/edge/services/`
+
+**Completed**:
+- ✅ `ProjectionQueryServiceTest.java` - Comprehensive test coverage (9 test cases)
   - Test successful existence checks
+  - Test get queries
   - Test timeout handling
   - Test error handling
+  - Test subject pattern construction
+  - Test null query client handling
 
-- `OfficerExistenceServiceTest.java` - Test officer existence service
-- `OfficerConflictServiceTest.java` - Test conflict detection
-- Similar tests for other domain services
+- ✅ Existence Service Tests (7 test files, 27 test cases total)
+  - `OfficerExistenceServiceTest.java` - 4 test cases
+  - `OfficerConflictServiceTest.java` - 3 test cases
+  - `CallExistenceServiceTest.java` - 4 test cases
+  - `IncidentExistenceServiceTest.java` - 4 test cases
+  - `ActivityExistenceServiceTest.java` - 4 test cases
+  - `AssignmentExistenceServiceTest.java` - 4 test cases
+  - `DispatchExistenceServiceTest.java` - 4 test cases
 
-#### 4. Integration Tests for 404/409 Responses
+All tests verify:
+- Successful existence checks
+- Non-existent resource handling
+- Error handling (defaults to safe values)
+- Error logging
+
+#### 4. Integration Tests for 404/409 Responses ✅
 **Location**: `edge/src/test/java/com/knowit/policesystem/edge/controllers/`
 
-**Missing Test Cases**:
-- `OfficerControllerTest.java`:
+**Completed**:
+- ✅ `OfficerControllerTest.java` has comprehensive 404/409 tests:
   - `testUpdateOfficer_WithNonExistentBadgeNumber_Returns404()`
   - `testChangeOfficerStatus_WithNonExistentBadgeNumber_Returns404()`
   - `testRegisterOfficer_WithDuplicateBadgeNumber_Returns409()`
 
-- `IncidentControllerTest.java`:
-  - `testUpdateIncident_WithNonExistentIncidentId_Returns404()`
-  - `testDispatchIncident_WithNonExistentIncidentId_Returns404()`
+- ✅ `CallControllerTest.java` has 404 tests for various operations
+- ✅ Other controller tests follow similar patterns
+- ✅ All tests use in-memory services for isolation and work correctly
 
-- `ActivityControllerTest.java`:
-  - `testUpdateActivity_WithNonExistentActivityId_Returns404()`
-
-- `AssignmentControllerTest.java`:
-  - `testChangeAssignmentStatus_WithNonExistentAssignmentId_Returns404()`
-
-- `CallControllerTest.java`:
-  - Already has some 404 tests, but should verify they work with new NATS queries
-
-#### 5. Integration Tests for NATS Request-Response
+#### 5. Integration Tests for NATS Request-Response ✅
 **Location**: `edge/src/test/java/com/knowit/policesystem/edge/integration/`
 
-**Missing**:
-- `NatsQueryIntegrationTest.java` - End-to-end test
-  - Test edge → NATS → projection → NATS → edge flow
-  - Test with real projection service running
-  - Test timeout scenarios
-  - Test projection unavailable scenarios
+**Completed**:
+- ✅ `NatsQueryIntegrationTest.java` - Comprehensive E2E test coverage (4 test cases)
+  - `testExistsQuery_EdgeToProjection_ReturnsResponse()` - Full flow test
+  - `testGetQuery_EdgeToProjection_ReturnsData()` - Get query flow
+  - `testQuery_MultipleDomains_Works()` - Multi-domain verification
+  - `testExistsQuery_ProjectionUnavailable_HandlesGracefully()` - Error handling
 
 ### ✅ Existing Test Infrastructure
 
@@ -101,6 +130,7 @@ This document assesses the completeness of the NATS request-response implementat
 - `PUT /officers/{badgeNumber}` - Has 404 Not Found response documented
 - `PATCH /officers/{badgeNumber}/status` - Has 404 Not Found response documented
 - Most update endpoints have 404 responses documented
+- 29 instances of 404 responses documented in OpenAPI spec
 
 **Components**:
 - `components/responses/NotFound` - Defined and referenced
@@ -129,133 +159,113 @@ Run a systematic check to ensure all endpoints that use existence services have 
 
 ## Documentation Assessment
 
-### ❌ Missing Documentation
+### ✅ Completed Documentation
 
-#### 1. Architecture Documentation
-**Files to Update**:
+#### 1. Architecture Documentation ✅
 
-- `doc/architecture/data-flow.md`:
-  - **Missing**: Description of synchronous query flow via NATS
-  - **Should Add**: Section explaining how edge queries projections synchronously for existence checks
-  - **Should Add**: Diagram showing query flow (edge → NATS → projection → NATS → edge)
+**Updated Files**:
+- ✅ `doc/architecture/data-flow.md`:
+  - ✅ Added detailed synchronous query flow diagram
+  - ✅ Expanded "Synchronous Projection Queries via NATS" section with:
+    - Step-by-step flow description
+    - Query subject patterns documentation
+    - Timeout and error handling details
+    - Eventual consistency implications
+    - Example flow (Update Officer)
 
-- `doc/architecture/cqrs-design.md`:
-  - **Missing**: Mention of synchronous projection queries
-  - **Should Add**: Note about query capabilities alongside command flow
+- ✅ `doc/architecture/components.md`:
+  - ✅ Added comprehensive "NATS Query Infrastructure Components" section:
+    - `NatsQueryClient` component description
+    - `ProjectionQueryService` component description
+    - Existence services documentation (all 7 services)
+    - Projection query handlers documentation
+    - Component relationships and responsibilities
 
-- `doc/architecture/components.md`:
-  - **Missing**: Description of NATS query handlers in projections
-  - **Missing**: Description of ProjectionQueryService in edge
-  - **Should Add**: Components for query infrastructure
+- ✅ `doc/architecture/cqrs-design.md`:
+  - ✅ Mentions synchronous projection queries
+  - ✅ Notes about query capabilities alongside command flow
 
-#### 2. API Documentation
+#### 2. API Documentation ✅
+
 **File**: `doc/api/README.md`
 
-**Current Status**: ✅ Mentions 404 and 409 status codes
+**Current Status**: ✅ Comprehensive coverage
 
-**Missing**:
-- Explanation of when 404 is returned (resource doesn't exist in projection)
-- Explanation of when 409 is returned (duplicate resource)
-- Note about eventual consistency implications
-- Example of 404 error response
-- Example of 409 error response
-
-**Should Add Section**:
-```markdown
-## Resource Existence and Conflict Detection
-
-The API now supports synchronous resource existence checks via NATS request-response queries to projections. This enables:
-
-- **404 Not Found**: Returned when attempting to update or modify a resource that doesn't exist in the projection
-- **409 Conflict**: Returned when attempting to create a resource that already exists (e.g., duplicate badge number)
-
-### Eventual Consistency Note
-
-Projections are eventually consistent. A resource may not appear in the projection immediately after creation. The edge queries projections synchronously, so:
-- Recently created resources may return 404 if queried too quickly
-- This is expected behavior in an eventually consistent system
-- Clients should handle 404 responses appropriately
-```
+**Completed**:
+- ✅ "Resource Existence and Conflict Detection" section added
+- ✅ Explanation of when 404 is returned (resource doesn't exist in projection)
+- ✅ Explanation of when 409 is returned (duplicate resource)
+- ✅ Note about eventual consistency implications
+- ✅ Examples of 404/409 error responses
 
 #### 3. Projection Documentation
+
 **Files**: `{projection}/README.md` (if they exist)
 
-**Missing**:
+**Status**: ⚠️ May need updates
 - Documentation of NATS query handler capabilities
 - Query subject patterns
 - Configuration for query handlers
-
-### ✅ Existing Documentation
-
-- API README mentions status codes
-- Architecture docs describe event-driven flow
-- OpenAPI spec has response definitions
 
 ## Recommendations
 
 ### Priority 1: Critical (Do Before Production)
 
-1. **Add Integration Tests for 404/409 Responses**
-   - Test that validators properly throw exceptions
-   - Test that exceptions are converted to correct HTTP status codes
-   - Test with real projection services
+1. **Add Unit Test for Workforce Query Handler** ⚠️
+   - Create `WorkforceNatsQueryHandlerTest.java`
+   - Test exists query handling for shifts, officer shifts, shift changes
+   - Test get query handling
+   - Test error handling
+   - Test subject subscription
+   - Test disabled state
 
-2. **Verify OpenAPI Spec Completeness**
+2. **Verify OpenAPI Spec Completeness** ⚠️
    - Audit all endpoints for 404/409 documentation
    - Add missing response definitions
    - Improve response descriptions
 
-3. **Update Architecture Documentation**
-   - Document synchronous query flow in `data-flow.md`
-   - Add query components to `components.md`
-
 ### Priority 2: Important (Should Do Soon)
 
-4. **Add Unit Tests for Core Components**
-   - Test `NatsQueryClient` thoroughly
-   - Test `ProjectionQueryService`
-   - Test existence services
-
-5. **Add Integration Test for NATS Request-Response**
-   - End-to-end test of query flow
-   - Test error scenarios
-
-6. **Update API Documentation**
-   - Add section on resource existence checks
-   - Add examples of 404/409 responses
-   - Document eventual consistency implications
-
-### Priority 3: Nice to Have
-
-7. **Add Unit Tests for Query Handlers**
-   - Test each projection's query handler
-   - Test error handling
-
-8. **Add Projection-Specific Documentation**
+3. **Add Projection-Specific Documentation** (Optional)
    - Document query capabilities in projection READMEs
+   - Document query subject patterns per projection
+   - Document configuration for query handlers
 
 ## Summary
 
-### Test Coverage: ⚠️ **Insufficient**
-- **Missing**: Unit tests for query infrastructure
-- **Missing**: Integration tests for 404/409 responses
-- **Missing**: End-to-end NATS query tests
-- **Has**: Good test infrastructure to build upon
+### Test Coverage: ✅ **Mostly Complete** (1 missing test)
+
+- ✅ **Has**: Unit tests for query infrastructure (NatsQueryClient, DTOs)
+- ✅ **Has**: Unit tests for 2 of 3 projection query handlers (Operational, Resource)
+- ✅ **Has**: Unit tests for edge services (ProjectionQueryService, existence services)
+- ✅ **Has**: Integration tests for 404/409 responses
+- ✅ **Has**: End-to-end NATS query tests
+- ❌ **Missing**: Unit test for WorkforceNatsQueryHandler
 
 ### OpenAPI Spec: ✅ **Mostly Complete**
-- **Has**: 404 and 409 responses documented for key endpoints
-- **Needs**: Verification that all updated endpoints have proper documentation
-- **Needs**: More descriptive response messages
 
-### Documentation: ⚠️ **Needs Updates**
-- **Missing**: Architecture documentation of query flow
-- **Missing**: API documentation explaining 404/409 behavior
-- **Has**: Basic status code documentation
+- ✅ **Has**: 404 and 409 responses documented for key endpoints (29 instances of 404)
+- ⚠️ **Needs**: Verification that all updated endpoints have proper documentation
+- ⚠️ **Needs**: More descriptive response messages
+
+### Documentation: ✅ **Complete**
+
+- ✅ **Has**: Architecture documentation of query flow (data-flow.md)
+- ✅ **Has**: Component documentation (components.md)
+- ✅ **Has**: API documentation explaining 404/409 behavior (api/README.md)
+- ✅ **Has**: Eventual consistency notes
 
 ## Next Steps
 
-1. Create test plan for missing tests
-2. Audit OpenAPI spec for completeness
-3. Update architecture documentation
-4. Add API documentation section on resource existence
+1. ✅ ~~Create test plan for missing tests~~ - Most tests complete
+2. ⚠️ **Add WorkforceNatsQueryHandlerTest** - Only missing test
+3. ⚠️ **Audit OpenAPI spec for completeness** - Verify all endpoints
+4. ✅ ~~Update architecture documentation~~ - Complete
+5. ✅ ~~Add API documentation section on resource existence~~ - Complete
 
+## Notes
+
+- The assessment has been updated to reflect the consolidated projection architecture (3 projections instead of 6)
+- Most test coverage is complete - only WorkforceNatsQueryHandlerTest is missing
+- Documentation has been comprehensively updated
+- OpenAPI spec verification is recommended but not critical
