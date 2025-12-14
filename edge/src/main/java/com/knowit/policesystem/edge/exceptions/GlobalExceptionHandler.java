@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge.exceptions;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.knowit.policesystem.edge.dto.ErrorResponse;
 import com.knowit.policesystem.edge.dto.ValidationErrorResponse;
+import com.knowit.policesystem.edge.util.EnumValidationHelper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -10,7 +11,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -47,8 +50,23 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.toList());
 
+        // Extract valid enum values for enum fields
+        Map<String, List<String>> validValues = new HashMap<>();
+        fieldErrors.forEach(error -> {
+            Class<?> fieldType = error.getRejectedValue() != null 
+                    ? error.getRejectedValue().getClass() 
+                    : null;
+            if (fieldType != null && fieldType.isEnum()) {
+                List<String> enumValues = EnumValidationHelper.getValidEnumValues(fieldType);
+                if (!enumValues.isEmpty()) {
+                    validValues.put(error.getField(), enumValues);
+                }
+            }
+        });
+
         ValidationErrorResponse response = new ValidationErrorResponse(
                 "Bad Request", "Validation failed", details);
+        response.setValidValues(validValues.isEmpty() ? null : validValues);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
@@ -116,24 +134,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(
             HttpMessageNotReadableException exception) {
         String message = "Invalid request body";
+        Map<String, List<String>> validValues = null;
+        
         if (exception.getCause() instanceof InvalidFormatException) {
             InvalidFormatException invalidFormat = (InvalidFormatException) exception.getCause();
             String fieldName = invalidFormat.getPath().stream()
                     .map(ref -> ref.getFieldName())
                     .reduce((first, second) -> second)
                     .orElse("unknown");
-            String validValues = "unknown";
+            
             if (invalidFormat.getTargetType().isEnum()) {
                 @SuppressWarnings("unchecked")
                 Class<? extends Enum<?>> enumClass = (Class<? extends Enum<?>>) invalidFormat.getTargetType();
-                validValues = String.join(", ", java.util.Arrays.stream(enumClass.getEnumConstants())
-                        .map(Enum::name)
-                        .toArray(String[]::new));
+                List<String> enumValues = EnumValidationHelper.getValidEnumValues(enumClass);
+                String validValuesStr = String.join(", ", enumValues);
+                message = String.format("Invalid value '%s' for field '%s'. Valid values are: %s",
+                        invalidFormat.getValue(), fieldName, validValuesStr);
+                validValues = EnumValidationHelper.createValidValuesMap(fieldName, enumClass);
+            } else {
+                message = String.format("Invalid value '%s' for field '%s'",
+                        invalidFormat.getValue(), fieldName);
             }
-            message = String.format("Invalid value '%s' for field '%s'. Valid values are: %s",
-                    invalidFormat.getValue(), fieldName, validValues);
         }
-        ErrorResponse response = new ErrorResponse("Bad Request", message, List.of());
+        
+        ErrorResponse response = new ErrorResponse("Bad Request", message, List.of(), validValues);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 

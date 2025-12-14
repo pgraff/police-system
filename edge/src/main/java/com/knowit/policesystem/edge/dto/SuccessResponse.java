@@ -13,6 +13,7 @@ public class SuccessResponse<T> {
     private boolean success;
     private String message;
     private T data;
+    private ResponseMetadata metadata;
 
     /**
      * Default constructor for Jackson deserialization.
@@ -30,6 +31,21 @@ public class SuccessResponse<T> {
         this.success = true;
         this.message = message;
         this.data = data;
+        this.metadata = new ResponseMetadata();
+    }
+
+    /**
+     * Creates a new success response with metadata.
+     *
+     * @param message the success message
+     * @param data the response data
+     * @param metadata the response metadata
+     */
+    public SuccessResponse(String message, T data, ResponseMetadata metadata) {
+        this.success = true;
+        this.message = message;
+        this.data = data;
+        this.metadata = metadata;
     }
 
     /**
@@ -84,6 +100,14 @@ public class SuccessResponse<T> {
      */
     public void setData(T data) {
         this.data = data;
+    }
+
+    public ResponseMetadata getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(ResponseMetadata metadata) {
+        this.metadata = metadata;
     }
 }
 

@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge.controllers;
 import com.knowit.policesystem.edge.commands.Command;
 import com.knowit.policesystem.edge.commands.CommandHandler;
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
+import com.knowit.policesystem.edge.dto.ResponseMetadata;
 import com.knowit.policesystem.edge.dto.SuccessResponse;
 import com.knowit.policesystem.edge.exceptions.ValidationException;
 import com.knowit.policesystem.edge.validation.Validator;
@@ -87,8 +88,13 @@ public abstract class BaseRestController {
         CommandHandler<C, R> handler = (CommandHandler<C, R>) commandHandlerRegistry.findHandler((Class<C>) commandClass);
         R response = handler.handle(command);
 
+        // Create metadata with correlation ID from command
+        ResponseMetadata metadata = new ResponseMetadata();
+        metadata.setCorrelationId(command.getCommandId().toString());
+        metadata.setTimestamp(command.getTimestamp());
+
         // Return response with appropriate HTTP status
-        SuccessResponse<R> successResponse = new SuccessResponse<>(successMessage, response);
+        SuccessResponse<R> successResponse = new SuccessResponse<>(successMessage, response, metadata);
         return ResponseEntity.status(httpStatus).body(successResponse);
     }
 }

@@ -8,6 +8,7 @@ public class IncidentResponseDto {
 
     private String incidentId;
     private String incidentNumber;
+    private RelatedResourcesDto relatedResources;
 
     /**
      * Default constructor for Jackson serialization.
@@ -40,5 +41,13 @@ public class IncidentResponseDto {
 
     public void setIncidentNumber(String incidentNumber) {
         this.incidentNumber = incidentNumber;
+    }
+
+    public RelatedResourcesDto getRelatedResources() {
+        return relatedResources;
+    }
+
+    public void setRelatedResources(RelatedResourcesDto relatedResources) {
+        this.relatedResources = relatedResources;
     }
 }

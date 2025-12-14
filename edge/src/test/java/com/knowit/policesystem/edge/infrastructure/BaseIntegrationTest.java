@@ -6,10 +6,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Base class for integration tests that require Kafka and NATS containers.
+ * Base class for integration tests that require Kafka, NATS, and PostgreSQL containers.
  * Containers are shared across all test classes that extend this base class,
  * significantly reducing test execution time by avoiding repeated container startup/shutdown.
  * 
@@ -19,9 +20,7 @@ import org.testcontainers.utility.DockerImageName;
  * Note: We do NOT use @Testcontainers and @Container annotations here, as they manage
  * container lifecycle per test class. Instead, we manually start containers in a static block.
  */
-@SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
-})
+@SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public abstract class BaseIntegrationTest {
@@ -31,6 +30,12 @@ public abstract class BaseIntegrationTest {
     );
 
     protected static final NatsTestContainer nats = new NatsTestContainer();
+
+    protected static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
+            DockerImageName.parse("postgres:15-alpine"))
+            .withDatabaseName("police_test")
+            .withUsername("test")
+            .withPassword("test");
 
     // Flag to ensure containers are started only once
     private static volatile boolean containersStarted = false;
@@ -44,6 +49,7 @@ public abstract class BaseIntegrationTest {
                 try {
                     kafka.start();
                     nats.start();
+                    postgres.start();
                     containersStarted = true;
                     
                     // Register shutdown hook to stop containers when JVM exits
@@ -54,6 +60,9 @@ public abstract class BaseIntegrationTest {
                             }
                             if (nats.isRunning()) {
                                 nats.stop();
+                            }
+                            if (postgres.isRunning()) {
+                                postgres.stop();
                             }
                         } catch (Exception e) {
                             // Ignore errors during shutdown
@@ -74,6 +83,7 @@ public abstract class BaseIntegrationTest {
                 try {
                     kafka.start();
                     nats.start();
+                    postgres.start();
                     containersStarted = true;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to start test containers", e);
@@ -85,6 +95,11 @@ public abstract class BaseIntegrationTest {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("nats.url", nats::getNatsUrl);
         registry.add("nats.enabled", () -> "true");
+        
+        // PostgreSQL configuration for edge service (webhooks and idempotency)
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
         
         // Disable NATS queries in tests - we use in-memory services instead
         // EXCEPTION: If this is an E2E test (indicated by system property), enable NATS queries

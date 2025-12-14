@@ -12,15 +12,15 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * Base class for end-to-end NATS query integration tests.
- * Extends BaseIntegrationTest and adds PostgreSQL container and enables NATS queries.
+ * Extends BaseIntegrationTest and adds a separate PostgreSQL container for projection services.
  * 
  * This base class:
- * - Starts PostgreSQL container for projection services
+ * - Uses BaseIntegrationTest's PostgreSQL container for edge service (webhooks/idempotency)
+ * - Starts a separate PostgreSQL container for projection services
  * - Enables NATS queries (unlike BaseIntegrationTest which disables them)
  * - Provides shared infrastructure for E2E query tests
  */
 @SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
         "spring.main.allow-bean-definition-overriding=true"  // Allow overriding NatsQueryClient bean
 })
 @AutoConfigureMockMvc
@@ -33,42 +33,44 @@ import org.testcontainers.utility.DockerImageName;
 @Import(NatsQueryE2ETestConfig.class)  // Import test config that provides enabled NatsQueryClient
 public abstract class NatsQueryE2ETestBase extends BaseIntegrationTest {
 
-    protected static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
+    // Separate PostgreSQL container for projection services (different database)
+    protected static final PostgreSQLContainer<?> projectionPostgres = new PostgreSQLContainer<>(
             DockerImageName.parse("postgres:15-alpine"))
             .withDatabaseName("police")
             .withUsername("test")
             .withPassword("test");
 
-    private static volatile boolean postgresStarted = false;
-    private static final Object POSTGRES_START_LOCK = new Object();
+    private static volatile boolean projectionPostgresStarted = false;
+    private static final Object PROJECTION_POSTGRES_START_LOCK = new Object();
 
     static {
         // Set system property to indicate this is an E2E test
         // This must be set BEFORE BaseIntegrationTest's @DynamicPropertySource runs
         // so that BaseIntegrationTest knows not to disable NATS queries
         System.setProperty("nats.query.e2e.test.enabled", "true");
-        startPostgres();
+        startProjectionPostgres();
     }
 
-    private static void startPostgres() {
-        if (postgresStarted) {
+    private static void startProjectionPostgres() {
+        if (projectionPostgresStarted) {
             return;
         }
-        synchronized (POSTGRES_START_LOCK) {
-            if (postgresStarted) {
+        synchronized (PROJECTION_POSTGRES_START_LOCK) {
+            if (projectionPostgresStarted) {
                 return;
             }
-            postgres.start();
-            postgresStarted = true;
+            projectionPostgres.start();
+            projectionPostgresStarted = true;
         }
     }
 
     @DynamicPropertySource
     static void configureE2EProperties(DynamicPropertyRegistry registry) {
-        // Start PostgreSQL if not already started
-        startPostgres();
+        // Start projection PostgreSQL if not already started
+        startProjectionPostgres();
 
         // Configure properties - containers are already started by BaseIntegrationTest
+        // Note: BaseIntegrationTest already configures edge service datasource
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("nats.url", nats::getNatsUrl);
         registry.add("nats.enabled", () -> "true");
@@ -89,31 +91,29 @@ public abstract class NatsQueryE2ETestBase extends BaseIntegrationTest {
         });
         registry.add("nats.query.timeout", () -> "5000"); // 5 second timeout for E2E tests
 
-        // PostgreSQL configuration for projection services
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
+        // Note: Edge service datasource is already configured by BaseIntegrationTest
+        // The projectionPostgres container is for projection services, not the edge service
     }
 
     /**
      * Gets the PostgreSQL JDBC URL for use by projection services.
      */
     protected String getPostgresJdbcUrl() {
-        return postgres.getJdbcUrl();
+        return projectionPostgres.getJdbcUrl();
     }
 
     /**
      * Gets the PostgreSQL username for use by projection services.
      */
     protected String getPostgresUsername() {
-        return postgres.getUsername();
+        return projectionPostgres.getUsername();
     }
 
     /**
      * Gets the PostgreSQL password for use by projection services.
      */
     protected String getPostgresPassword() {
-        return postgres.getPassword();
+        return projectionPostgres.getPassword();
     }
 }
 

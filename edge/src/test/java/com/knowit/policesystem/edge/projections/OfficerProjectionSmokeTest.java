@@ -46,9 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end projection smoke test for officer registration.
  * Validates REST -> Kafka/NATS -> projection (Postgres) flow.
  */
-@SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=" + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration"
-})
+@SpringBootTest
 class OfficerProjectionSmokeTest extends BaseIntegrationTest {
 
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(

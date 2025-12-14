@@ -2,13 +2,17 @@ package com.knowit.policesystem.edge.controllers;
 
 import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.officers.ChangeOfficerStatusCommand;
+import com.knowit.policesystem.edge.commands.officers.BatchRegisterOfficersCommand;
 import com.knowit.policesystem.edge.commands.officers.RegisterOfficerCommand;
 import com.knowit.policesystem.edge.commands.officers.UpdateOfficerCommand;
 import com.knowit.policesystem.edge.dto.ChangeOfficerStatusRequestDto;
+import com.knowit.policesystem.edge.dto.BatchCreateOfficersRequestDto;
+import com.knowit.policesystem.edge.dto.BatchCreateResponseDto;
 import com.knowit.policesystem.edge.dto.OfficerResponseDto;
 import com.knowit.policesystem.edge.dto.OfficerStatusResponseDto;
 import com.knowit.policesystem.edge.dto.RegisterOfficerRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateOfficerRequestDto;
+import com.knowit.policesystem.edge.validation.officers.BatchRegisterOfficersCommandValidator;
 import com.knowit.policesystem.edge.validation.officers.ChangeOfficerStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.officers.RegisterOfficerCommandValidator;
 import com.knowit.policesystem.edge.validation.officers.UpdateOfficerCommandValidator;
@@ -35,6 +39,7 @@ public class OfficerController extends BaseRestController {
     private final RegisterOfficerCommandValidator registerCommandValidator;
     private final UpdateOfficerCommandValidator updateCommandValidator;
     private final ChangeOfficerStatusCommandValidator changeStatusCommandValidator;
+    private final BatchRegisterOfficersCommandValidator batchRegisterCommandValidator;
 
     /**
      * Creates a new officer controller.
@@ -47,11 +52,13 @@ public class OfficerController extends BaseRestController {
     public OfficerController(CommandHandlerRegistry commandHandlerRegistry,
                             RegisterOfficerCommandValidator registerCommandValidator,
                             UpdateOfficerCommandValidator updateCommandValidator,
-                            ChangeOfficerStatusCommandValidator changeStatusCommandValidator) {
+                            ChangeOfficerStatusCommandValidator changeStatusCommandValidator,
+                            BatchRegisterOfficersCommandValidator batchRegisterCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.registerCommandValidator = registerCommandValidator;
         this.updateCommandValidator = updateCommandValidator;
         this.changeStatusCommandValidator = changeStatusCommandValidator;
+        this.batchRegisterCommandValidator = batchRegisterCommandValidator;
     }
 
     /**
@@ -68,6 +75,24 @@ public class OfficerController extends BaseRestController {
         RegisterOfficerCommand command = new RegisterOfficerCommand(requestDto.getBadgeNumber(), requestDto);
         return executeCommand(command, registerCommandValidator, commandHandlerRegistry, RegisterOfficerCommand.class,
                 "Officer registration request created", HttpStatus.CREATED);
+    }
+
+    /**
+     * Batch registers multiple officers.
+     * Accepts an array of officer data, validates each, and publishes RegisterOfficerRequested events.
+     * Returns a summary of created and failed officers.
+     *
+     * @param requestDto the batch create officers request DTO
+     * @return 201 Created with batch response containing created and failed lists
+     */
+    @PostMapping("/officers/batch")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<BatchCreateResponseDto>> batchRegisterOfficers(
+            @Valid @RequestBody BatchCreateOfficersRequestDto requestDto) {
+
+        String batchId = "BATCH-" + System.currentTimeMillis();
+        BatchRegisterOfficersCommand command = new BatchRegisterOfficersCommand(batchId, requestDto);
+        return executeCommand(command, batchRegisterCommandValidator, commandHandlerRegistry,
+                BatchRegisterOfficersCommand.class, "Batch officer registration completed", HttpStatus.CREATED);
     }
 
     /**

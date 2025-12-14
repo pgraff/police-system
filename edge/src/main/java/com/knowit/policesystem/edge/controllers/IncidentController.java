@@ -4,19 +4,23 @@ import com.knowit.policesystem.edge.commands.CommandHandlerRegistry;
 import com.knowit.policesystem.edge.commands.incidents.ArriveAtIncidentCommand;
 import com.knowit.policesystem.edge.commands.incidents.ChangeIncidentStatusCommand;
 import com.knowit.policesystem.edge.commands.incidents.ClearIncidentCommand;
+import com.knowit.policesystem.edge.commands.incidents.CreateIncidentWithRelationsCommand;
 import com.knowit.policesystem.edge.commands.incidents.DispatchIncidentCommand;
 import com.knowit.policesystem.edge.commands.incidents.ReportIncidentCommand;
 import com.knowit.policesystem.edge.commands.incidents.UpdateIncidentCommand;
 import com.knowit.policesystem.edge.dto.ArriveAtIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.ChangeIncidentStatusRequestDto;
 import com.knowit.policesystem.edge.dto.ClearIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.CreateIncidentWithRelationsRequestDto;
 import com.knowit.policesystem.edge.dto.DispatchIncidentRequestDto;
+import com.knowit.policesystem.edge.dto.DispatchIncidentResponseDto;
 import com.knowit.policesystem.edge.dto.IncidentResponseDto;
 import com.knowit.policesystem.edge.dto.ReportIncidentRequestDto;
 import com.knowit.policesystem.edge.dto.UpdateIncidentRequestDto;
 import com.knowit.policesystem.edge.validation.incidents.ArriveAtIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.ChangeIncidentStatusCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.ClearIncidentCommandValidator;
+import com.knowit.policesystem.edge.validation.incidents.CreateIncidentWithRelationsCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.DispatchIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.ReportIncidentCommandValidator;
 import com.knowit.policesystem.edge.validation.incidents.UpdateIncidentCommandValidator;
@@ -46,6 +50,7 @@ public class IncidentController extends BaseRestController {
     private final ClearIncidentCommandValidator clearCommandValidator;
     private final ChangeIncidentStatusCommandValidator changeStatusCommandValidator;
     private final UpdateIncidentCommandValidator updateIncidentCommandValidator;
+    private final CreateIncidentWithRelationsCommandValidator createWithRelationsCommandValidator;
 
     /**
      * Creates a new incident controller.
@@ -64,7 +69,8 @@ public class IncidentController extends BaseRestController {
                               ArriveAtIncidentCommandValidator arriveCommandValidator,
                               ClearIncidentCommandValidator clearCommandValidator,
                               ChangeIncidentStatusCommandValidator changeStatusCommandValidator,
-                              UpdateIncidentCommandValidator updateIncidentCommandValidator) {
+                              UpdateIncidentCommandValidator updateIncidentCommandValidator,
+                              CreateIncidentWithRelationsCommandValidator createWithRelationsCommandValidator) {
         this.commandHandlerRegistry = commandHandlerRegistry;
         this.commandValidator = commandValidator;
         this.dispatchCommandValidator = dispatchCommandValidator;
@@ -72,6 +78,7 @@ public class IncidentController extends BaseRestController {
         this.clearCommandValidator = clearCommandValidator;
         this.changeStatusCommandValidator = changeStatusCommandValidator;
         this.updateIncidentCommandValidator = updateIncidentCommandValidator;
+        this.createWithRelationsCommandValidator = createWithRelationsCommandValidator;
     }
 
     /**
@@ -91,6 +98,24 @@ public class IncidentController extends BaseRestController {
     }
 
     /**
+     * Creates a new incident with related resources (location, calls) in one call.
+     * Accepts incident data with optional locationId and callIds, validates it, and publishes
+     * ReportIncidentRequested, LinkLocationToIncidentRequested, and LinkCallToIncidentRequested events.
+     *
+     * @param requestDto the create incident with relations request DTO
+     * @return 201 Created with incident ID and related resource IDs
+     */
+    @PostMapping("/incidents/with-relations")
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<IncidentResponseDto>> createIncidentWithRelations(
+            @Valid @RequestBody CreateIncidentWithRelationsRequestDto requestDto) {
+
+        CreateIncidentWithRelationsCommand command = new CreateIncidentWithRelationsCommand(
+                requestDto.getIncidentId(), requestDto);
+        return executeCommand(command, createWithRelationsCommandValidator, commandHandlerRegistry,
+                CreateIncidentWithRelationsCommand.class, "Incident created with relations", HttpStatus.CREATED);
+    }
+
+    /**
      * Dispatches an incident.
      * Accepts dispatch time, validates it, and publishes a DispatchIncidentRequested event.
      *
@@ -99,7 +124,7 @@ public class IncidentController extends BaseRestController {
      * @return 200 OK with incident ID
      */
     @PostMapping("/incidents/{incidentId}/dispatch")
-    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<IncidentResponseDto>> dispatchIncident(
+    public ResponseEntity<com.knowit.policesystem.edge.dto.SuccessResponse<DispatchIncidentResponseDto>> dispatchIncident(
             @PathVariable String incidentId,
             @Valid @RequestBody DispatchIncidentRequestDto requestDto) {
 

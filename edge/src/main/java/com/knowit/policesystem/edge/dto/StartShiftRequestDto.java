@@ -1,8 +1,10 @@
 package com.knowit.policesystem.edge.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.knowit.policesystem.edge.domain.ShiftStatus;
 import com.knowit.policesystem.edge.domain.ShiftType;
+import com.knowit.policesystem.edge.util.FlexibleInstantDeserializer;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -18,9 +20,11 @@ public class StartShiftRequestDto {
     private String shiftId;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", timezone = "UTC")
+    @JsonDeserialize(using = FlexibleInstantDeserializer.class)
     private Instant startTime;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", timezone = "UTC")
+    @JsonDeserialize(using = FlexibleInstantDeserializer.class)
     private Instant endTime;
 
     @NotNull(message = "shiftType is required")

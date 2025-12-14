@@ -14,6 +14,24 @@ spring:
   # Kafka configuration (will be overridden by environment-specific configs)
   kafka:
     bootstrap-servers: localhost:9092
+  
+  # Database configuration for webhooks and idempotency
+  datasource:
+    url: ${EDGE_DATASOURCE_URL:jdbc:postgresql://localhost:5432/police}
+    username: ${EDGE_DATASOURCE_USERNAME:postgres}
+    password: ${EDGE_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
 
 # NATS/JetStream configuration
 # Connect to all three NATS servers in the cluster for high availability
@@ -38,6 +56,7 @@ springdoc:
   show-actuator: false
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
+
 
 # Application-specific configuration
 api:

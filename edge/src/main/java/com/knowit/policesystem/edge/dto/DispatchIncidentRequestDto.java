@@ -1,6 +1,8 @@
 package com.knowit.policesystem.edge.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.knowit.policesystem.edge.util.FlexibleInstantDeserializer;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
@@ -12,7 +14,8 @@ import java.time.Instant;
 public class DispatchIncidentRequestDto {
 
     @NotNull(message = "dispatchedTime is required")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", timezone = "UTC")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, timezone = "UTC")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = com.knowit.policesystem.edge.util.FlexibleInstantDeserializer.class)
     private Instant dispatchedTime;
 
     /**

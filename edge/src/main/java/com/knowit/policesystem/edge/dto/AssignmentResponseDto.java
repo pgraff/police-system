@@ -7,6 +7,7 @@ package com.knowit.policesystem.edge.dto;
 public class AssignmentResponseDto {
 
     private String assignmentId;
+    private RelatedResourcesDto relatedResources;
 
     /**
      * Default constructor for Jackson serialization.
@@ -29,5 +30,13 @@ public class AssignmentResponseDto {
 
     public void setAssignmentId(String assignmentId) {
         this.assignmentId = assignmentId;
+    }
+
+    public RelatedResourcesDto getRelatedResources() {
+        return relatedResources;
+    }
+
+    public void setRelatedResources(RelatedResourcesDto relatedResources) {
+        this.relatedResources = relatedResources;
     }
 }

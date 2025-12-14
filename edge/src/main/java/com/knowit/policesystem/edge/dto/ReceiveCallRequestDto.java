@@ -1,9 +1,11 @@
 package com.knowit.policesystem.edge.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.knowit.policesystem.edge.domain.CallStatus;
 import com.knowit.policesystem.edge.domain.CallType;
 import com.knowit.policesystem.edge.domain.Priority;
+import com.knowit.policesystem.edge.util.FlexibleInstantDeserializer;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -27,6 +29,7 @@ public class ReceiveCallRequestDto {
     private CallStatus status;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", timezone = "UTC")
+    @JsonDeserialize(using = FlexibleInstantDeserializer.class)
     private Instant receivedTime;
 
     private String description;

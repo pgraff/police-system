@@ -3,6 +3,7 @@ package com.knowit.policesystem.edge.dto;
 import com.knowit.policesystem.edge.validation.ValidationResult;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**

@@ -1,8 +1,10 @@
 package com.knowit.policesystem.edge.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.knowit.policesystem.edge.domain.AssignmentStatus;
 import com.knowit.policesystem.edge.domain.AssignmentType;
+import com.knowit.policesystem.edge.util.FlexibleInstantDeserializer;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -18,6 +20,7 @@ public class CreateAssignmentRequestDto {
     private String assignmentId;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", timezone = "UTC")
+    @JsonDeserialize(using = FlexibleInstantDeserializer.class)
     private Instant assignedTime;
 
     @NotNull(message = "assignmentType is required")

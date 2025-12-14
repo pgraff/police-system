@@ -1,7 +1,9 @@
 package com.knowit.policesystem.edge.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.knowit.policesystem.edge.domain.PartyRoleType;
+import com.knowit.policesystem.edge.util.FlexibleInstantDeserializer;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -28,6 +30,7 @@ public class InvolvePartyRequestDto {
     private String description;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX", timezone = "UTC")
+    @JsonDeserialize(using = FlexibleInstantDeserializer.class)
     private Instant involvementStartTime;
 
     /**

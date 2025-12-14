@@ -9,10 +9,20 @@ The Police Incident Management System is designed to handle the complete lifecyc
 ### Key Features
 
 - **Event-Driven Architecture**: All operations produce events to Kafka, representing requests/commands from the edge layer
-- **RESTful API**: Comprehensive REST API for all system operations
+- **RESTful API**: Comprehensive REST API for all system operations with UI-friendly enhancements
 - **Event Sourcing**: Complete audit trail through immutable events
 - **CQRS Pattern**: Separation of command and query responsibilities
 - **Scalable Design**: Built for horizontal scaling and high availability
+- **UI-Friendly API**: Enhanced API design for easier frontend development
+  - Flexible date format parsing
+  - Comprehensive error messages with valid enum values
+  - Related resources in responses
+  - Composite endpoints for multi-step workflows
+  - Batch operations with partial failure handling
+  - Standardized response metadata
+  - Webhook subscriptions for real-time notifications
+  - Idempotency key support for safe retries
+  - Query proxy endpoints for projection data
 
 ## Quick Start
 
@@ -256,14 +266,14 @@ policesystem/
 The system provides REST API endpoints organized by domain:
 
 ### Core Entities
-- **Officers**: Register, update, change status
+- **Officers**: Register, update, change status, batch registration
 - **Vehicles**: Register, update, change status
 - **Units**: Create, update, change status
 - **Persons**: Register, update
 - **Locations**: Create, update, link/unlink to incidents and calls
 
 ### Operations
-- **Incidents**: Report, update, dispatch, arrive, clear, change status
+- **Incidents**: Report, update, dispatch, arrive, clear, change status, create with relations
 - **Calls**: Receive, update, dispatch, arrive, clear, change status, link to incidents/dispatches
 - **Activities**: Start, update, complete, change status, link to incidents
 - **Assignments**: Create, complete, change status, link to dispatches, manage resources
@@ -271,6 +281,22 @@ The system provides REST API endpoints organized by domain:
 - **Dispatches**: Create, change status
 - **Involved Parties**: Involve, update, end involvement
 - **Resource Assignments**: Assign, unassign, change status
+
+### Workflows
+- **Incident Dispatch Workflow**: Complete incident dispatch workflow in a single call (create incident, dispatch, assignment, and resource assignments)
+
+### Advanced Features
+- **Webhooks**: Register webhook subscriptions for real-time event notifications
+- **Query Proxy**: Query projection services through the edge (`/api/v1/query/{domain}/{id}/full`, `/api/v1/query/{domain}/{id}/exists`, `/api/v1/query/{domain}` with filtering, pagination, sorting)
+- **Idempotency**: Support for idempotency keys via `Idempotency-Key` header for safe request retries
+
+### UI-Friendly Enhancements
+- **Flexible Date Formats**: Accepts multiple ISO 8601 date formats (e.g., `2024-01-15T10:40:00Z`, `2024-01-15T10:40:00+00:00`, `2024-01-15T10:40:00.000+00:00`)
+- **Enhanced Error Messages**: Error responses include `validValues` field with valid enum options for validation errors
+- **Related Resources**: Response DTOs include `relatedResources` field with IDs of related entities (e.g., dispatchId, assignmentIds, callIds)
+- **Composite Endpoints**: Create resources with relationships in one call (e.g., `POST /incidents/with-relations`)
+- **Batch Operations**: Register multiple officers in one call with partial failure handling (`POST /officers/batch`)
+- **Standardized Responses**: All responses include `ResponseMetadata` with correlationId, timestamp, version, and links
 
 See the [API Documentation](doc/api/README.md) for complete endpoint details.
 

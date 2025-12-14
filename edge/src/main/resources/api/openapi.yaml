@@ -140,6 +140,34 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /officers/batch:
+    post:
+      tags:
+        - Officers
+      summary: Batch register officers
+      description: Registers multiple officers in one call with partial failure handling
+      operationId: batchRegisterOfficers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchCreateOfficersRequest'
+      responses:
+        '201':
+          description: Batch officer registration completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/BatchCreateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   # ============================================
   # Vehicles
   # ============================================
@@ -577,6 +605,34 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /incidents/with-relations:
+    post:
+      tags:
+        - Incidents
+      summary: Create incident with relations
+      description: Creates an incident and links location/calls in one call for UI convenience
+      operationId: createIncidentWithRelations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIncidentWithRelationsRequest'
+      responses:
+        '201':
+          description: Incident created with relations
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/IncidentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   /incidents/{incidentId}/dispatch:
     post:
       tags:
@@ -598,7 +654,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DispatchIncidentResponse'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -860,6 +921,265 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Workflows
+  # ============================================
+  /workflows/incident-dispatch:
+    post:
+      tags:
+        - Workflows
+      summary: Incident dispatch workflow
+      description: Orchestrates creating an incident, dispatching it, creating an assignment, and assigning resources in one call
+      operationId: incidentDispatchWorkflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentDispatchWorkflowRequest'
+      responses:
+        '201':
+          description: Incident dispatch workflow completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/IncidentDispatchWorkflowResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ============================================
+  # Webhooks
+  # ============================================
+  /webhooks:
+    post:
+      tags:
+        - Webhooks
+      summary: Register webhook subscription
+      description: Registers a webhook URL to receive notifications for specified event types
+      operationId: registerWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRegistration'
+      responses:
+        '201':
+          description: Webhook subscription created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          url:
+                            type: string
+                          events:
+                            type: array
+                            items:
+                              type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    
+    get:
+      tags:
+        - Webhooks
+      summary: List webhook subscriptions
+      description: Returns all registered webhook subscriptions
+      operationId: listWebhooks
+      responses:
+        '200':
+          description: Webhook subscriptions retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+  
+  /webhooks/{id}:
+    delete:
+      tags:
+        - Webhooks
+      summary: Delete webhook subscription
+      description: Deletes a webhook subscription by ID
+      operationId: deleteWebhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook subscription deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================
+  # Query
+  # ============================================
+  /query/{domain}/{id}/full:
+    get:
+      tags:
+        - Query
+      summary: Get full resource from projections
+      description: Retrieves a complete resource with related data from projection services
+      operationId: getFullResource
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "incident"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "INC-001"
+        - name: fields
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id,description,status"
+          description: "Comma-separated list of fields to include"
+      responses:
+        '200':
+          description: Resource retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+        '404':
+          $ref: '#/components/responses/NotFound'
+  
+  /query/{domain}/{id}/exists:
+    get:
+      tags:
+        - Query
+      summary: Check resource existence
+      description: Checks if a resource exists in projections
+      operationId: checkResourceExists
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Existence check completed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          exists:
+                            type: boolean
+  
+  /query/{domain}:
+    get:
+      tags:
+        - Query
+      summary: List resources with filtering and pagination
+      description: Lists resources from projections with optional filtering, pagination, and sorting
+      operationId: listResources
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: priority
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "id,asc"
+      responses:
+        '200':
+          description: Resources retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          content:
+                            type: array
+                          totalElements:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          page:
+                            type: integer
+                          size:
+                            type: integer
 
   # ============================================
   # Activities
@@ -2589,6 +2909,76 @@ components:
         incidentNumber:
           type: string
           example: "2024-001"
+        relatedResources:
+          $ref: '#/components/schemas/RelatedResources'
+          nullable: true
+    
+    DispatchIncidentResponse:
+      type: object
+      properties:
+        incidentId:
+          type: string
+          example: "INC-001"
+        incidentNumber:
+          type: string
+          example: "2024-001"
+          nullable: true
+        dispatchId:
+          type: string
+          example: "DISP-ABC12345"
+          description: "Generated dispatch ID for linking operations"
+        dispatchedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:40:00.000+00:00"
+        relatedResources:
+          $ref: '#/components/schemas/RelatedResources'
+          nullable: true
+    
+    RelatedResources:
+      type: object
+      description: Related resource IDs for UI convenience
+      properties:
+        dispatchId:
+          type: string
+          example: "DISP-001"
+          nullable: true
+        assignmentIds:
+          type: array
+          items:
+            type: string
+          example: ["ASSIGN-001", "ASSIGN-002"]
+          nullable: true
+        callIds:
+          type: array
+          items:
+            type: string
+          example: ["CALL-001"]
+          nullable: true
+        locationId:
+          type: string
+          example: "LOC-001"
+          nullable: true
+        activityIds:
+          type: array
+          items:
+            type: string
+          example: ["ACT-001"]
+          nullable: true
+        involvedPartyIds:
+          type: array
+          items:
+            type: string
+          example: ["INV-001"]
+          nullable: true
+        unitId:
+          type: string
+          example: "UNIT-001"
+          nullable: true
+        vehicleId:
+          type: string
+          example: "VEH-001"
+          nullable: true
     
     CallResponse:
       type: object
@@ -2613,6 +3003,9 @@ components:
         assignmentId:
           type: string
           example: "ASSIGN-001"
+        relatedResources:
+          $ref: '#/components/schemas/RelatedResources'
+          nullable: true
     
     ShiftResponse:
       type: object
@@ -2652,9 +3045,17 @@ components:
     SuccessResponse:
       type: object
       properties:
+        success:
+          type: boolean
+          example: true
         message:
           type: string
           example: "Request processed successfully"
+        data:
+          description: Response data (type varies by endpoint)
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+          nullable: true
     
     ErrorResponse:
       type: object
@@ -2670,6 +3071,223 @@ components:
           items:
             type: string
           example: ["badgeNumber is required"]
+        validValues:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: Map of field names to their valid enum values (only present for enum validation errors)
+          example:
+            unitType: ["Single", "Team", "Squad"]
+    
+    ResponseMetadata:
+      type: object
+      properties:
+        correlationId:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+          description: "Correlation ID for request tracing"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:40:00.000+00:00"
+        version:
+          type: string
+          example: "1.0"
+        links:
+          type: object
+          additionalProperties:
+            type: string
+          description: "HATEOAS-style links to related resources"
+          example:
+            self: "/api/v1/incidents/INC-001"
+            dispatch: "/api/v1/incidents/INC-001/dispatch"
+    
+    CreateIncidentWithRelationsRequest:
+      type: object
+      required:
+        - incidentId
+        - priority
+        - status
+        - incidentType
+      properties:
+        incidentId:
+          type: string
+          example: "INC-001"
+        incidentNumber:
+          type: string
+          example: "2024-001"
+        priority:
+          $ref: '#/components/schemas/Priority'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        reportedTime:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00.000+00:00"
+        description:
+          type: string
+          example: "Traffic accident at Main St and Oak Ave"
+        incidentType:
+          $ref: '#/components/schemas/IncidentType'
+        locationId:
+          type: string
+          example: "LOC-001"
+          nullable: true
+        callIds:
+          type: array
+          items:
+            type: string
+          example: ["CALL-001", "CALL-002"]
+          nullable: true
+    
+    BatchCreateOfficersRequest:
+      type: object
+      required:
+        - officers
+      properties:
+        officers:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegisterOfficerRequest'
+          minItems: 1
+    
+    BatchCreateResponse:
+      type: object
+      properties:
+        created:
+          type: array
+          items:
+            type: string
+          example: ["BADGE-001", "BADGE-002"]
+        failed:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchFailure'
+    
+    BatchFailure:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "BADGE-003"
+        reason:
+          type: string
+          example: "Officer with badge number already exists: BADGE-003"
+    
+    IncidentDispatchWorkflowRequest:
+      type: object
+      required:
+        - incident
+      properties:
+        incident:
+          type: object
+          required:
+            - incidentId
+            - priority
+            - status
+            - incidentType
+          properties:
+            incidentId:
+              type: string
+              example: "INC-001"
+            incidentNumber:
+              type: string
+              example: "2024-001"
+            priority:
+              $ref: '#/components/schemas/Priority'
+            status:
+              $ref: '#/components/schemas/IncidentStatus'
+            reportedTime:
+              type: string
+              format: date-time
+            description:
+              type: string
+            incidentType:
+              $ref: '#/components/schemas/IncidentType'
+        dispatch:
+          type: object
+          properties:
+            dispatchedTime:
+              type: string
+              format: date-time
+            unitId:
+              type: string
+        assignment:
+          type: object
+          properties:
+            assignmentId:
+              type: string
+            badgeNumber:
+              type: string
+            assignmentType:
+              $ref: '#/components/schemas/AssignmentType'
+            status:
+              $ref: '#/components/schemas/AssignmentStatus'
+            assignedTime:
+              type: string
+              format: date-time
+        resources:
+          type: array
+          items:
+            type: object
+            properties:
+              resourceId:
+                type: string
+              resourceType:
+                $ref: '#/components/schemas/ResourceType'
+              roleType:
+                $ref: '#/components/schemas/RoleType'
+              status:
+                type: string
+              startTime:
+                type: string
+                format: date-time
+        locationId:
+          type: string
+        callIds:
+          type: array
+          items:
+            type: string
+    
+    IncidentDispatchWorkflowResponse:
+      type: object
+      properties:
+        incidentId:
+          type: string
+          example: "INC-001"
+        dispatchId:
+          type: string
+          example: "DISP-ABC12345"
+        assignmentId:
+          type: string
+          example: "ASSIGN-001"
+        resourceAssignmentIds:
+          type: array
+          items:
+            type: string
+          example: ["RES-ASSIGN-001", "RES-ASSIGN-002"]
+    
+    WebhookRegistration:
+      type: object
+      required:
+        - url
+        - events
+      properties:
+        url:
+          type: string
+          format: uri
+          example: "https://example.com/webhooks/incidents"
+        events:
+          type: array
+          items:
+            type: string
+          example: ["ReportIncidentRequested", "DispatchIncidentRequested"]
+        secret:
+          type: string
+          example: "webhook-secret-key"
+          description: "Secret for webhook signature verification"
 
   responses:
     BadRequest:

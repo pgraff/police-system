@@ -931,14 +931,7 @@ class CallControllerTest extends BaseIntegrationTest {
             return new InMemoryCallExistenceService();
         }
 
-        @Bean
-        @Primary
-        ObjectMapper testObjectMapper() {
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.registerModule(new JavaTimeModule());
-            mapper.configure(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
-            mapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            return mapper;
-        }
+        // Note: Removed testObjectMapper bean - tests use the main objectMapper from JacksonConfig
+        // which is configured with FlexibleInstantDeserializer for date parsing
     }
 }
