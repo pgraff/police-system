@@ -664,8 +664,6 @@ public class ProjectionTestContext {
                                 log.error("Failed to execute schema.sql using ResourceDatabasePopulator for projection {}: {}", 
                                         domain, ex.getMessage(), ex);
                             }
-                        } else {
-                            log.warn("Application class not available for schema initialization for projection {}", domain);
                         }
                     } catch (Exception ex) {
                         log.error("Failed to manually initialize schema for projection {}: {}", domain, ex.getMessage(), ex);
